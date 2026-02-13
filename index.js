@@ -1,11 +1,12 @@
-const { Client, GatewayIntentBits, PermissionsBitField } = require('discord.js');
+const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
@@ -26,6 +27,13 @@ function parseTime(time) {
   return null;
 }
 
+async function sendLog(guild, embed) {
+  const logChannel = guild.channels.cache.find(c => c.name === "logs");
+  if (logChannel) {
+    logChannel.send({ embeds: [embed] });
+  }
+}
+
 client.on('messageCreate', async message => {
   if (message.author.bot) return;
   if (!message.content.startsWith(prefix)) return;
@@ -33,19 +41,21 @@ client.on('messageCreate', async message => {
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // 🔇 MUTE
+  // 🔇 MUTE CHAT
   if (command === "mutechat") {
+
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-      return message.reply("Você não tem permissão.");
+      return message.reply("Sem permissão.");
 
     const member = message.mentions.members.first();
     const timeArg = args[1];
+    const motivo = args.slice(2).join(" ") || "Não informado";
 
     if (!member || !timeArg)
-      return message.reply("Uso correto: thl!mutechat @user 2m");
+      return message.reply("Uso correto: thl!mutechat @user 2m motivo");
 
     const duration = parseTime(timeArg);
-    if (!duration) return message.reply("Tempo inválido. Use: 10s, 5m, 1h");
+    if (!duration) return message.reply("Tempo inválido.");
 
     let mutedRole = message.guild.roles.cache.find(r => r.name === "Muted");
 
@@ -57,14 +67,26 @@ client.on('messageCreate', async message => {
 
       message.guild.channels.cache.forEach(async channel => {
         await channel.permissionOverwrites.create(mutedRole, {
-          SendMessages: false,
-          Speak: false
+          SendMessages: false
         });
       });
     }
 
     await member.roles.add(mutedRole);
-    message.reply(`${member.user.tag} foi mutado por ${timeArg} 🔇`);
+    message.reply(`${member.user.tag} mutado por ${timeArg}`);
+
+    const embed = new EmbedBuilder()
+      .setTitle("🔇 MUTE CHAT")
+      .setColor("Red")
+      .addFields(
+        { name: "Usuário", value: `${member.user.tag}`, inline: true },
+        { name: "Staff", value: `${message.author.tag}`, inline: true },
+        { name: "Tempo", value: timeArg, inline: true },
+        { name: "Motivo", value: motivo }
+      )
+      .setTimestamp();
+
+    sendLog(message.guild, embed);
 
     setTimeout(async () => {
       if (member.roles.cache.has(mutedRole.id)) {
@@ -75,21 +97,70 @@ client.on('messageCreate', async message => {
 
   // 🔊 UNMUTE
   if (command === "unmute") {
+
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-      return message.reply("Você não tem permissão.");
+      return message.reply("Sem permissão.");
 
     const member = message.mentions.members.first();
     if (!member)
       return message.reply("Uso correto: thl!unmute @user");
 
     const mutedRole = message.guild.roles.cache.find(r => r.name === "Muted");
-
-    if (!mutedRole || !member.roles.cache.has(mutedRole.id))
-      return message.reply("Esse usuário não está mutado.");
+    if (!mutedRole) return;
 
     await member.roles.remove(mutedRole);
-    message.reply(`${member.user.tag} foi desmutado 🔊`);
-  }
-});
+    message.reply(`${member.user.tag} desmutado`);
 
-client.login(process.env.TOKEN);
+    const embed = new EmbedBuilder()
+      .setTitle("🔊 UNMUTE")
+      .setColor("Green")
+      .addFields(
+        { name: "Usuário", value: `${member.user.tag}`, inline: true },
+        { name: "Staff", value: `${message.author.tag}`, inline: true }
+      )
+      .setTimestamp();
+
+    sendLog(message.guild, embed);
+  }
+
+ // 🎙 MUTE CALL COM TEMPO
+if (command === "mutecall") {
+
+  if (!message.member.permissions.has(PermissionsBitField.Flags.MuteMembers))
+    return message.reply("Sem permissão.");
+
+  const member = message.mentions.members.first();
+  const timeArg = args[1];
+  const motivo = args.slice(2).join(" ") || "Não informado";
+
+  if (!member || !timeArg)
+    return message.reply("Uso correto: thl!mutecall @user 5m motivo");
+
+  const duration = parseTime(timeArg);
+  if (!duration) return message.reply("Tempo inválido. Use: 10s, 5m, 1h");
+
+  if (!member.voice.channel)
+    return message.reply("O usuário não está em uma call.");
+
+  await member.voice.setMute(true);
+  message.reply(`${member.user.tag} mutado na call por ${timeArg}`);
+
+  const embed = new EmbedBuilder()
+    .setTitle("🎙 MUTE CALL")
+    .setColor("Orange")
+    .addFields(
+      { name: "Usuário", value: `${member.user.tag}`, inline: true },
+      { name: "Staff", value: `${message.author.tag}`, inline: true },
+      { name: "Tempo", value: timeArg, inline: true },
+      { name: "Motivo", value: motivo }
+    )
+    .setTimestamp();
+
+  sendLog(message.guild, embed);
+
+  setTimeout(async () => {
+    if (member.voice.serverMute) {
+      await member.voice.setMute(false);
+    }
+  }, duration);
+}
