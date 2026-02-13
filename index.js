@@ -20,6 +20,7 @@ const client = new Client({
 
 const PREFIX = "thl!";
 const STAFF_ROLE_ID = "1471998602577711337";
+const MAX_HOURS = 999;
 
 // =============================
 // FUNÇÃO LOG
@@ -30,23 +31,26 @@ function sendLog(guild, embed) {
 }
 
 // =============================
-// CONVERTER TEMPO
+// CONVERTER TEMPO (1m até 999h)
 // =============================
 function parseDuration(time) {
-  const match = time.match(/^(\d+)([smhd])$/);
+  const match = time.match(/^(\d+)([mh])$/);
   if (!match) return null;
 
   const value = parseInt(match[1]);
   const unit = match[2];
 
-  const multipliers = {
-    s: 1000,
-    m: 60000,
-    h: 3600000,
-    d: 86400000
-  };
+  if (unit === "m") {
+    if (value < 1) return null;
+    return value * 60000;
+  }
 
-  return value * multipliers[unit];
+  if (unit === "h") {
+    if (value < 1 || value > MAX_HOURS) return null;
+    return value * 3600000;
+  }
+
+  return null;
 }
 
 // =============================
@@ -66,14 +70,14 @@ client.on("messageCreate", async message => {
   if (!member) return message.reply("Mencione um usuário.");
 
   if (member.roles.cache.has(STAFF_ROLE_ID))
-    return message.reply("Você não pode usar esse comando nesse cargo.");
+    return message.reply("Você não pode usar nesse cargo.");
 
   const timeArg = args[0];
   const motivo = args.slice(1).join(" ") || "Não informado";
   const duration = parseDuration(timeArg);
 
   if (!duration && command !== "unmutechat" && command !== "unmutecall")
-    return message.reply("Tempo inválido. Use 10m, 2h, 1d...");
+    return message.reply("Tempo inválido. Use de 1m até 999h.");
 
   // =============================
   // MUTE CHAT
@@ -112,7 +116,6 @@ client.on("messageCreate", async message => {
       .setTimestamp();
 
     message.reply({ embeds: [embed], components: [row] });
-
     sendLog(message.guild, embed);
 
     setTimeout(async () => {
@@ -130,7 +133,6 @@ client.on("messageCreate", async message => {
     if (!cargoMute) return;
 
     await member.roles.remove(cargoMute);
-
     message.reply(`🔊 ${member} foi desmutado.`);
   }
 
@@ -140,7 +142,7 @@ client.on("messageCreate", async message => {
   if (command === "mutecall") {
 
     if (!member.voice.channel)
-      return message.reply("O usuário não está em uma call.");
+      return message.reply("O usuário não está em call.");
 
     await member.voice.setMute(true);
 
@@ -174,10 +176,9 @@ client.on("messageCreate", async message => {
   if (command === "unmutecall") {
 
     if (!member.voice.channel)
-      return message.reply("O usuário não está em uma call.");
+      return message.reply("O usuário não está em call.");
 
     await member.voice.setMute(false);
-
     message.reply(`🔊 ${member} foi desmutado na call.`);
   }
 
