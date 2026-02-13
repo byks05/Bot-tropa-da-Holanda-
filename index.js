@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 const client = new Client({
   intents: [
@@ -11,6 +11,7 @@ const client = new Client({
 });
 
 const prefix = "thl!";
+const allowedRoleId = "1471998602577711337";
 
 client.on('ready', () => {
   console.log(`Bot online como ${client.user.tag}`);
@@ -48,8 +49,8 @@ client.on('messageCreate', async message => {
   // ===============================
   if (command === "mutechat") {
 
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-      return message.reply("Sem permissão.");
+    if (!message.member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não tem permissão para usar este comando.");
 
     const member = message.mentions.members.first();
     const timeArg = args[1];
@@ -57,6 +58,9 @@ client.on('messageCreate', async message => {
 
     if (!member || !timeArg)
       return message.reply("Uso correto: thl!mutechat @user 5m motivo");
+
+    if (member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não pode mutar alguém com esse cargo.");
 
     const duration = parseTime(timeArg);
     if (!duration)
@@ -102,44 +106,12 @@ client.on('messageCreate', async message => {
   }
 
   // ===============================
-  // 🔊 UNMUTE CHAT
-  // ===============================
-  if (command === "unmute") {
-
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
-      return message.reply("Sem permissão.");
-
-    const member = message.mentions.members.first();
-    if (!member)
-      return message.reply("Uso correto: thl!unmute @user");
-
-    const mutedRole = message.guild.roles.cache.find(r => r.name === "Muted");
-    if (!mutedRole)
-      return message.reply("Cargo Muted não existe.");
-
-    await member.roles.remove(mutedRole);
-
-    message.reply(`${member.user.tag} desmutado`);
-
-    const embed = new EmbedBuilder()
-      .setTitle("🔊 UNMUTE CHAT")
-      .setColor("Green")
-      .addFields(
-        { name: "Usuário", value: member.user.tag, inline: true },
-        { name: "Staff", value: message.author.tag, inline: true }
-      )
-      .setTimestamp();
-
-    sendLog(message.guild, embed);
-  }
-
-  // ===============================
   // 🎙 MUTE CALL
   // ===============================
   if (command === "mutecall") {
 
-    if (!message.member.permissions.has(PermissionsBitField.Flags.MuteMembers))
-      return message.reply("Sem permissão.");
+    if (!message.member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não tem permissão para usar este comando.");
 
     const member = message.mentions.members.first();
     const timeArg = args[1];
@@ -147,6 +119,9 @@ client.on('messageCreate', async message => {
 
     if (!member || !timeArg)
       return message.reply("Uso correto: thl!mutecall @user 5m motivo");
+
+    if (member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não pode mutar alguém com esse cargo.");
 
     const duration = parseTime(timeArg);
     if (!duration)
@@ -177,40 +152,6 @@ client.on('messageCreate', async message => {
         await member.voice.setMute(false);
       }
     }, duration);
-  }
-
-  // ===============================
-  // 🔊 UNMUTE CALL
-  // ===============================
-  if (command === "unmutecall") {
-
-    if (!message.member.permissions.has(PermissionsBitField.Flags.MuteMembers))
-      return message.reply("Sem permissão.");
-
-    const member = message.mentions.members.first();
-    if (!member)
-      return message.reply("Uso correto: thl!unmutecall @user");
-
-    if (!member.voice.channel)
-      return message.reply("O usuário não está em uma call.");
-
-    if (!member.voice.serverMute)
-      return message.reply("O usuário não está mutado na call.");
-
-    await member.voice.setMute(false);
-
-    message.reply(`${member.user.tag} desmutado na call`);
-
-    const embed = new EmbedBuilder()
-      .setTitle("🔊 UNMUTE CALL")
-      .setColor("Green")
-      .addFields(
-        { name: "Usuário", value: member.user.tag, inline: true },
-        { name: "Staff", value: message.author.tag, inline: true }
-      )
-      .setTimestamp();
-
-    sendLog(message.guild, embed);
   }
 
 });
