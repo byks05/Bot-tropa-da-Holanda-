@@ -8,13 +8,25 @@ const client = new Client({
   ]
 });
 
+const prefix = "thl!";
+
 client.on('ready', () => {
   console.log(`Bot online como ${client.user.tag}`);
 });
 
 client.on('messageCreate', message => {
-  if (message.content === '!ping') {
-    message.reply('Pong 🏓');
+  if (message.author.bot) return;
+  if (!message.content.startsWith(prefix)) return;
+
+  const args = message.content.slice(prefix.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+
+  if (command === "ping") {
+    message.reply("Pong 🏓");
+  }
+
+  if (command === "oi") {
+    message.reply("Salve tropa da Holanda 🔥");
   }
 });
 
