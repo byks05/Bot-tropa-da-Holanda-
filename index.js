@@ -17,7 +17,9 @@ client.on('ready', () => {
   console.log(`Bot online como ${client.user.tag}`);
 });
 
-// Converter tempo (10s, 5m, 1h)
+// ===============================
+// ⏳ CONVERTER TEMPO
+// ===============================
 function parseTime(time) {
   const unit = time.slice(-1);
   const value = parseInt(time.slice(0, -1));
@@ -29,7 +31,9 @@ function parseTime(time) {
   return null;
 }
 
-// Enviar logs para canal "logs"
+// ===============================
+// 📜 ENVIAR LOG
+// ===============================
 async function sendLog(guild, embed) {
   const logChannel = guild.channels.cache.find(c => c.name === "logs");
   if (logChannel) {
@@ -50,14 +54,14 @@ client.on('messageCreate', async message => {
   if (command === "mutechat") {
 
     if (!message.member.roles.cache.has(allowedRoleId))
-      return message.reply("Você não tem permissão para usar este comando.");
+      return message.reply("Você não tem permissão.");
 
     const member = message.mentions.members.first();
     const timeArg = args[1];
     const motivo = args.slice(2).join(" ") || "Não informado";
 
     if (!member || !timeArg)
-      return message.reply("Uso correto: thl!mutechat @user 5m motivo");
+      return message.reply("Uso: thl!mutechat @user 5m motivo");
 
     if (member.roles.cache.has(allowedRoleId))
       return message.reply("Você não pode mutar alguém com esse cargo.");
@@ -106,19 +110,51 @@ client.on('messageCreate', async message => {
   }
 
   // ===============================
+  // 🔊 UNMUTE CHAT
+  // ===============================
+  if (command === "unmutechat") {
+
+    if (!message.member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não tem permissão.");
+
+    const member = message.mentions.members.first();
+    if (!member)
+      return message.reply("Uso: thl!unmutechat @user");
+
+    let mutedRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (!mutedRole)
+      return message.reply("Cargo Muted não existe.");
+
+    await member.roles.remove(mutedRole);
+
+    message.reply(`${member.user.tag} desmutado.`);
+
+    const embed = new EmbedBuilder()
+      .setTitle("🔊 UNMUTE CHAT")
+      .setColor("Green")
+      .addFields(
+        { name: "Usuário", value: member.user.tag, inline: true },
+        { name: "Staff", value: message.author.tag, inline: true }
+      )
+      .setTimestamp();
+
+    sendLog(message.guild, embed);
+  }
+
+  // ===============================
   // 🎙 MUTE CALL
   // ===============================
   if (command === "mutecall") {
 
     if (!message.member.roles.cache.has(allowedRoleId))
-      return message.reply("Você não tem permissão para usar este comando.");
+      return message.reply("Você não tem permissão.");
 
     const member = message.mentions.members.first();
     const timeArg = args[1];
     const motivo = args.slice(2).join(" ") || "Não informado";
 
     if (!member || !timeArg)
-      return message.reply("Uso correto: thl!mutecall @user 5m motivo");
+      return message.reply("Uso: thl!mutecall @user 5m motivo");
 
     if (member.roles.cache.has(allowedRoleId))
       return message.reply("Você não pode mutar alguém com esse cargo.");
@@ -128,7 +164,7 @@ client.on('messageCreate', async message => {
       return message.reply("Tempo inválido. Use: 10s, 5m, 1h");
 
     if (!member.voice.channel)
-      return message.reply("O usuário não está em uma call.");
+      return message.reply("O usuário não está em call.");
 
     await member.voice.setMute(true);
 
@@ -152,6 +188,37 @@ client.on('messageCreate', async message => {
         await member.voice.setMute(false);
       }
     }, duration);
+  }
+
+  // ===============================
+  // 🔊 UNMUTE CALL
+  // ===============================
+  if (command === "unmutecall") {
+
+    if (!message.member.roles.cache.has(allowedRoleId))
+      return message.reply("Você não tem permissão.");
+
+    const member = message.mentions.members.first();
+    if (!member)
+      return message.reply("Uso: thl!unmutecall @user");
+
+    if (!member.voice.channel)
+      return message.reply("O usuário não está em call.");
+
+    await member.voice.setMute(false);
+
+    message.reply(`${member.user.tag} desmutado na call.`);
+
+    const embed = new EmbedBuilder()
+      .setTitle("🔊 UNMUTE CALL")
+      .setColor("Green")
+      .addFields(
+        { name: "Usuário", value: member.user.tag, inline: true },
+        { name: "Staff", value: message.author.tag, inline: true }
+      )
+      .setTimestamp();
+
+    sendLog(message.guild, embed);
   }
 
 });
