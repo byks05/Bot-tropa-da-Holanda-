@@ -23,7 +23,7 @@ const STAFF_ROLE_ID = "1471998602577711337";
 const MAX_HOURS = 999;
 
 // =============================
-// FUNÇÃO LOG
+// LOG
 // =============================
 function sendLog(guild, embed) {
   const canalLogs = guild.channels.cache.find(c => c.name === "logs");
@@ -31,10 +31,10 @@ function sendLog(guild, embed) {
 }
 
 // =============================
-// CONVERTER TEMPO (1m até 999h)
+// VALIDAR TEMPO (1m até 999h)
 // =============================
 function parseDuration(time) {
-  const match = time.match(/^(\d+)([mh])$/);
+  const match = time?.match(/^(\d+)([mh])$/);
   if (!match) return null;
 
   const value = parseInt(match[1]);
@@ -54,7 +54,7 @@ function parseDuration(time) {
 }
 
 // =============================
-// MESSAGE COMMANDS
+// COMANDOS
 // =============================
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
@@ -72,8 +72,9 @@ client.on("messageCreate", async message => {
   if (member.roles.cache.has(STAFF_ROLE_ID))
     return message.reply("Você não pode usar nesse cargo.");
 
-  const timeArg = args[0];
-  const motivo = args.slice(1).join(" ") || "Não informado";
+  // 🔥 AQUI ESTÁ A CORREÇÃO
+  const timeArg = args[1];
+  const motivo = args.slice(2).join(" ") || "Não informado";
   const duration = parseDuration(timeArg);
 
   if (!duration && command !== "unmutechat" && command !== "unmutecall")
