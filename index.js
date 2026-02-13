@@ -33,6 +33,7 @@ client.on('messageCreate', async message => {
   const args = message.content.slice(prefix.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
+  // 🔇 MUTE
   if (command === "mutechat") {
     if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
       return message.reply("Você não tem permissão.");
@@ -70,6 +71,24 @@ client.on('messageCreate', async message => {
         await member.roles.remove(mutedRole);
       }
     }, duration);
+  }
+
+  // 🔊 UNMUTE
+  if (command === "unmute") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ModerateMembers))
+      return message.reply("Você não tem permissão.");
+
+    const member = message.mentions.members.first();
+    if (!member)
+      return message.reply("Uso correto: thl!unmute @user");
+
+    const mutedRole = message.guild.roles.cache.find(r => r.name === "Muted");
+
+    if (!mutedRole || !member.roles.cache.has(mutedRole.id))
+      return message.reply("Esse usuário não está mutado.");
+
+    await member.roles.remove(mutedRole);
+    message.reply(`${member.user.tag} foi desmutado 🔊`);
   }
 });
 
