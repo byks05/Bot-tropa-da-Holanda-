@@ -30,7 +30,7 @@ const CATEGORIAS = [
       {label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
       {label:"Verificado", id:"1468283328510558208"}
     ],
-    maxSelect:null, // pode selecionar todos
+    maxSelect:null,
     allowAll:true
   },
   {
@@ -41,7 +41,7 @@ const CATEGORIAS = [
       {label:"Aliados", id:"1468279104624398509"}
     ],
     maxSelect:null,
-    allowAll:false // só adms
+    allowAll:false
   }
 ];
 
@@ -171,9 +171,7 @@ client.on("messageCreate", async message=>{
     try{const m=await message.reply("Você não tem permissão para usar este comando."); setTimeout(async()=>await m.delete().catch(()=>{}),5000);}catch(e){console.error(e);}
   }
 
-  // =============================
-  // COMANDOS DE MUTE/UNMUTE
-  // =============================
+  // MUTE / UNMUTE
   if(["mutechat","mutecall","unmutechat","unmutecall"].includes(cmd)&&member){
     const timeArg=args[0], motivo=args.slice(1).join(" ")||"Não informado", duration=parseDuration(timeArg);
     if(cmd==="mutechat") await muteMember(member,motivo,message);
@@ -192,51 +190,32 @@ client.on("messageCreate", async message=>{
     if(cmd==="unmutecall") await unmuteCall(member,message);
   }
 
-  // =============================
-  // COMANDO SETAR/REMOVER CARGOS
-  // =============================
-  if((cmd === "setarcargo" || cmd === "removercargo") && member){
-    const components = [];
+  // =======================
+  // COMANDO RECRUTAMENTO
+  // =======================
+  if(cmd === "rec" && member){
+    if(!STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id))){
+      return message.reply("❌ Você não tem permissão para usar esse comando.");
+    }
+
     const embed = new EmbedBuilder()
-      .setColor("Green")
-      .setTitle(cmd==="setarcargo"?"✅ Setar Cargos":"🗑 Remover Cargos")
-      .setDescription(`Selecione os cargos para ${cmd==="setarcargo"?"adicionar":"remover"} de ${member}`);
+      .setTitle("🎯 Recrutamento")
+      .setDescription(`Selecione uma ação para ${member}:`)
+      .setColor("Green");
 
-    if(cmd === "setarcargo"){
-      for(const cat of CATEGORIAS){
-        if(cat.label === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id=>message.member.roles.cache.has(id))) continue; // só adms
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`select_${member.id}_${cat.label}_${message.author.id}`)
-            .setPlaceholder(`Selecione cargos: ${cat.label}`)
-            .setMinValues(1)
-            .setMaxValues(cat.maxSelect || cat.options.length)
-            .addOptions(cat.options.map(o=>({label:o.label,value:o.id})))
-        );
-        components.push(row);
-      }
-    }
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`rec_init_${member.id}_${message.author.id}`)
+        .setPlaceholder("Escolha uma ação")
+        .addOptions([
+          { label: "Adicionar", value: "adicionar", description: "Adicionar cargos ao usuário", emoji: "➕" },
+          { label: "Remover", value: "remover", description: "Remover cargos do usuário", emoji: "➖" },
+          { label: "Concluído", value: "concluido", description: "Finalizar o recrutamento", emoji: "✅" }
+        ])
+    );
 
-    if(cmd === "removercargo"){
-      const userRoles = member.roles.cache.filter(r=>!r.managed && r.id !== member.guild.id).map(r=>({label:r.name,value:r.id}));
-      if(userRoles.length>0){
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`select_${member.id}_removercargo_${message.author.id}`)
-            .setPlaceholder("Selecione cargos para remover")
-            .setMinValues(1)
-            .setMaxValues(userRoles.length)
-            .addOptions(userRoles)
-        );
-        components.push(row);
-      } else {
-        return message.reply(`${member} não possui cargos para remover.`);
-      }
-    }
-
-    await message.reply({embeds:[embed], components});
+    await message.reply({embeds:[embed], components:[row]});
   }
-
 });
 
 // =============================
@@ -254,46 +233,85 @@ client.on("channelCreate", async channel=>{
 client.on("interactionCreate", async interaction=>{
   if(!interaction.isStringSelectMenu()) return;
 
-  const parts = interaction.customId.split("_"); // Ex.: select_userId_menuName_executorId
-  const userId = parts[1], menuName = parts[2], executorId = parts[3];
+  const parts = interaction.customId.split("_"); // Ex.: rec_init_userId_executorId
+  const action = parts[0], userId = parts[2], executorId = parts[3];
   const member = await interaction.guild.members.fetch(userId).catch(()=>null);
   if(!member) return;
   const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
 
-  // ===== SETAR CARGOS =====
-  if(menuName === "Membros" || menuName === "TropaDaHolanda"){
-    if(menuName === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id => executor.roles.cache.has(id)))
-      return interaction.reply({content:"Você não pode selecionar cargos nessa categoria.", ephemeral:true});
+  // ===== SETAR / REMOVER CARGOS EXISTENTE =====
+  if(action === "setarcargo" || action === "removercargo"){
+    if(parts[0]==="setarcargo"){
+      for(const cid of interaction.values){
+        const role = interaction.guild.roles.cache.get(cid);
+        if(role && !member.roles.cache.has(cid)) await member.roles.add(role);
+      }
+      await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
+    }
+    if(parts[0]==="removercargo"){
+      for(const cid of interaction.values){
+        if(member.roles.cache.has(cid)) await member.roles.remove(cid);
+      }
+      await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
+    }
+    if(executor) sendLog(interaction.guild,new EmbedBuilder().setColor("Orange").setTitle("📌 Comando Executado").setDescription(`${executor} executou ${parts[0]} em ${member}`).setTimestamp());
+  }
 
+  // ===== RECRUTAMENTO MENU =====
+  if(action === "rec"){
+    const selected = interaction.values[0];
+
+    // AÇÃO ADICIONAR
+    if(selected === "adicionar"){
+      const categoriasMembros = CATEGORIAS.find(c => c.label === "Membros");
+      const options = categoriasMembros.options.map(o => ({label:o.label, value:o.id}));
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_add_${member.id}_${executor.id}`)
+          .setPlaceholder("Selecione cargos para adicionar")
+          .setMinValues(1)
+          .setMaxValues(options.length)
+          .addOptions(options)
+      );
+      return interaction.update({content:`🎯 Adicionar cargos para ${member}`, embeds:[], components:[row]});
+    }
+
+    // AÇÃO REMOVER
+    if(selected === "remover"){
+      const userRoles = member.roles.cache.map(r => ({label:r.name, value:r.id})).filter(r => r.value !== member.guild.id);
+      if(userRoles.length === 0) return interaction.update({content:`⚠️ ${member} não possui cargos para remover.`, embeds:[], components:[]});
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_remove_${member.id}_${executor.id}`)
+          .setPlaceholder("Selecione cargos para remover")
+          .setMinValues(1)
+          .setMaxValues(userRoles.length)
+          .addOptions(userRoles)
+      );
+      return interaction.update({content:`🎯 Remover cargos de ${member}`, embeds:[], components:[row]});
+    }
+
+    // AÇÃO CONCLUÍDO
+    if(selected === "concluido"){
+      return interaction.update({content:`✅ Recrutamento finalizado para ${member}`, embeds:[], components:[]});
+    }
+  }
+
+  // INTERAÇÃO ADICIONAR RECRUTAMENTO
+  if(action === "rec" && parts[1]==="add"){
     for(const cid of interaction.values){
       const role = interaction.guild.roles.cache.get(cid);
       if(role && !member.roles.cache.has(cid)) await member.roles.add(role);
     }
-
-    await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
-
-    if(executor) sendLog(interaction.guild, new EmbedBuilder()
-      .setColor(menuName==="Membros"?"Blue":"Orange")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${executor} executou setarcargo em ${member}`)
-      .setTimestamp()
-    );
+    return interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
   }
 
-  // ===== REMOVER CARGOS =====
-  if(menuName === "removercargo"){
+  // INTERAÇÃO REMOVER RECRUTAMENTO
+  if(action === "rec" && parts[1]==="remove"){
     for(const cid of interaction.values){
       if(member.roles.cache.has(cid)) await member.roles.remove(cid);
     }
-
-    await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
-
-    if(executor) sendLog(interaction.guild, new EmbedBuilder()
-      .setColor("Orange")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${executor} executou removercargo em ${member}`)
-      .setTimestamp()
-    );
+    return interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
   }
 });
 
