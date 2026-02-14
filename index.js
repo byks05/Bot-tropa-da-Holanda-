@@ -1,7 +1,5 @@
 const {
   Client,
-  Gateconst 
-  Client,
   GatewayIntentBits,
   PermissionsBitField,
   EmbedBuilder,
