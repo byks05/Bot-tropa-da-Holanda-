@@ -290,7 +290,6 @@ client.on("messageCreate", async message => {
 client.on("interactionCreate", async (interaction) => {
   if (!isStaffOrEspecial(interaction.member)) return;
 
-  // Select menus
   if (interaction.isStringSelectMenu()) {
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
@@ -309,6 +308,22 @@ client.on("interactionCreate", async (interaction) => {
         if (member.roles.cache.has(cid)) await member.roles.remove(cid);
       }
       await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+    }
+  }
+});
+
+// =============================
+// READY
+// =============================
+client.once("ready", () => {
+  console.log(`Bot online! ${client.user.tag}`);
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
+});
+
+// =============================
+// LOGIN
+// =============================
+client.login(process.env.TOKEN);argos removidos de ${member}`, embeds: [], components: [] });
     }
   }
 });
