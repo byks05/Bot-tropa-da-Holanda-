@@ -1,4 +1,4 @@
-const {
+Oiconst {
   Client,
   GatewayIntentBits,
   PermissionsBitField,
@@ -297,7 +297,7 @@ client.once("ready", () => {
 // =============================
 // LOGIN
 // =============================
-client.login(process.env.TOKEN);ents: [] });
+client.login(process.env.TOKEN);
 });
 
 // =============================
