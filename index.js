@@ -2,7 +2,11 @@ const {
   Client,
   GatewayIntentBits,
   PermissionsBitField,
-lder
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 require("dotenv").config();
@@ -256,24 +260,25 @@ client.on("messageCreate", async message => {
   // CLEAR (CORRIGIDO)
   // =============================
   if (command === "clear") {
-    const target = message.mentions.users.first();
-    let amount = parseInt(args[0]);
-
-    if (!message.member.permissions.has("MANAGE_MESSAGES")) 
+    if (!message.member.permissions.has("MANAGE_MESSAGES"))
       return message.reply("Sem permissão.");
 
-    if (!args[0] || isNaN(amount) || amount < 1 || amount > 100) {
-      return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
+    const target = message.mentions.users.first();
+    let amount;
+
+    if (target) {
+      amount = args[1] ? parseInt(args[1]) : 100;
+      if (isNaN(amount) || amount < 1 || amount > 100)
+        return message.reply("Número inválido (1-100).");
+    } else {
+      amount = parseInt(args[0]);
+      if (!amount || isNaN(amount) || amount < 1 || amount > 100)
+        return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
     }
 
     if (target) {
-      const userAmount = args[1] ? parseInt(args[1]) : 100;
-      if (isNaN(userAmount) || userAmount < 1 || userAmount > 100) 
-        return message.reply("Número inválido (1-100).");
-
       const messages = await message.channel.messages.fetch({ limit: 100 });
-      const userMessages = messages.filter(m => m.author.id === target.id).first(userAmount);
-
+      const userMessages = messages.filter(m => m.author.id === target.id).first(amount);
       if (!userMessages.length) return message.reply("Nenhuma mensagem encontrada para apagar.");
 
       await message.channel.bulkDelete(userMessages, true);
@@ -305,6 +310,48 @@ client.on("interactionCreate", async interaction => {
   if (interaction.isButton()) {
     if (interaction.customId.startsWith("unmute_")) {
       const userId = interaction.customId.split("_")[1];
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      if (!member) return;
+      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
+      if (muteRole) await member.roles.remove(muteRole);
+      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
+    }
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    const userId = interaction.customId.split("_")[1];
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    if (interaction.customId.startsWith("selectcargo_")) {
+      for (const cid of interaction.values) {
+        const cargo = interaction.guild.roles.cache.get(cid);
+        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
+      }
+      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
+    }
+
+    if (interaction.customId.startsWith("removercargo_")) {
+      for (const cid of interaction.values) {
+        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
+      }
+      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+    }
+  }
+});
+
+// =============================
+// READY
+// =============================
+client.on("ready", () => {
+  console.log(`Bot online! ${client.user.tag}`);
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
+});
+
+// =============================
+// LOGIN
+// =============================
+client.login(process.env.TOKEN);teraction.customId.split("_")[1];
       const member = await interaction.guild.members.fetch(userId).catch(() => null);
       if (!member) return;
       const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
