@@ -24,19 +24,33 @@ const client = new Client({
 // =============================
 const PREFIX = "thl!";
 
-// CARGO ESPECÍFICO QUE PODE GERENCIAR CARGOS
-const MANAGE_ROLE_ID = "1468066422490923081";
+// CARGOS DE STAFF PARA USAR COMANDOS
+const STAFF_ROLE_IDS = [
+  "1468070328138858710",
+  "1468069942451507221",
+  "1468069638935150635",
+  "1468017578747105390"
+];
 
-// CARGOS DISPONÍVEIS POR CATEGORIA
-const CATEGORIES = {
-  Inicial: [
-    { label: "Equipe Tropa da Holanda", id: "1468026315285205094" },
-    { label: "Verificado", id: "1468283328510558208" }
-  ],
-  Aliados: [
-    { label: "Aliados", id: "1468279104624398509" }
-  ]
-};
+// CARGO ESPECÍFICO QUE SÓ PODE SETAR/REMOVER CARGOS
+const CARGO_ESPECIAL = "1468066422490923081";
+
+// CARGOS DISPONÍVEIS PARA SETARCARGO
+const CATEGORIAS = [
+  {
+    label: "Inicial",
+    options: [
+      { label: "Equipe Tropa da Holanda", id: "1468026315285205094" },
+      { label: "Verificado", id: "1468283328510558208" }
+    ]
+  },
+  {
+    label: "Aliados",
+    options: [
+      { label: "Aliados", id: "1468279104624398509" }
+    ]
+  }
+];
 
 const MAX_HOURS = 999;
 
@@ -72,13 +86,6 @@ function parseDuration(time) {
 }
 
 // =============================
-// VERIFICA PERMISSÕES
-// =============================
-function canManageRoles(member) {
-  return member.roles.cache.has(MANAGE_ROLE_ID) || member.permissions.has(PermissionsBitField.Flags.Administrator);
-}
-
-// =============================
 // EVENTO DE MENSAGEM
 // =============================
 client.on("messageCreate", async message => {
@@ -90,33 +97,37 @@ client.on("messageCreate", async message => {
 
   const member = message.mentions.members.first();
 
-  if (!canManageRoles(message.member)) {
+  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
+  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
+
+  if (!isStaff && !isEspecial) {
     return message.reply("Você não tem permissão para usar este comando.");
   }
 
   // =============================
-  // SETAR CARGOS
+  // SETAR CARGOS COM EMBED E BOTÕES
   // =============================
   if (command === "setarcargo") {
     if (!member) return message.reply("Mencione um usuário.");
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`categoria_Inicial_${member.id}`)
-        .setLabel("Inicial")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId(`categoria_Aliados_${member.id}`)
-        .setLabel("Aliados")
-        .setStyle(ButtonStyle.Secondary)
-    );
+    if (!isStaff && !isEspecial) return message.reply("Você não tem permissão.");
 
     const embed = new EmbedBuilder()
-      .setTitle("🎯 Escolha uma Categoria")
-      .setDescription(`Selecione a categoria para ${member}`)
+      .setTitle("🎯 Setar Cargo")
+      .setDescription(`Escolha o(s) cargo(s) para ${member}`)
       .setColor("Blue");
 
-    await message.reply({ embeds: [embed], components: [row] });
+    const rows = CATEGORIAS.map(cat => {
+      return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`selectcargo_${member.id}_${cat.label}`)
+          .setPlaceholder(cat.label)
+          .setMinValues(1)
+          .setMaxValues(cat.options.length)
+          .addOptions(cat.options.map(opt => ({ label: opt.label, value: opt.id })))
+      );
+    });
+
+    await message.reply({ embeds: [embed], components: rows });
   }
 
   // =============================
@@ -124,28 +135,124 @@ client.on("messageCreate", async message => {
   // =============================
   if (command === "removercargo") {
     if (!member) return message.reply("Mencione um usuário.");
+    if (!isStaff && !isEspecial) return message.reply("Você não tem permissão.");
 
-    const userRoles = member.roles.cache
-      .filter(r => !r.managed && r.id !== member.guild.id)
-      .map(r => ({ label: r.name, value: r.id }));
+    const userRoles = member.roles.cache.filter(r => r.id !== message.guild.id);
+    if (!userRoles.size) return message.reply("Este usuário não possui cargos.");
 
-    if (!userRoles.length) return message.reply("O usuário não possui cargos removíveis.");
+    const embed = new EmbedBuilder()
+      .setTitle("🗑 Remover Cargo")
+      .setDescription(`Selecione os cargos que deseja remover de ${member}`)
+      .setColor("Orange");
 
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId(`remover_${member.id}`)
-        .setPlaceholder("Selecione cargos para remover")
-        .addOptions(userRoles)
+        .setCustomId(`removercargo_${member.id}`)
+        .setPlaceholder("Selecione os cargos")
         .setMinValues(1)
-        .setMaxValues(userRoles.length)
+        .setMaxValues(userRoles.size)
+        .addOptions(userRoles.map(r => ({ label: r.name, value: r.id })))
     );
 
-    const embed = new EmbedBuilder()
-      .setTitle("🗑 Remover Cargos")
-      .setDescription(`Selecione os cargos de ${member} que deseja remover`)
-      .setColor("Red");
-
     await message.reply({ embeds: [embed], components: [row] });
+  }
+
+  // =============================
+  // MUTE CHAT/CALL
+  // =============================
+  if (["mutechat", "mutecall"].includes(command)) {
+    if (!member) return message.reply("Mencione um usuário.");
+    const timeArg = args[1];
+    const motivo = args.slice(2).join(" ") || "Não informado";
+    const duration = parseDuration(timeArg);
+    if (!duration) return message.reply("Tempo inválido. Use de 1m até 999h.");
+
+    if (command === "mutechat") {
+      let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+      if (!muteRole) {
+        muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
+      }
+
+      await member.roles.add(muteRole);
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`unmute_${member.id}`)
+          .setLabel("Desmutar")
+          .setStyle(ButtonStyle.Success)
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("🔇 Usuário Mutado")
+        .setDescription(`${member} foi mutado no chat`)
+        .addFields(
+          { name: "🆔 ID", value: member.id },
+          { name: "⏳ Tempo", value: timeArg },
+          { name: "📄 Motivo", value: motivo },
+          { name: "👮 Staff", value: message.author.tag }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: message.guild.name })
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed], components: [row] });
+      sendLog(message.guild, embed);
+
+      setTimeout(async () => {
+        if (member.roles.cache.has(muteRole.id)) {
+          await member.roles.remove(muteRole);
+        }
+      }, duration);
+    }
+
+    if (command === "mutecall") {
+      if (!member.voice.channel) return message.reply("O usuário não está em call.");
+      await member.voice.setMute(true);
+
+      const embed = new EmbedBuilder()
+        .setColor("Orange")
+        .setTitle("🎙 Usuário Mutado na Call")
+        .setDescription(`${member} foi silenciado na call`)
+        .addFields(
+          { name: "🆔 ID", value: member.id },
+          { name: "⏳ Tempo", value: timeArg },
+          { name: "📄 Motivo", value: motivo },
+          { name: "👮 Staff", value: message.author.tag }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: message.guild.name })
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+      sendLog(message.guild, embed);
+
+      setTimeout(async () => {
+        if (member.voice.serverMute) {
+          await member.voice.setMute(false);
+        }
+      }, duration);
+    }
+  }
+
+  // =============================
+  // UNMUTE CHAT
+  // =============================
+  if (command === "unmutechat") {
+    if (!member) return message.reply("Mencione um usuário.");
+    const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await member.roles.remove(muteRole);
+    await message.reply(`🔊 ${member} foi desmutado.`);
+  }
+
+  // =============================
+  // UNMUTE CALL
+  // =============================
+  if (command === "unmutecall") {
+    if (!member) return message.reply("Mencione um usuário.");
+    if (!member.voice.channel) return message.reply("O usuário não está em call.");
+    await member.voice.setMute(false);
+    await message.reply(`🔊 ${member} foi desmutado na call.`);
   }
 });
 
@@ -153,48 +260,46 @@ client.on("messageCreate", async message => {
 // INTERAÇÕES (BOTÕES E SELECT MENUS)
 // =============================
 client.on("interactionCreate", async interaction => {
-  if (!canManageRoles(interaction.member)) {
-    return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+  const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
+  const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
+
+  if (interaction.isButton()) {
+    if (!isStaff && !isEspecial)
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+
+    if (interaction.customId.startsWith("unmute_")) {
+      const userId = interaction.customId.split("_")[1];
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      if (!member) return;
+
+      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
+      if (muteRole) await member.roles.remove(muteRole);
+
+      await interaction.update({
+        content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`,
+        embeds: [],
+        components: []
+      });
+    }
   }
 
-  // ======== BOTÕES DE CATEGORIA ========
-  if (interaction.isButton() && interaction.customId.startsWith("categoria_")) {
-    const [_, categoria, userId] = interaction.customId.split("_");
+  if (interaction.isStringSelectMenu()) {
+    const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) return;
 
-    const cargos = CATEGORIES[categoria];
-    if (!cargos || !cargos.length) return;
+    if (!isStaff && !isEspecial)
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
-    const options = cargos.map(c => ({ label: c.label, value: c.id }));
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`selectcargo_${member.id}`)
-        .setPlaceholder("Selecione cargos")
-        .addOptions(options)
-        .setMinValues(1)
-        .setMaxValues(options.length)
-    );
-
-    await interaction.update({
-      content: `Selecione os cargos da categoria **${categoria}** para ${member}`,
-      components: [row]
-    });
-  }
-
-  // ======== SELECT MENU DE CARGOS ========
-  if (interaction.isStringSelectMenu()) {
-    const memberId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
-    if (!member) return;
-
+    // SETAR CARGOS
     if (interaction.customId.startsWith("selectcargo_")) {
-      // Adiciona os cargos selecionados
-      for (const cargoId of interaction.values) {
-        const role = interaction.guild.roles.cache.get(cargoId);
-        if (role && !member.roles.cache.has(role.id)) await member.roles.add(role);
+      const cargoIds = interaction.values;
+      for (const cid of cargoIds) {
+        const cargo = interaction.guild.roles.cache.get(cid);
+        if (cargo && !member.roles.cache.has(cid)) {
+          await member.roles.add(cargo);
+        }
       }
-
       await interaction.update({
         content: `✅ Cargos adicionados para ${member}`,
         embeds: [],
@@ -202,15 +307,16 @@ client.on("interactionCreate", async interaction => {
       });
     }
 
-    if (interaction.customId.startsWith("remover_")) {
-      // Remove os cargos selecionados
-      for (const cargoId of interaction.values) {
-        const role = interaction.guild.roles.cache.get(cargoId);
-        if (role && member.roles.cache.has(role.id)) await member.roles.remove(role);
+    // REMOVER CARGOS
+    if (interaction.customId.startsWith("removercargo_")) {
+      const cargoIds = interaction.values;
+      for (const cid of cargoIds) {
+        if (member.roles.cache.has(cid)) {
+          await member.roles.remove(cid);
+        }
       }
-
       await interaction.update({
-        content: `✅ Cargos removidos de ${member}`,
+        content: `🗑 Cargos removidos de ${member}`,
         embeds: [],
         components: []
       });
@@ -220,30 +326,6 @@ client.on("interactionCreate", async interaction => {
 
 // =============================
 // BIO DO BOT
-// =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", {
-    type: "WATCHING"
-  });
-});
-
-client.login(process.env.TOKEN);=== "removercargo") {
-      for (const cargoId of interaction.values) {
-        const cargo = interaction.guild.roles.cache.get(cargoId);
-        if (cargo) await member.roles.remove(cargo);
-      }
-      await interaction.update({
-        content: `❌ Cargos removidos de ${member}`,
-        embeds: [],
-        components: []
-      });
-    }
-  }
-});
-
-// =============================
-// READY
 // =============================
 client.on("ready", () => {
   console.log(`Bot online! ${client.user.tag}`);
