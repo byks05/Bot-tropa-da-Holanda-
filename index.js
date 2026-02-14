@@ -9,6 +9,8 @@ const {
   StringSelectMenuBuilder
 } = require("discord.js");
 
+require("dotenv").config();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -69,25 +71,18 @@ function parseDuration(time) {
   const value = parseInt(match[1]);
   const unit = match[2];
 
-  if (unit === "m") {
-    if (value < 1) return null;
-    return value * 60000;
-  }
-
-  if (unit === "h") {
-    if (value < 1 || value > MAX_HOURS) return null;
-    return value * 3600000;
-  }
+  if (unit === "m") return value >= 1 ? value * 60000 : null;
+  if (unit === "h") return value >= 1 && value <= MAX_HOURS ? value * 3600000 : null;
 
   return null;
 }
 
 // =============================
-// ANTI-SPAM POR MENSAGEM RÁPIDA
+// ANTI-SPAM
 // =============================
 const spamMap = new Map(); // usuarioId => [timestamps]
 
-function checkSpam(message) {
+async function checkSpam(message) {
   const now = Date.now();
   const userId = message.author.id;
 
@@ -99,9 +94,18 @@ function checkSpam(message) {
 
   if (timestamps.length >= 5) {
     spamMap.set(userId, []);
+    let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (!muteRole) {
+      muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
+    }
+    await message.member.roles.add(muteRole);
+    const spamMsg = await message.reply("🔇 Você foi mutado por spam!");
+    setTimeout(() => {
+      message.delete().catch(() => {});
+      spamMsg.delete().catch(() => {});
+    }, 5000);
     return true;
   }
-
   return false;
 }
 
@@ -111,26 +115,11 @@ function checkSpam(message) {
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
 
-  // =============================
-  // ANTI-SPAM
-  // =============================
-  if (checkSpam(message)) {
-    let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-    if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
-    await message.member.roles.add(muteRole);
-    const spamMsg = await message.reply(`🔇 Você foi mutado por spam!`);
-    setTimeout(() => {
-      message.delete().catch(() => {});
-      spamMsg.delete().catch(() => {});
-    }, 5000);
-    return;
-  }
-
+  if (await checkSpam(message)) return;
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
   const member = message.mentions.members.first();
   const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
   const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
@@ -145,26 +134,24 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // SETAR CARGOS COM EMBED E BOTÕES
+  // SETAR CARGOS
   // =============================
-  if (command === "setarcargo") {
-    if (!member) return message.reply("Mencione um usuário.");
-
+  if (command === "setarcargo" && member) {
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargo")
       .setDescription(`Escolha o(s) cargo(s) para ${member}`)
       .setColor("Blue");
 
-    const rows = CATEGORIAS.map(cat => {
-      return new ActionRowBuilder().addComponents(
+    const rows = CATEGORIAS.map(cat =>
+      new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(`selectcargo_${member.id}_${cat.label}`)
           .setPlaceholder(cat.label)
           .setMinValues(1)
           .setMaxValues(cat.options.length)
           .addOptions(cat.options.map(opt => ({ label: opt.label, value: opt.id })))
-      );
-    });
+      )
+    );
 
     const msg = await message.reply({ embeds: [embed], components: rows });
     setTimeout(() => message.delete().catch(() => {}), 5000);
@@ -173,9 +160,7 @@ client.on("messageCreate", async message => {
   // =============================
   // REMOVER CARGOS
   // =============================
-  if (command === "removercargo") {
-    if (!member) return message.reply("Mencione um usuário.");
-
+  if (command === "removercargo" && member) {
     const userRoles = member.roles.cache.filter(r => r.id !== message.guild.id);
     if (!userRoles.size) return message.reply("Este usuário não possui cargos.");
 
@@ -198,10 +183,9 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // MUTE CHAT/CALL
+  // MUTECHAT / MUTECALL
   // =============================
-  if (["mutechat", "mutecall"].includes(command)) {
-    if (!member) return message.reply("Mencione um usuário.");
+  if (["mutechat", "mutecall"].includes(command) && member) {
     const timeArg = args[1];
     const motivo = args.slice(2).join(" ") || "Não informado";
     const duration = parseDuration(timeArg);
@@ -209,10 +193,7 @@ client.on("messageCreate", async message => {
 
     if (command === "mutechat") {
       let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-      if (!muteRole) {
-        muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
-      }
-
+      if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
       await member.roles.add(muteRole);
 
       const row = new ActionRowBuilder().addComponents(
@@ -244,9 +225,7 @@ client.on("messageCreate", async message => {
       }, 5000);
 
       setTimeout(async () => {
-        if (member.roles.cache.has(muteRole.id)) {
-          await member.roles.remove(muteRole);
-        }
+        if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
       }, duration);
     }
 
@@ -270,62 +249,51 @@ client.on("messageCreate", async message => {
 
       const msg = await message.reply({ embeds: [embed] });
       sendLog(message.guild, embed);
-      setTimeout(() => {
-        message.delete().catch(() => {});
-        msg.delete().catch(() => {});
-      }, 5000);
 
       setTimeout(async () => {
-        if (member.voice.serverMute) {
-          await member.voice.setMute(false);
-        }
+        if (member.voice.serverMute) await member.voice.setMute(false);
       }, duration);
     }
   }
 
   // =============================
-  // CLEAR MENSAGENS
+  // CLEAR
   // =============================
   if (command === "clear") {
     const target = message.mentions.users.first();
-    const argsNumber = parseInt(args[0]);
-
-    if (!message.member.permissions.has("MANAGE_MESSAGES")) 
-        return message.reply("Você não tem permissão para usar este comando.");
-
-    if (!args[0]) return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
+    const amount = parseInt(args[0]);
+    if (!message.member.permissions.has("MANAGE_MESSAGES")) return message.reply("Sem permissão.");
+    if (!args[0] || isNaN(amount) || amount < 1 || amount > 100)
+      return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
 
     if (target) {
-        const amount = args[1] ? parseInt(args[1]) : 100;
-        if (isNaN(amount) || amount < 1 || amount > 100) return message.reply("Número inválido (1-100).");
-
-        const messages = await message.channel.messages.fetch({ limit: 100 });
-        const userMessages = messages.filter(msg => msg.author.id === target.id).first(amount);
-        const msg = await message.channel.bulkDelete(userMessages, true);
-        const reply = await message.channel.send(`🗑️ ${userMessages.length} mensagens de ${target.tag} apagadas!`);
-        setTimeout(() => {
-          message.delete().catch(() => {});
-          reply.delete().catch(() => {});
-        }, 5000);
+      const userAmount = args[1] ? parseInt(args[1]) : 100;
+      if (isNaN(userAmount) || userAmount < 1 || userAmount > 100) return message.reply("Número inválido (1-100).");
+      const messages = await message.channel.messages.fetch({ limit: 100 });
+      const userMessages = messages.filter(m => m.author.id === target.id).first(userAmount);
+      const reply = await message.channel.bulkDelete(userMessages, true);
+      const msg = await message.channel.send(`🗑️ ${userMessages.length} mensagens de ${target.tag} apagadas!`);
+      setTimeout(() => {
+        message.delete().catch(() => {});
+        msg.delete().catch(() => {});
+      }, 5000);
     } else {
-        if (isNaN(argsNumber) || argsNumber < 1 || argsNumber > 100) return message.reply("Número inválido (1-100).");
-        const msg = await message.channel.bulkDelete(argsNumber, true);
-        const reply = await message.channel.send(`🗑️ ${argsNumber} mensagens apagadas!`);
-        setTimeout(() => {
-          message.delete().catch(() => {});
-          reply.delete().catch(() => {});
-        }, 5000);
+      const msg = await message.channel.bulkDelete(amount, true);
+      const reply = await message.channel.send(`🗑️ ${amount} mensagens apagadas!`);
+      setTimeout(() => {
+        message.delete().catch(() => {});
+        reply.delete().catch(() => {});
+      }, 5000);
     }
   }
 });
 
 // =============================
-// INTERAÇÕES (BOTÕES E SELECT MENUS)
+// INTERAÇÕES
 // =============================
 client.on("interactionCreate", async interaction => {
   const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
   const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
-
   if (!isStaff && !isEspecial) return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
   if (interaction.isButton()) {
@@ -333,15 +301,9 @@ client.on("interactionCreate", async interaction => {
       const userId = interaction.customId.split("_")[1];
       const member = await interaction.guild.members.fetch(userId).catch(() => null);
       if (!member) return;
-
       const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
       if (muteRole) await member.roles.remove(muteRole);
-
-      await interaction.update({
-        content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`,
-        embeds: [],
-        components: []
-      });
+      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
     }
   }
 
@@ -351,155 +313,15 @@ client.on("interactionCreate", async interaction => {
     if (!member) return;
 
     if (interaction.customId.startsWith("selectcargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) {
-          await member.roles.add(cargo);
-        }
-      }
-      await interaction.update({
-        content: `✅ Cargos adicionados para ${member}`,
-        embeds: [],
-        components: []
-      });
-    }
-
-    if (interaction.customId.startsWith("removercargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        if (member.roles.cache.has(cid)) {
-          await member.roles.remove(cid);
-        }
-      }
-      await interaction.update({
-        content: `🗑 Cargos removidos de ${member}`,
-        embeds: [],
-        components: []
-      });
-    }
-  }
-});
-
-// =============================
-// BIO DO BOT
-// =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", {
-    type: "WATCHING"
-  });
-});
-
-// =============================
-// LOGIN
-// =============================
-client.login(process.env.TOKEN);essage.guild.roles.cache.find(r => r.name === "Muted");
-    if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
-    await message.member.roles.add(muteRole);
-    message.reply(`🔇 Você foi mutado por spam!`);
-  }
-});
-
-// =============================
-// INTERAÇÕES (BOTÕES E SELECT MENUS)
-// =============================
-client.on("interactionCreate", async interaction => {
-  const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
-  const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
-
-  if (interaction.isButton()) {
-    if (!isStaff && !isEspecial)
-      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
-
-    if (interaction.customId.startsWith("unmute_")) {
-      const userId = interaction.customId.split("_")[1];
-      const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
-
-      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-      if (muteRole) await member.roles.remove(muteRole);
-
-      await interaction.update({
-        content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`,
-        embeds: [],
-        components: []
-      });
-    }
-  }
-
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
-
-    if (!isStaff && !isEspecial)
-      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
-
-    if (interaction.customId.startsWith("selectcargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) {
-          await member.roles.add(cargo);
-        }
-      }
-      await interaction.update({
-        content: `✅ Cargos adicionados para ${member}`,
-        embeds: [],
-        components: []
-      });
-    }
-
-    if (interaction.customId.startsWith("removercargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        if (member.roles.cache.has(cid)) {
-          await member.roles.remove(cid);
-        }
-      }
-      await interaction.update({
-        content: `🗑 Cargos removidos de ${member}`,
-        embeds: [],
-        components: []
-      });
-    }
-  }
-});
-
-// =============================
-// BIO DO BOT
-// =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", {
-    type: "WATCHING"
-  });
-});
-
-client.login(process.env.TOKEN);= interaction.member.roles.cache.has(CARGO_ESPECIAL);
-
-  if (!isStaff && !isEspecial) return;
-
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
-
-    // SETAR CARGOS
-    if (interaction.customId.startsWith("selectcargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
+      for (const cid of interaction.values) {
         const cargo = interaction.guild.roles.cache.get(cid);
         if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
       }
       await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
     }
 
-    // REMOVER CARGOS
     if (interaction.customId.startsWith("removercargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
+      for (const cid of interaction.values) {
         if (member.roles.cache.has(cid)) await member.roles.remove(cid);
       }
       await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
@@ -515,4 +337,7 @@ client.on("ready", () => {
   client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
 });
 
+// =============================
+// LOGIN
+// =============================
 client.login(process.env.TOKEN);
