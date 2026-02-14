@@ -257,29 +257,39 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // CLEAR
+  // CLEAR (CORRIGIDO)
   // =============================
   if (command === "clear") {
     const target = message.mentions.users.first();
-    const amount = parseInt(args[0]);
-    if (!message.member.permissions.has("MANAGE_MESSAGES")) return message.reply("Sem permissão.");
-    if (!args[0] || isNaN(amount) || amount < 1 || amount > 100)
+    let amount = parseInt(args[0]);
+
+    if (!message.member.permissions.has("MANAGE_MESSAGES")) 
+      return message.reply("Sem permissão.");
+
+    if (!args[0] || isNaN(amount) || amount < 1 || amount > 100) {
       return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
+    }
 
     if (target) {
       const userAmount = args[1] ? parseInt(args[1]) : 100;
-      if (isNaN(userAmount) || userAmount < 1 || userAmount > 100) return message.reply("Número inválido (1-100).");
+      if (isNaN(userAmount) || userAmount < 1 || userAmount > 100) 
+        return message.reply("Número inválido (1-100).");
+
       const messages = await message.channel.messages.fetch({ limit: 100 });
       const userMessages = messages.filter(m => m.author.id === target.id).first(userAmount);
-      const reply = await message.channel.bulkDelete(userMessages, true);
-      const msg = await message.channel.send(`🗑️ ${userMessages.length} mensagens de ${target.tag} apagadas!`);
+
+      if (!userMessages.length) return message.reply("Nenhuma mensagem encontrada para apagar.");
+
+      await message.channel.bulkDelete(userMessages, true);
+      const reply = await message.channel.send(`🗑️ ${userMessages.length} mensagens de ${target.tag} apagadas!`);
       setTimeout(() => {
         message.delete().catch(() => {});
-        msg.delete().catch(() => {});
+        reply.delete().catch(() => {});
       }, 5000);
+
     } else {
-      const msg = await message.channel.bulkDelete(amount, true);
-      const reply = await message.channel.send(`🗑️ ${amount} mensagens apagadas!`);
+      const deleted = await message.channel.bulkDelete(amount, true);
+      const reply = await message.channel.send(`🗑️ ${deleted.size} mensagens apagadas!`);
       setTimeout(() => {
         message.delete().catch(() => {});
         reply.delete().catch(() => {});
