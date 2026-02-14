@@ -161,32 +161,60 @@ client.on("messageCreate", async message=>{
   // SPAM
   await handleSpam(message);
 
+  // ===== COMANDOS SETAR / REMOVER CARGOS =====
   if(!message.content.startsWith(PREFIX)) return;
-  const args=message.content.slice(PREFIX.length).trim().split(/ +/);
-  const cmd=args.shift().toLowerCase();
-  const member=message.mentions.members.first();
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const cmd = args.shift().toLowerCase();
+  const member = message.mentions.members.first();
+  if(!member) return;
 
-  if(!canUseCommand(message.member,cmd)){
-    try{const m=await message.reply("Você não tem permissão para usar este comando."); setTimeout(async()=>await m.delete().catch(()=>{}),5000);}catch(e){console.error(e);}
-  }
-
-  // MUTE / UNMUTE
-  if(["mutechat","mutecall","unmutechat","unmutecall"].includes(cmd)&&member){
-    const timeArg=args[0], motivo=args.slice(1).join(" ")||"Não informado", duration=parseDuration(timeArg);
-    if(cmd==="mutechat") await muteMember(member,motivo,message);
-    if(cmd==="mutecall"){
-      if(!member.voice.channel) return (await message.reply("O usuário não está em call.")).delete();
-      await member.voice.setMute(true);
-      const embed=new EmbedBuilder().setColor("Orange").setTitle("🎙 Usuário Mutado na Call")
-        .setDescription(`${member} foi silenciado na call`)
-        .addFields({name:"🆔 ID",value:member.id},{name:"⏳ Tempo",value:timeArg},{name:"📄 Motivo",value:motivo},{name:"👮 Staff",value:message.author.tag})
-        .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:message.guild.name}).setTimestamp();
-      const msgSent=await message.reply({embeds:[embed]}); sendLog(message.guild,embed);
-      setTimeout(()=>msgSent.delete().catch(()=>{}),5000);
-      setTimeout(async()=>{if(member.voice.serverMute) await member.voice.setMute(false);},duration);
+  if(cmd === "setarcargo" || cmd === "removercargo"){
+    if(!canUseCommand(message.member, cmd)){
+      const m = await message.reply("Você não tem permissão para usar este comando.");
+      return setTimeout(()=>m.delete().catch(()=>{}),5000);
     }
-    if(cmd==="unmutechat") await unmuteMember(member,message);
-    if(cmd==="unmutecall") await unmuteCall(member,message);
+
+    if(cmd === "setarcargo"){
+      const row = new ActionRowBuilder();
+      for(const cat of CATEGORIAS){
+        row.addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`select_${member.id}_${cat.label}_${message.author.id}`)
+            .setPlaceholder(`Selecione cargos: ${cat.label}`)
+            .setMinValues(1)
+            .setMaxValues(cat.maxSelect||cat.options.length)
+            .addOptions(cat.options.map(o=>({label:o.label, value:o.id})))
+        );
+      }
+
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("✅ Setar Cargos")
+        .setDescription(`Selecione os cargos que deseja adicionar para ${member}`);
+
+      return message.reply({embeds:[embed], components:[row]});
+    }
+
+    if(cmd === "removercargo"){
+      const userRoles = member.roles.cache.filter(r => r.id !== message.guild.id);
+      if(!userRoles.size) return message.reply("Este usuário não possui cargos.").then(m=>setTimeout(()=>m.delete().catch(()=>{}),5000));
+
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`removercargo_${member.id}_${message.author.id}`)
+          .setPlaceholder("Selecione os cargos para remover")
+          .setMinValues(1)
+          .setMaxValues(userRoles.size)
+          .addOptions(userRoles.map(r => ({label:r.name, value:r.id})))
+      );
+
+      const embed = new EmbedBuilder()
+        .setColor("Orange")
+        .setTitle("🗑 Remover Cargos")
+        .setDescription(`Selecione os cargos que deseja remover de ${member}`);
+
+      return message.reply({embeds:[embed], components:[row]});
+    }
   }
 });
 
@@ -205,7 +233,7 @@ client.on("channelCreate", async channel=>{
 client.on("interactionCreate", async interaction=>{
   if(!interaction.isStringSelectMenu()) return;
 
-  const parts = interaction.customId.split("_"); // Ex.: select_userId_menuName_executorId
+  const parts = interaction.customId.split("_"); 
   const userId = parts[1], menuName = parts[2], executorId = parts[3];
   const member = await interaction.guild.members.fetch(userId).catch(()=>null);
   if(!member) return;
