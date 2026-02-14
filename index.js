@@ -2,11 +2,7 @@ const {
   Client,
   GatewayIntentBits,
   PermissionsBitField,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  StringSelectMenuBuilder
+lder
 } = require("discord.js");
 
 require("dotenv").config();
