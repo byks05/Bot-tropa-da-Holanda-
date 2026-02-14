@@ -247,6 +247,32 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
+  // UNMUTECHAT / UNMUTECALL
+  // =============================
+  if (["unmutechat", "unmutecall"].includes(command) && member) {
+    if (command === "unmutechat") {
+      const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+      if (muteRole && member.roles.cache.has(muteRole.id)) {
+        await member.roles.remove(muteRole);
+        await message.reply(`🔊 ${member} foi desmutado no chat!`);
+      } else {
+        await message.reply(`${member} não está mutado no chat.`);
+      }
+    }
+
+    if (command === "unmutecall") {
+      if (member.voice.channel && member.voice.serverMute) {
+        await member.voice.setMute(false);
+        await message.reply(`🔊 ${member} foi desmutado na call!`);
+      } else {
+        await message.reply(`${member} não está mutado na call.`);
+      }
+    }
+
+    message.delete().catch(() => {});
+  }
+
+  // =============================
   // CLEAR
   // =============================
   if (command === "clear") {
