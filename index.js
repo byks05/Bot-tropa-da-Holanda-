@@ -2,13 +2,13 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, StringSelectM
 require("dotenv").config();
 
 const client = new Client({
-  intents:[
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
-  ]
+intents:[
+GatewayIntentBits.Guilds,
+GatewayIntentBits.GuildMessages,
+GatewayIntentBits.MessageContent,
+GatewayIntentBits.GuildMembers,
+GatewayIntentBits.GuildVoiceStates
+]
 });
 
 // =============================
@@ -22,188 +22,287 @@ const RULES_CHANNEL_ID = "1468011045166518427";
 const TICKET_CATEGORY_ID = "1468014890500489447";
 const RECRUITMENT_ROLE_ID = "1468024687031484530";
 
-// =============================
-// CATEGORIAS COM EMOJIS
-// =============================
 const CATEGORIAS = [
-  {
-    label:"🌸 Faixa Rosas (Somente Meninas)",
-    options:[
-      {label:"🎖️ Equipe Tropa da Holanda", id:"1468026315285205094"},
-      {label:"✔️ Verificado", id:"1468283328510558208"}
-    ],
-    allowAll:true
-  },
-  {
-    label:"🇳🇱 TropaDaHolanda",
-    options:[
-      {label:"🟢 Membro Ativo", id:"1468022534686507028"},
-      {label:"👑 Dono do Paredão", id:"1468263594931130574"},
-      {label:"🤝 Aliados", id:"1468279104624398509"}
-    ],
-    allowAll:false // SOMENTE STAFF
-  }
+{
+label:"Faixa Rosas (Somente Meninas)",
+options:[
+{label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
+{label:"Verificado", id:"1468283328510558208"}
+],
+maxSelect:null,
+allowAll:true
+},
+{
+label:"TropaDaHolanda",
+options:[
+{label:"Membro Ativo", id:"1468022534686507028"},
+{label:"Dono do Paredão", id:"1468263594931130574"},
+{label:"Aliados", id:"1468279104624398509"}
+],
+maxSelect:null,
+allowAll:false
+}
 ];
 
 // =============================
 // UTILS
 // =============================
+const parseDuration = t=>{
+const m=t?.match(/^(\d+)([mh])$/); if(!m) return null;
+const [_,v,u]=m;
+if(u==="m") return parseInt(v)*60000;
+if(u==="h") return parseInt(v)*3600000;
+return null;
+};
+
 const sendLog = (guild, embed) => guild.channels.cache.get(LOG_CHANNEL_ID)?.send({embeds:[embed]});
-const isStaff = (member) => STAFF_ROLE_IDS.some(id=>member.roles.cache.has(id));
+const canUseCommand=(m,c)=> STAFF_ROLE_IDS.some(id=>m.roles.cache.has(id))||(m.roles.cache.has(CARGO_ESPECIAL)&&["setarcargo","removercargo","rec"].includes(c));
 
 // =============================
-// PALAVRAS-CHAVE
+// SPAM
+// =============================
+const messageHistory=new Map(), bigMessageHistory=new Map();
+async function handleSpam(message){
+if(!message.guild||message.author.bot) return;
+const isStaff = STAFF_ROLE_IDS.some(id=>message.member.roles.cache.has(id));
+const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
+if(isStaff||isEspecial) return;
+
+const now=Date.now(), userId=message.author.id;
+
+if(message.content.length>=200){
+if(!bigMessageHistory.has(userId)) bigMessageHistory.set(userId,[]);
+const arr=bigMessageHistory.get(userId); arr.push(now); while(arr.length>3) arr.shift(); bigMessageHistory.set(userId,arr);
+if(arr.length>=3){ await muteMember(message.member,"Spam de texto grande",message); bigMessageHistory.set(userId,[]); }
+}
+
+if(!messageHistory.has(userId)) messageHistory.set(userId,[]);
+const msgs=messageHistory.get(userId); msgs.push(now);
+const filtered=msgs.filter(t=>now-t<=5000);
+messageHistory.set(userId,filtered);
+if(filtered.length>=5){ await muteMember(message.member,"Spam de palavras rápidas",message); messageHistory.set(userId,[]); }
+}
+
+// =============================
+// MUTE / UNMUTE
+// =============================
+async function muteMember(member,motivo,msg=null){
+let muteRole=member.guild.roles.cache.find(r=>r.name==="Muted");
+if(!muteRole) muteRole=await member.guild.roles.create({name:"Muted",permissions:[]});
+await member.roles.add(muteRole);
+
+const embed=new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado")
+.setDescription(${member} foi mutado automaticamente)
+.addFields(
+{name:"🆔 ID",value:member.id},
+{name:"⏳ Tempo",value:"2 minutos"},
+{name:"📄 Motivo",value:motivo},
+{name:"👮 Staff",value:msg?msg.client.user.tag:"Sistema"}
+).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+
+if(msg) await msg.channel.send({embeds:[embed]});
+sendLog(member.guild,embed);
+
+setTimeout(()=>{if(member.roles.cache.has(muteRole.id)) member.roles.remove(muteRole);},2601000);
+}
+
+async function unmuteMember(member,msg=null){
+const muteRole=member.guild.roles.cache.find(r=>r.name==="Muted");
+if(!muteRole) return;
+if(member.roles.cache.has(muteRole.id)){
+await member.roles.remove(muteRole);
+const embed=new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado")
+.setDescription(${member} foi desmutado)
+.addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
+.setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+if(msg) await msg.channel.send({embeds:[embed]});
+sendLog(member.guild,embed);
+}
+}
+
+async function unmuteCall(member,msg=null){
+if(!member.voice.channel) return; await member.voice.setMute(false);
+const embed=new EmbedBuilder().setColor("Green").setTitle("🎙 Usuário Desmutado na Call")
+.setDescription(${member} foi desmutado na call)
+.addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
+.setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+if(msg) await msg.channel.send({embeds:[embed]}); sendLog(member.guild,embed);
+}
+
+// =============================
+// MENSAGENS
 // =============================
 client.on("messageCreate", async message=>{
-  if(!message.guild||message.author.bot) return;
+if(!message.guild||message.author.bot) return;
 
-  if(/\blink da tropa\b/i.test(message.content)){
-    const msg = await message.channel.send("🇳🇱 Aqui está o link da Tropa da Holanda:\nhttps://discord.gg/tropadaholanda");
-    setTimeout(()=>msg.delete().catch(()=>{}),30000);
-  }
+// PALAVRAS-CHAVE
+const palavras=[
+{regex:/\bsetamento\b/i, msg:"Confira o canal <#1468020392005337161>", cor:"Blue", deleteTime:30000},
+{regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
+{regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
+{regex:/\bregras\b/i, msg:<#${RULES_CHANNEL_ID}>, cor:"Yellow", deleteTime:300000},
+{regex:/\blink da tropa\b/i, msg:"Aqui está o link da Tropa da Holanda: https://discord.gg/tropadaholanda", cor:"Purple", deleteTime:30000}
+];
+
+for(const p of palavras){
+if(p.regex.test(message.content)){
+try{
+const msgSent=await message.channel.send(p.msg);
+setTimeout(async()=>await msgSent.delete().catch(()=>{}), p.deleteTime);
+sendLog(message.guild,new EmbedBuilder()
+.setColor(p.cor)
+.setTitle("📌 Palavra Detectada")
+.setDescription(${message.author} digitou "${p.regex.source.replace(/\\b/g,"")}")
+.setTimestamp()
+);
+}catch(e){console.error(e);}
+}
+}
+
+// SPAM
+await handleSpam(message);
 });
 
 // =============================
-// INTERAÇÕES
+// TICKET MENTION
+// =============================
+client.on("channelCreate", async channel=>{
+if(channel.type===0 && channel.parentId===TICKET_CATEGORY_ID && channel.name.toLowerCase().includes("ticket")){
+await channel.send(<@&${RECRUITMENT_ROLE_ID}>);
+}
+});
+
+// =============================
+// INTERAÇÕES (BOTÕES E SELECT MENUS)
 // =============================
 client.on("interactionCreate", async interaction=>{
-  if(!interaction.isStringSelectMenu()) return;
+if(!interaction.isStringSelectMenu()) return;
 
-  const parts = interaction.customId.split("_"); 
-  const action = parts[0], subAction = parts[1], userId = parts[2], executorId = parts[3];
+const parts = interaction.customId.split("_");
+const action = parts[0], subAction = parts[1], userId = parts[2], executorId = parts[3];
 
-  if(interaction.user.id !== executorId) 
-    return interaction.reply({content:"❌ Apenas quem iniciou o comando pode usar este menu.", ephemeral:true});
+// Somente quem executou o comando pode interagir
+if(interaction.user.id !== executorId)
+return interaction.reply({content:"❌ Apenas quem iniciou o comando pode usar este menu.", ephemeral:true});
 
-  const member = await interaction.guild.members.fetch(userId).catch(()=>null);
-  if(!member) return;
-  const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
+const member = await interaction.guild.members.fetch(userId).catch(()=>null);
+if(!member) return;
+const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
 
-  // =============================
-  // SETAR CARGOS
-  // =============================
-  if(action === "setarcargo"){
-    const categoria = CATEGORIAS.find(c=>c.label.includes(subAction));
-    if(!categoria) return;
+// ===== SETAR CARGOS =====
+if(action === "setarcargo" || action === "Membros" || action === "TropaDaHolanda"){
+if(action === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id => executor.roles.cache.has(id)))
+return interaction.reply({content:"Você não pode selecionar cargos nessa categoria.", ephemeral:true});
 
-    if(!categoria.allowAll && !isStaff(executor))
-      return interaction.reply({content:"❌ Apenas administradores podem usar essa categoria.", ephemeral:true});
+for(const cid of interaction.values){  
+  const role = interaction.guild.roles.cache.get(cid);  
+  if(role && !member.roles.cache.has(cid)) await member.roles.add(role);  
+}  
 
-    for(const cid of interaction.values){
-      if(!member.roles.cache.has(cid)) await member.roles.add(cid);
-    }
+await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});  
 
-    await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
-  }
+if(executor) sendLog(interaction.guild, new EmbedBuilder().setColor("Blue").setTitle("📌 Comando Executado").setDescription(`${executor} executou setarcargo em ${member}`).setTimestamp());
 
-  // =============================
-  // REMOVER CARGOS
-  // =============================
-  if(action === "removercargo"){
-    for(const cid of interaction.values){
-      if(member.roles.cache.has(cid)) await member.roles.remove(cid);
-    }
-    await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
-  }
+}
 
-  // =============================
-  // RECRUTAMENTO CICLICO
-  // =============================
-  if(action === "rec"){
+// ===== REMOVER CARGOS =====
+if(action === "removercargo"){
+for(const cid of interaction.values){
+if(member.roles.cache.has(cid)) await member.roles.remove(cid);
+}
 
-    const menuPrincipal = async ()=>{
-      const embed = new EmbedBuilder()
-        .setTitle("🎯 Sistema de Recrutamento")
-        .setDescription(`Selecione uma ação para ${member}`)
-        .setColor("Green");
+await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});  
 
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_init_${member.id}_${executor.id}`)
-          .setPlaceholder("Escolha uma ação")
-          .addOptions([
-            {label:"➕ Adicionar Cargos", value:"adicionar"},
-            {label:"➖ Remover Cargos", value:"remover"},
-            {label:"✅ Finalizar", value:"concluir"}
-          ])
-      );
+if(executor) sendLog(interaction.guild, new EmbedBuilder().setColor("Orange").setTitle("📌 Comando Executado").setDescription(`${executor} executou removercargo em ${member}`).setTimestamp());
 
-      await interaction.update({embeds:[embed], components:[row]});
-    };
+}
 
-    if(subAction === "init"){
-      const escolha = interaction.values[0];
+// ===== RECRUTAMENTO CICLICO (thl!rec) =====
+if(action === "rec"){
+const recMember = member;
+const recExecutor = executor;
 
-      if(escolha === "adicionar"){
+const menuPrincipal = async () => {  
+  const embed = new EmbedBuilder()  
+    .setTitle("🎯 Recrutamento")  
+    .setDescription(`Selecione uma ação para ${recMember}:`)  
+    .setColor("Green");  
+  const row = new ActionRowBuilder().addComponents(  
+    new StringSelectMenuBuilder()  
+      .setCustomId(`rec_init_${recMember.id}_${recExecutor.id}`)  
+      .setPlaceholder("Escolha uma ação")  
+      .addOptions([  
+        { label: "Adicionar", value: "adicionar", description: "Adicionar cargos", emoji: "➕" },  
+        { label: "Remover", value: "remover", description: "Remover cargos", emoji: "➖" },  
+        { label: "Concluído", value: "concluido", description: "Finalizar recrutamento", emoji: "✅" }  
+      ])  
+  );  
+  await interaction.update({embeds:[embed], components:[row]});  
+};  
 
-        let options = [];
+if(subAction === "init"){  
+  const choice = interaction.values[0];  
+  if(choice === "adicionar"){  
+    const categoriasMembros = CATEGORIAS.find(c => c.label === "Faixa Rosas (Somente Meninas)");  
+    const options = categoriasMembros.options.map(o => ({label:o.label, value:o.id}));  
+    const row = new ActionRowBuilder().addComponents(  
+      new StringSelectMenuBuilder()  
+        .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)  
+        .setPlaceholder("Selecione cargos para adicionar")  
+        .setMinValues(1)  
+        .setMaxValues(options.length)  
+        .addOptions(options)  
+    );  
+    return interaction.update({content:`🎯 Adicionar cargos para ${recMember}`, embeds:[], components:[row]});  
+  }  
 
-        for(const categoria of CATEGORIAS){
+  if(choice === "remover"){  
+    const userRoles = recMember.roles.cache.map(r => ({label:r.name, value:r.id})).filter(r => r.value !== recMember.guild.id);  
+    if(userRoles.length === 0) return interaction.update({content:`⚠️ ${recMember} não possui cargos para remover.`, embeds:[], components:[]});  
+    const row = new ActionRowBuilder().addComponents(  
+      new StringSelectMenuBuilder()  
+        .setCustomId(`rec_remove_${recMember.id}_${recExecutor.id}`)  
+        .setPlaceholder("Selecione cargos para remover")  
+        .setMinValues(1)  
+        .setMaxValues(userRoles.length)  
+        .addOptions(userRoles)  
+    );  
+    return interaction.update({content:`🎯 Remover cargos de ${recMember}`, embeds:[], components:[row]});  
+  }  
 
-          if(!categoria.allowAll && !isStaff(executor)) continue;
+  if(choice === "concluido"){  
+    return interaction.update({content:`✅ Recrutamento finalizado para ${recMember}`, embeds:[], components:[]});  
+  }  
+}  
 
-          categoria.options.forEach(o=>{
-            options.push({label:o.label, value:o.id});
-          });
-        }
+if(subAction === "add"){  
+  for(const cid of interaction.values){  
+    const role = interaction.guild.roles.cache.get(cid);  
+    if(role && !recMember.roles.cache.has(cid)) await recMember.roles.add(cid);  
+  }  
+  if(recExecutor) sendLog(interaction.guild, new EmbedBuilder().setColor("Blue").setTitle("📌 Cargos Adicionados").setDescription(`${recExecutor} adicionou cargos a ${recMember}`).setTimestamp());  
+  return menuPrincipal();  
+}  
 
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`rec_add_${member.id}_${executor.id}`)
-            .setPlaceholder("Selecione cargos para adicionar")
-            .setMinValues(1)
-            .setMaxValues(options.length)
-            .addOptions(options)
-        );
+if(subAction === "remove"){  
+  for(const cid of interaction.values){  
+    if(recMember.roles.cache.has(cid)) await recMember.roles.remove(cid);  
+  }  
+  if(recExecutor) sendLog(interaction.guild, new EmbedBuilder().setColor("Orange").setTitle("📌 Cargos Removidos").setDescription(`${recExecutor} removeu cargos de ${recMember}`).setTimestamp());  
+  return menuPrincipal();  
+}
 
-        return interaction.update({content:`➕ Adicionar cargos para ${member}`, embeds:[], components:[row]});
-      }
-
-      if(escolha === "remover"){
-        const userRoles = member.roles.cache
-          .filter(r=>r.id!==member.guild.id)
-          .map(r=>({label:`🗑 ${r.name}`, value:r.id}));
-
-        if(userRoles.length===0)
-          return interaction.update({content:"⚠️ Este usuário não possui cargos removíveis.", components:[]});
-
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`rec_remove_${member.id}_${executor.id}`)
-            .setPlaceholder("Selecione cargos para remover")
-            .setMinValues(1)
-            .setMaxValues(userRoles.length)
-            .addOptions(userRoles)
-        );
-
-        return interaction.update({content:`➖ Remover cargos de ${member}`, embeds:[], components:[row]});
-      }
-
-      if(escolha === "concluir"){
-        return interaction.update({content:`✅ Recrutamento finalizado para ${member}`, components:[]});
-      }
-    }
-
-    if(subAction === "add"){
-      for(const cid of interaction.values){
-        if(!member.roles.cache.has(cid)) await member.roles.add(cid);
-      }
-      return menuPrincipal();
-    }
-
-    if(subAction === "remove"){
-      for(const cid of interaction.values){
-        if(member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      return menuPrincipal();
-    }
-  }
+}
 });
 
 // =============================
-client.once("ready",()=>{
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("🇳🇱 Tropa da Holanda",{type:"WATCHING"});
-});
+// READY
+// =============================
+client.once("ready",()=>{console.log(Bot online! ${client.user.tag}); client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda",{type:"WATCHING"});});
 
+// =============================
+// LOGIN
+// =============================
 client.login(process.env.TOKEN);
+
+Junte os dois
