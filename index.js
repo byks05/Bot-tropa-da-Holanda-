@@ -32,10 +32,23 @@ const STAFF_ROLE_IDS = [
   "1468017578747105390"
 ];
 
-// CARGOS DISPONÍVEIS PARA SETARCARGO
-const CARGOS_RECRUTAMENTO = [
-  { label: "Equipe Tropa da Holanda", id: "1468026315285205094" },
-  { label: "Verificado", id: "1468283328510558208" }
+// =============================
+// CATEGORIAS E CARGOS
+// =============================
+const CARGO_CATEGORIAS = [
+  {
+    label: "Inicial", // antes era Recrutamento
+    options: [
+      { label: "Equipe Tropa da Holanda", value: "1468026315285205094" },
+      { label: "Verificado", value: "1468283328510558208" }
+    ]
+  },
+  {
+    label: "Aliados",
+    options: [
+      { label: "Aliados", value: "1468279104624398509" }
+    ]
+  }
 ];
 
 const MAX_HOURS = 999;
@@ -80,7 +93,6 @@ client.on("messageCreate", async message => {
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
   const member = message.mentions.members.first();
 
   if (!STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id))) {
@@ -88,33 +100,32 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // SETAR CARGOS COM EMBED E BOTÕES
+  // COMANDO PARA SETAR CARGOS COM CATEGORIAS
   // =============================
   if (command === "setarcargo") {
     if (!member) return message.reply("Mencione um usuário.");
 
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargo")
-      .setDescription(`Escolha o cargo para ${member}`)
+      .setDescription(`Escolha a categoria e o cargo para ${member}`)
       .setColor("Blue");
 
-    const options = CARGOS_RECRUTAMENTO.map(cargo => ({
-      label: cargo.label,
-      value: cargo.id
-    }));
+    const rows = CARGO_CATEGORIAS.map((categoria) => {
+      return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`selectcargo_${categoria.label}_${member.id}`)
+          .setPlaceholder(categoria.label)
+          .setMinValues(1)
+          .setMaxValues(categoria.options.length)
+          .addOptions(categoria.options)
+      );
+    });
 
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`selectcargo_${member.id}`)
-        .setPlaceholder("Selecione o cargo")
-        .addOptions(options)
-    );
-
-    await message.reply({ embeds: [embed], components: [row] });
+    await message.reply({ embeds: [embed], components: rows });
   }
 
   // =============================
-  // MUTE CHAT E CALL
+  // MUTE CHAT / CALL
   // =============================
   if (["mutechat", "mutecall"].includes(command)) {
     if (!member) return message.reply("Mencione um usuário.");
@@ -193,7 +204,7 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // UNMUTE CHAT
+  // UNMUTE CHAT / CALL
   // =============================
   if (command === "unmutechat") {
     if (!member) return message.reply("Mencione um usuário.");
@@ -202,9 +213,6 @@ client.on("messageCreate", async message => {
     await message.reply(`🔊 ${member} foi desmutado.`);
   }
 
-  // =============================
-  // UNMUTE CALL
-  // =============================
   if (command === "unmutecall") {
     if (!member) return message.reply("Mencione um usuário.");
     if (!member.voice.channel) return message.reply("O usuário não está em call.");
@@ -239,21 +247,22 @@ client.on("interactionCreate", async interaction => {
 
   if (interaction.isStringSelectMenu()) {
     if (!interaction.customId.startsWith("selectcargo_")) return;
-
     if (!STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id)))
       return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    const parts = interaction.customId.split("_");
+    const memberId = parts[2];
+    const member = await interaction.guild.members.fetch(memberId).catch(() => null);
     if (!member) return;
 
-    const cargoId = interaction.values[0];
-    const cargo = interaction.guild.roles.cache.get(cargoId);
-    if (!cargo) return;
+    const cargos = interaction.values.map(id => interaction.guild.roles.cache.get(id)).filter(Boolean);
 
-    await member.roles.add(cargo);
+    for (const cargo of cargos) {
+      await member.roles.add(cargo);
+    }
+
     await interaction.update({
-      content: `✅ Cargo **${cargo.name}** adicionado para ${member}`,
+      content: `✅ Cargos adicionados para ${member}: ${cargos.map(c => c.name).join(", ")}`,
       embeds: [],
       components: []
     });
