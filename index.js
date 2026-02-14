@@ -298,17 +298,3 @@ client.once("ready", () => {
 // LOGIN
 // =============================
 client.login(process.env.TOKEN);
-});
-
-// =============================
-// READY
-// =============================
-client.once("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
-});
-
-// =============================
-// LOGIN
-// =============================
-client.login(process.env.TOKEN);
