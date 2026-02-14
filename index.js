@@ -1,4 +1,4 @@
-Oiconst {
+const {
   Client,
   GatewayIntentBits,
   PermissionsBitField,
