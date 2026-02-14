@@ -152,7 +152,7 @@ setTimeout(async()=>await msgSent.delete().catch(()=>{}), p.deleteTime);
 sendLog(message.guild,new EmbedBuilder()
 .setColor(p.cor)
 .setTitle("📌 Palavra Detectada")
-.setDescription(${message.author} digitou "${p.regex.source.replace(/\\b/g,"")}")
+.setDescription(`${message.author} digitou "${p.regex.source.replace(/\\b/g,"")}"`)
 .setTimestamp()
 );
 }catch(e){console.error(e);}
