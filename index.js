@@ -30,7 +30,7 @@ const CATEGORIAS = [
       {label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
       {label:"Verificado", id:"1468283328510558208"}
     ],
-    maxSelect:null,
+    maxSelect:null, 
     allowAll:true
   },
   {
@@ -190,31 +190,22 @@ client.on("messageCreate", async message=>{
     if(cmd==="unmutecall") await unmuteCall(member,message);
   }
 
-  // =======================
-  // COMANDO RECRUTAMENTO
-  // =======================
+  // ===== COMANDO thl!rec =====
   if(cmd === "rec" && member){
-    if(!STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id))){
-      return message.reply("❌ Você não tem permissão para usar esse comando.");
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle("🎯 Recrutamento")
-      .setDescription(`Selecione uma ação para ${member}:`)
+    const embed = new EmbedBuilder().setTitle("🎯 Recrutamento")
+      .setDescription(`Selecione uma ação para ${member}`)
       .setColor("Green");
-
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`rec_init_${member.id}_${message.author.id}`)
         .setPlaceholder("Escolha uma ação")
         .addOptions([
-          { label: "Adicionar", value: "adicionar", description: "Adicionar cargos ao usuário", emoji: "➕" },
-          { label: "Remover", value: "remover", description: "Remover cargos do usuário", emoji: "➖" },
-          { label: "Concluído", value: "concluido", description: "Finalizar o recrutamento", emoji: "✅" }
+          { label: "Adicionar", value: "adicionar", description: "Adicionar cargos", emoji: "➕" },
+          { label: "Remover", value: "remover", description: "Remover cargos", emoji: "➖" },
+          { label: "Concluído", value: "concluido", description: "Finalizar recrutamento", emoji: "✅" }
         ])
     );
-
-    await message.reply({embeds:[embed], components:[row]});
+    message.reply({embeds:[embed], components:[row]});
   }
 });
 
@@ -233,85 +224,128 @@ client.on("channelCreate", async channel=>{
 client.on("interactionCreate", async interaction=>{
   if(!interaction.isStringSelectMenu()) return;
 
-  const parts = interaction.customId.split("_"); // Ex.: rec_init_userId_executorId
-  const action = parts[0], userId = parts[2], executorId = parts[3];
+  const parts = interaction.customId.split("_"); // Ex.: select_userId_menuName_executorId
+  const action = parts[0], subAction = parts[1], userId = parts[2], executorId = parts[3];
   const member = await interaction.guild.members.fetch(userId).catch(()=>null);
   if(!member) return;
   const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
 
-  // ===== SETAR / REMOVER CARGOS EXISTENTE =====
-  if(action === "setarcargo" || action === "removercargo"){
-    if(parts[0]==="setarcargo"){
-      for(const cid of interaction.values){
-        const role = interaction.guild.roles.cache.get(cid);
-        if(role && !member.roles.cache.has(cid)) await member.roles.add(role);
-      }
-      await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
-    }
-    if(parts[0]==="removercargo"){
-      for(const cid of interaction.values){
-        if(member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
-    }
-    if(executor) sendLog(interaction.guild,new EmbedBuilder().setColor("Orange").setTitle("📌 Comando Executado").setDescription(`${executor} executou ${parts[0]} em ${member}`).setTimestamp());
-  }
+  // ===== SETAR CARGOS =====
+  if(action === "setarcargo" || action === "Membros" || action === "TropaDaHolanda"){
+    if(action === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id => executor.roles.cache.has(id)))
+      return interaction.reply({content:"Você não pode selecionar cargos nessa categoria.", ephemeral:true});
 
-  // ===== RECRUTAMENTO MENU =====
-  if(action === "rec"){
-    const selected = interaction.values[0];
-
-    // AÇÃO ADICIONAR
-    if(selected === "adicionar"){
-      const categoriasMembros = CATEGORIAS.find(c => c.label === "Membros");
-      const options = categoriasMembros.options.map(o => ({label:o.label, value:o.id}));
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_add_${member.id}_${executor.id}`)
-          .setPlaceholder("Selecione cargos para adicionar")
-          .setMinValues(1)
-          .setMaxValues(options.length)
-          .addOptions(options)
-      );
-      return interaction.update({content:`🎯 Adicionar cargos para ${member}`, embeds:[], components:[row]});
-    }
-
-    // AÇÃO REMOVER
-    if(selected === "remover"){
-      const userRoles = member.roles.cache.map(r => ({label:r.name, value:r.id})).filter(r => r.value !== member.guild.id);
-      if(userRoles.length === 0) return interaction.update({content:`⚠️ ${member} não possui cargos para remover.`, embeds:[], components:[]});
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_remove_${member.id}_${executor.id}`)
-          .setPlaceholder("Selecione cargos para remover")
-          .setMinValues(1)
-          .setMaxValues(userRoles.length)
-          .addOptions(userRoles)
-      );
-      return interaction.update({content:`🎯 Remover cargos de ${member}`, embeds:[], components:[row]});
-    }
-
-    // AÇÃO CONCLUÍDO
-    if(selected === "concluido"){
-      return interaction.update({content:`✅ Recrutamento finalizado para ${member}`, embeds:[], components:[]});
-    }
-  }
-
-  // INTERAÇÃO ADICIONAR RECRUTAMENTO
-  if(action === "rec" && parts[1]==="add"){
     for(const cid of interaction.values){
       const role = interaction.guild.roles.cache.get(cid);
       if(role && !member.roles.cache.has(cid)) await member.roles.add(role);
     }
-    return interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
+
+    await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
+
+    if(executor) sendLog(interaction.guild, new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou setarcargo em ${member}`)
+      .setTimestamp()
+    );
   }
 
-  // INTERAÇÃO REMOVER RECRUTAMENTO
-  if(action === "rec" && parts[1]==="remove"){
+  // ===== REMOVER CARGOS =====
+  if(action === "removercargo"){
     for(const cid of interaction.values){
       if(member.roles.cache.has(cid)) await member.roles.remove(cid);
     }
-    return interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
+
+    await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
+
+    if(executor) sendLog(interaction.guild, new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou removercargo em ${member}`)
+      .setTimestamp()
+    );
+  }
+
+  // ===== RECRUTAMENTO CICLICO =====
+  if(action === "rec"){
+    // aqui usa a função que já te passei anteriormente
+    const recParts = interaction.customId.split("_"); // rec_init_userId_executorId
+    const recSub = recParts[1];
+    const recUserId = recParts[2];
+    const recExecutorId = recParts[3];
+    const recMember = await interaction.guild.members.fetch(recUserId).catch(()=>null);
+    if(!recMember) return;
+    const recExecutor = await interaction.guild.members.fetch(recExecutorId).catch(()=>null);
+
+    const menuPrincipal = async () => {
+      const embed = new EmbedBuilder()
+        .setTitle("🎯 Recrutamento")
+        .setDescription(`Selecione uma ação para ${recMember}:`)
+        .setColor("Green");
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_init_${recMember.id}_${recExecutor.id}`)
+          .setPlaceholder("Escolha uma ação")
+          .addOptions([
+            { label: "Adicionar", value: "adicionar", description: "Adicionar cargos", emoji: "➕" },
+            { label: "Remover", value: "remover", description: "Remover cargos", emoji: "➖" },
+            { label: "Concluído", value: "concluido", description: "Finalizar recrutamento", emoji: "✅" }
+          ])
+      );
+      await interaction.update({embeds:[embed], components:[row]});
+    };
+
+    if(recSub === "init"){
+      const choice = interaction.values[0];
+      if(choice === "adicionar"){
+        const categoriasMembros = CATEGORIAS.find(c => c.label === "Membros");
+        const options = categoriasMembros.options.map(o => ({label:o.label, value:o.id}));
+        const row = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)
+            .setPlaceholder("Selecione cargos para adicionar")
+            .setMinValues(1)
+            .setMaxValues(options.length)
+            .addOptions(options)
+        );
+        return interaction.update({content:`🎯 Adicionar cargos para ${recMember}`, embeds:[], components:[row]});
+      }
+
+      if(choice === "remover"){
+        const userRoles = recMember.roles.cache.map(r => ({label:r.name, value:r.id})).filter(r => r.value !== recMember.guild.id);
+        if(userRoles.length === 0) return interaction.update({content:`⚠️ ${recMember} não possui cargos para remover.`, embeds:[], components:[]});
+        const row = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`rec_remove_${recMember.id}_${recExecutor.id}`)
+            .setPlaceholder("Selecione cargos para remover")
+            .setMinValues(1)
+            .setMaxValues(userRoles.length)
+            .addOptions(userRoles)
+        );
+        return interaction.update({content:`🎯 Remover cargos de ${recMember}`, embeds:[], components:[row]});
+      }
+
+      if(choice === "concluido"){
+        return interaction.update({content:`✅ Recrutamento finalizado para ${recMember}`, embeds:[], components:[]});
+      }
+    }
+
+    if(recSub === "add"){
+      for(const cid of interaction.values){
+        const role = interaction.guild.roles.cache.get(cid);
+        if(role && !recMember.roles.cache.has(cid)) await recMember.roles.add(role);
+      }
+      if(recExecutor) sendLog(interaction.guild, new EmbedBuilder().setColor("Blue").setTitle("📌 Cargos Adicionados").setDescription(`${recExecutor} adicionou cargos a ${recMember}`).setTimestamp());
+      return menuPrincipal();
+    }
+
+    if(recSub === "remove"){
+      for(const cid of interaction.values){
+        if(recMember.roles.cache.has(cid)) await recMember.roles.remove(cid);
+      }
+      if(recExecutor) sendLog(interaction.guild, new EmbedBuilder().setColor("Orange").setTitle("📌 Cargos Removidos").setDescription(`${recExecutor} removeu cargos de ${recMember}`).setTimestamp());
+      return menuPrincipal();
+    }
   }
 });
 
