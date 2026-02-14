@@ -49,17 +49,17 @@ const CATEGORIAS = [
 ];
 
 const MAX_HOURS = 999;
-const SPAM_MESSAGE_LIMIT = 5; 
-const SPAM_MESSAGE_INTERVAL = 5000; 
-const BIG_TEXT_LIMIT = 200; 
-const BIG_TEXT_COUNT = 3; 
-const MUTE_DURATION = 2 * 60 * 1000; 
+const SPAM_MESSAGE_LIMIT = 5;
+const SPAM_MESSAGE_INTERVAL = 5000;
+const BIG_TEXT_LIMIT = 200;
+const BIG_TEXT_COUNT = 3;
+const MUTE_DURATION = 2 * 60 * 1000; // 2 minutos
 
 // =============================
 // LOGS
 // =============================
 function sendLog(guild, embed) {
-  const canalLogs = guild.channels.cache.get("1468722726247338115"); // canal fixo
+  const canalLogs = guild.channels.cache.get("1468722726247338115");
   if (canalLogs) canalLogs.send({ embeds: [embed] });
 }
 
@@ -174,7 +174,9 @@ client.on("messageCreate", async message => {
   const member = message.mentions.members.first();
   if (!isStaffOrEspecial(message.member)) return message.reply("Você não tem permissão para usar este comando.");
 
+  // =============================
   // SETAR CARGOS
+  // =============================
   if (command === "setarcargo" && member) {
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargo")
@@ -195,7 +197,9 @@ client.on("messageCreate", async message => {
     await message.reply({ embeds: [embed], components: rows });
   }
 
+  // =============================
   // REMOVER CARGOS
+  // =============================
   if (command === "removercargo" && member) {
     const userRoles = member.roles.cache.filter(r => r.id !== message.guild.id);
     if (!userRoles.size) return message.reply("Este usuário não possui cargos.");
@@ -217,7 +221,9 @@ client.on("messageCreate", async message => {
     await message.reply({ embeds: [embed], components: [row] });
   }
 
+  // =============================
   // MUTE CHAT / CALL
+  // =============================
   if (["mutechat", "mutecall"].includes(command) && member) {
     const timeArg = args[0];
     const motivo = args.slice(1).join(" ") || "Não informado";
@@ -230,6 +236,7 @@ client.on("messageCreate", async message => {
     if (command === "mutecall") {
       if (!member.voice.channel) return message.reply("O usuário não está em call.");
       await member.voice.setMute(true);
+
       const embed = new EmbedBuilder()
         .setColor("Orange")
         .setTitle("🎙 Usuário Mutado na Call")
@@ -250,6 +257,56 @@ client.on("messageCreate", async message => {
       setTimeout(async () => {
         if (member.voice.serverMute) await member.voice.setMute(false);
       }, duration);
+    }
+  }
+
+  // =============================
+  // UNMUTE CHAT / CALL
+  // =============================
+  if (["unmutechat", "unmutecall"].includes(command) && member) {
+    if (command === "unmutechat") {
+      const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+      if (!muteRole || !member.roles.cache.has(muteRole.id)) {
+        return message.reply("Este usuário não está mutado no chat.");
+      }
+      await member.roles.remove(muteRole);
+
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🔊 Usuário Desmutado")
+        .setDescription(`${member} foi desmutado no chat`)
+        .addFields(
+          { name: "🆔 ID", value: member.id },
+          { name: "👮 Staff", value: message.author.tag }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: message.guild.name })
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+      sendLog(message.guild, embed);
+    }
+
+    if (command === "unmutecall") {
+      if (!member.voice.channel) return message.reply("O usuário não está em call.");
+      if (!member.voice.serverMute) return message.reply("O usuário não está mutado na call.");
+
+      await member.voice.setMute(false);
+
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🎙 Usuário Desmutado na Call")
+        .setDescription(`${member} foi desmutado na call`)
+        .addFields(
+          { name: "🆔 ID", value: member.id },
+          { name: "👮 Staff", value: message.author.tag }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setFooter({ text: message.guild.name })
+        .setTimestamp();
+
+      await message.reply({ embeds: [embed] });
+      sendLog(message.guild, embed);
     }
   }
 });
