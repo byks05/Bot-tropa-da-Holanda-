@@ -224,6 +224,30 @@ client.on("messageCreate", async message => {
   const regexSetamento = /\bsetamento\b/i;
   if (regexSetamento.test(message.content)) {
     await message.channel.send("Confira o canal <#1468020392005337161>");
+    // Log
+    const embed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📌 Palavra Detectada")
+      .setDescription(`${message.author} digitou 'setamento'`)
+      .setTimestamp();
+    sendLog(message.guild, embed);
+  }
+
+  // =============================
+  // CHECAGEM DE FAIXA ROSA
+  // =============================
+  const regexFaixaRosa = /\bfaixa rosa\b/i;
+  if (regexFaixaRosa.test(message.content)) {
+    await message.channel.send(
+      "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ"
+    );
+    // Log
+    const embed = new EmbedBuilder()
+      .setColor("Pink")
+      .setTitle("📌 Palavra Detectada")
+      .setDescription(`${message.author} digitou 'faixa rosa'`)
+      .setTimestamp();
+    sendLog(message.guild, embed);
   }
 
   // =============================
@@ -261,6 +285,14 @@ client.on("messageCreate", async message => {
     );
 
     await message.reply({ embeds: [embed], components: rows });
+
+    // Log comando setarcargo
+    const logEmbed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${message.author} executou setarcargo em ${member}`)
+      .setTimestamp();
+    sendLog(message.guild, logEmbed);
   }
 
   // =============================
@@ -285,6 +317,14 @@ client.on("messageCreate", async message => {
     );
 
     await message.reply({ embeds: [embed], components: [row] });
+
+    // Log comando removercargo
+    const logEmbed = new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${message.author} executou removercargo em ${member}`)
+      .setTimestamp();
+    sendLog(message.guild, logEmbed);
   }
 
   // =============================
