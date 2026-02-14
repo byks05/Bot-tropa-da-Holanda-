@@ -92,7 +92,7 @@ if(!muteRole) muteRole=await member.guild.roles.create({name:"Muted",permissions
 await member.roles.add(muteRole);
 
 const embed=new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado")
-.setDescription(${member} foi mutado automaticamente)
+.setDescription(`${member} foi mutado automaticamente`)
 .addFields(
 {name:"🆔 ID",value:member.id},
 {name:"⏳ Tempo",value:"2 minutos"},
