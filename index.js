@@ -4,8 +4,6 @@ const {
   PermissionsBitField,
   EmbedBuilder,
   ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   StringSelectMenuBuilder
 } = require("discord.js");
 require("dotenv").config();
@@ -133,14 +131,7 @@ async function muteMember({ member, type = "chat", durationMs, motivo, staff }) 
     if (!muteRole) muteRole = await member.guild.roles.create({ name: "Muted", permissions: [] });
     await member.roles.add(muteRole);
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`unmute_${member.id}`)
-        .setLabel("Desmutar")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    const msg = await member.guild.systemChannel?.send({ embeds: [embed], components: [row] });
+    await member.guild.systemChannel?.send({ embeds: [embed] });
     sendLog(member.guild, embed);
 
     if (durationMs) setTimeout(async () => {
@@ -200,7 +191,7 @@ client.on("messageCreate", async message => {
       )
     );
 
-    const msg = await message.reply({ embeds: [embed], components: rows });
+    await message.reply({ embeds: [embed], components: rows });
     setTimeout(() => message.delete().catch(() => {}), 5000);
   }
 
@@ -225,7 +216,7 @@ client.on("messageCreate", async message => {
         .addOptions(userRoles.map(r => ({ label: r.name, value: r.id })))
     );
 
-    const msg = await message.reply({ embeds: [embed], components: [row] });
+    await message.reply({ embeds: [embed], components: [row] });
     setTimeout(() => message.delete().catch(() => {}), 5000);
   }
 
@@ -294,20 +285,46 @@ client.on("messageCreate", async message => {
 });
 
 // =============================
-// INTERAÇÕES
+// INTERAÇÕES (Select Menus)
 // =============================
 client.on("interactionCreate", async (interaction) => {
   if (!isStaffOrEspecial(interaction.member)) return;
 
-  // Botão de unmute
-  if (interaction.isButton() && interaction.customId.startsWith("unmute_")) {
+  // Select menus
+  if (interaction.isStringSelectMenu()) {
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return interaction.reply({ content: "Membro não encontrado!", ephemeral: true });
+    if (!member) return;
 
-    const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-    if (muteRole) await member.roles.remove(muteRole);
-    await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, components: [] });
+    if (interaction.customId.startsWith("selectcargo_")) {
+      for (const cid of interaction.values) {
+        const cargo = interaction.guild.roles.cache.get(cid);
+        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cid);
+      }
+      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
+    }
+
+    if (interaction.customId.startsWith("removercargo_")) {
+      for (const cid of interaction.values) {
+        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
+      }
+      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+    }
+  }
+});
+
+// =============================
+// READY
+// =============================
+client.once("ready", () => {
+  console.log(`Bot online! ${client.user.tag}`);
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
+});
+
+// =============================
+// LOGIN
+// =============================
+client.login(process.env.TOKEN);.user.tag}`, components: [] });
   }
 
   // Select menus
