@@ -168,7 +168,7 @@ await handleSpam(message);
 // =============================
 client.on("channelCreate", async channel=>{
 if(channel.type===0 && channel.parentId===TICKET_CATEGORY_ID && channel.name.toLowerCase().includes("ticket")){
-await channel.send(<@&${RECRUITMENT_ROLE_ID}>);
+await channel.send(`<@&${RECRUITMENT_ROLE_ID}>`);
 }
 });
 
