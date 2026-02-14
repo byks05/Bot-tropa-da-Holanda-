@@ -23,14 +23,19 @@ const client = new Client({
 // CONFIGURAÇÃO
 // =============================
 const PREFIX = "thl!";
+
+// CARGOS DE STAFF PARA USAR COMANDOS
 const STAFF_ROLE_IDS = [
   "1468070328138858710",
   "1468069942451507221",
   "1468069638935150635",
   "1468017578747105390"
 ];
+
+// CARGO ESPECÍFICO QUE SÓ PODE SETAR/REMOVER CARGOS
 const CARGO_ESPECIAL = "1468066422490923081";
 
+// CARGOS DISPONÍVEIS PARA SETARCARGO
 const CATEGORIAS = [
   {
     label: "Inicial",
@@ -48,11 +53,6 @@ const CATEGORIAS = [
 ];
 
 const MAX_HOURS = 999;
-const SPAM_MESSAGE_LIMIT = 5; // quantidade de msgs rápidas
-const SPAM_MESSAGE_INTERVAL = 5000; // 5 segundos
-const BIG_TEXT_LIMIT = 200; // tamanho mínimo de msg grande
-const BIG_TEXT_COUNT = 3; // muta após 3 mensagens grandes
-const MUTE_DURATION = 2 * 60 * 1000; // 2 minutos
 
 // =============================
 // LOGS
@@ -86,119 +86,54 @@ function parseDuration(time) {
 }
 
 // =============================
-// SISTEMA DE SPAM AUTOMÁTICO
+// ANTI-SPAM POR MENSAGEM RÁPIDA
 // =============================
-const messageHistory = new Map(); // armazena msgs rápidas
-const bigMessageHistory = new Map(); // armazena msgs grandes
+const spamMap = new Map(); // usuarioId => [timestamps]
 
-async function handleSpam(message) {
-  if (!message.guild || message.author.bot) return;
-
-  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
-  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
-
-  // STAFF não sofre spam
-  if (isStaff || isEspecial) return;
-
-  const userId = message.author.id;
+function checkSpam(message) {
   const now = Date.now();
+  const userId = message.author.id;
 
-  // ------------------------
-  // MENSAGENS GRANDES
-  // ------------------------
-  if (message.content.length >= BIG_TEXT_LIMIT) {
-    if (!bigMessageHistory.has(userId)) bigMessageHistory.set(userId, []);
-    const arr = bigMessageHistory.get(userId);
+  if (!spamMap.has(userId)) spamMap.set(userId, []);
+  const timestamps = spamMap.get(userId);
 
-    arr.push(now);
-    // remove antigas
-    while (arr.length > BIG_TEXT_COUNT) arr.shift();
-    bigMessageHistory.set(userId, arr);
+  timestamps.push(now);
+  // Remove timestamps antigos (>5s)
+  while (timestamps.length && now - timestamps[0] > 5000) timestamps.shift();
 
-    if (arr.length >= BIG_TEXT_COUNT) {
-      // mutar
-      await muteMember(message.member, "Spam de texto grande", message);
-      bigMessageHistory.set(userId, []);
-    }
+  // Se 5 ou mais msgs em 5s → mute
+  if (timestamps.length >= 5) {
+    spamMap.set(userId, []); // reset
+    return true;
   }
 
-  // ------------------------
-  // MENSAGENS RÁPIDAS
-  // ------------------------
-  if (!messageHistory.has(userId)) messageHistory.set(userId, []);
-  const msgs = messageHistory.get(userId);
-
-  msgs.push(now);
-  // remove msgs antigas fora do intervalo
-  const filtered = msgs.filter(t => now - t <= SPAM_MESSAGE_INTERVAL);
-  messageHistory.set(userId, filtered);
-
-  if (filtered.length >= SPAM_MESSAGE_LIMIT) {
-    await muteMember(message.member, "Spam de palavras rápidas", message);
-    messageHistory.set(userId, []);
-  }
-}
-
-// =============================
-// FUNÇÃO DE MUTE
-// =============================
-async function muteMember(member, motivo, messageContext = null) {
-  let muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
-  if (!muteRole) {
-    muteRole = await member.guild.roles.create({ name: "Muted", permissions: [] });
-  }
-
-  await member.roles.add(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado")
-    .setDescription(`${member} foi mutado automaticamente`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: "2 minutos" },
-      { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: messageContext ? messageContext.client.user.tag : "Sistema" }
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (messageContext) await messageContext.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  setTimeout(async () => {
-    if (member.roles.cache.has(muteRole.id)) {
-      await member.roles.remove(muteRole);
-    }
-  }, MUTE_DURATION);
+  return false;
 }
 
 // =============================
 // EVENTO DE MENSAGEM
 // =============================
 client.on("messageCreate", async message => {
-  if (!message.guild) return;
-
-  // 1️⃣ verificar spam
-  await handleSpam(message);
-
-  // 2️⃣ comandos
+  if (!message.guild || message.author.bot) return;
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
+
   const member = message.mentions.members.first();
   const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
   const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
 
-  if (!isStaff && !isEspecial) return message.reply("Você não tem permissão para usar este comando.");
+  if (!isStaff && !isEspecial) {
+    return message.reply("Você não tem permissão para usar este comando.");
+  }
 
   // =============================
-  // SETAR CARGOS
+  // SETAR CARGOS COM EMBED E BOTÕES
   // =============================
   if (command === "setarcargo") {
     if (!member) return message.reply("Mencione um usuário.");
+
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargo")
       .setDescription(`Escolha o(s) cargo(s) para ${member}`)
@@ -245,7 +180,7 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // MUTE CHAT / CALL (manual)
+  // MUTE CHAT/CALL
   // =============================
   if (["mutechat", "mutecall"].includes(command)) {
     if (!member) return message.reply("Mencione um usuário.");
@@ -262,6 +197,13 @@ client.on("messageCreate", async message => {
 
       await member.roles.add(muteRole);
 
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`unmute_${member.id}`)
+          .setLabel("Desmutar")
+          .setStyle(ButtonStyle.Success)
+      );
+
       const embed = new EmbedBuilder()
         .setColor("Red")
         .setTitle("🔇 Usuário Mutado")
@@ -276,11 +218,13 @@ client.on("messageCreate", async message => {
         .setFooter({ text: message.guild.name })
         .setTimestamp();
 
-      await message.reply({ embeds: [embed] });
+      await message.reply({ embeds: [embed], components: [row] });
       sendLog(message.guild, embed);
 
       setTimeout(async () => {
-        if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
+        if (member.roles.cache.has(muteRole.id)) {
+          await member.roles.remove(muteRole);
+        }
       }, duration);
     }
 
@@ -306,9 +250,70 @@ client.on("messageCreate", async message => {
       sendLog(message.guild, embed);
 
       setTimeout(async () => {
-        if (member.voice.serverMute) await member.voice.setMute(false);
+        if (member.voice.serverMute) {
+          await member.voice.setMute(false);
+        }
       }, duration);
     }
+  }
+
+  // =============================
+  // UNMUTE CHAT
+  // =============================
+  if (command === "unmutechat") {
+    if (!member) return message.reply("Mencione um usuário.");
+    const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await member.roles.remove(muteRole);
+    await message.reply(`🔊 ${member} foi desmutado.`);
+  }
+
+  // =============================
+  // UNMUTE CALL
+  // =============================
+  if (command === "unmutecall") {
+    if (!member) return message.reply("Mencione um usuário.");
+    if (!member.voice.channel) return message.reply("O usuário não está em call.");
+    await member.voice.setMute(false);
+    await message.reply(`🔊 ${member} foi desmutado na call.`);
+  }
+
+  // =============================
+  // CLEAR MENSAGENS
+  // =============================
+  if (command === "clear") {
+    const target = message.mentions.users.first();
+    const argsNumber = parseInt(args[0]);
+
+    if (!message.member.permissions.has("MANAGE_MESSAGES")) 
+        return message.reply("Você não tem permissão para usar este comando.");
+
+    if (!args[0]) return message.reply("Use: thl!clear <número> ou thl!clear @usuário [número]");
+
+    if (target) {
+        const amount = args[1] ? parseInt(args[1]) : 100;
+        if (isNaN(amount) || amount < 1 || amount > 100) return message.reply("Número inválido (1-100).");
+
+        const messages = await message.channel.messages.fetch({ limit: 100 });
+        const userMessages = messages.filter(msg => msg.author.id === target.id).first(amount);
+        await message.channel.bulkDelete(userMessages, true)
+            .catch(err => message.reply("Erro ao apagar mensagens: " + err));
+        message.channel.send(`🗑️ ${userMessages.length} mensagens de ${target.tag} apagadas!`).then(msg => setTimeout(() => msg.delete(), 5000));
+    } else {
+        if (isNaN(argsNumber) || argsNumber < 1 || argsNumber > 100) return message.reply("Número inválido (1-100).");
+        await message.channel.bulkDelete(argsNumber, true)
+            .catch(err => message.reply("Erro ao apagar mensagens: " + err));
+        message.channel.send(`🗑️ ${argsNumber} mensagens apagadas!`).then(msg => setTimeout(() => msg.delete(), 5000));
+    }
+  }
+
+  // =============================
+  // ANTI-SPAM
+  // =============================
+  if (checkSpam(message)) {
+    let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
+    await message.member.roles.add(muteRole);
+    message.reply(`🔇 Você foi mutado por spam!`);
   }
 });
 
@@ -318,6 +323,77 @@ client.on("messageCreate", async message => {
 client.on("interactionCreate", async interaction => {
   const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
   const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
+
+  if (interaction.isButton()) {
+    if (!isStaff && !isEspecial)
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+
+    if (interaction.customId.startsWith("unmute_")) {
+      const userId = interaction.customId.split("_")[1];
+      const member = await interaction.guild.members.fetch(userId).catch(() => null);
+      if (!member) return;
+
+      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
+      if (muteRole) await member.roles.remove(muteRole);
+
+      await interaction.update({
+        content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`,
+        embeds: [],
+        components: []
+      });
+    }
+  }
+
+  if (interaction.isStringSelectMenu()) {
+    const userId = interaction.customId.split("_")[1];
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    if (!isStaff && !isEspecial)
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+
+    if (interaction.customId.startsWith("selectcargo_")) {
+      const cargoIds = interaction.values;
+      for (const cid of cargoIds) {
+        const cargo = interaction.guild.roles.cache.get(cid);
+        if (cargo && !member.roles.cache.has(cid)) {
+          await member.roles.add(cargo);
+        }
+      }
+      await interaction.update({
+        content: `✅ Cargos adicionados para ${member}`,
+        embeds: [],
+        components: []
+      });
+    }
+
+    if (interaction.customId.startsWith("removercargo_")) {
+      const cargoIds = interaction.values;
+      for (const cid of cargoIds) {
+        if (member.roles.cache.has(cid)) {
+          await member.roles.remove(cid);
+        }
+      }
+      await interaction.update({
+        content: `🗑 Cargos removidos de ${member}`,
+        embeds: [],
+        components: []
+      });
+    }
+  }
+});
+
+// =============================
+// BIO DO BOT
+// =============================
+client.on("ready", () => {
+  console.log(`Bot online! ${client.user.tag}`);
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", {
+    type: "WATCHING"
+  });
+});
+
+client.login(process.env.TOKEN);= interaction.member.roles.cache.has(CARGO_ESPECIAL);
 
   if (!isStaff && !isEspecial) return;
 
