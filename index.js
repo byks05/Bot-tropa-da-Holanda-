@@ -24,13 +24,13 @@ const CATEGORIAS = [
 ];
 
 const MAX_HOURS=999, SPAM_MESSAGE_LIMIT=5, SPAM_MESSAGE_INTERVAL=5000, BIG_TEXT_LIMIT=200, BIG_TEXT_COUNT=3, MUTE_DURATION=2*60*1000;
+
 const LOG_CHANNEL_ID = "1468722726247338115";
+const sendLog = (guild, embed) => guild.channels.cache.get(LOG_CHANNEL_ID)?.send({ embeds: [embed] });
 
 // =============================
 // UTILS
 // =============================
-const sendLog = (guild, embed) => guild.channels.cache.get(LOG_CHANNEL_ID)?.send({ embeds: [embed] });
-
 const parseDuration = time => {
   const m = time?.match(/^(\d+)([mh])$/);
   if(!m) return null;
@@ -114,6 +114,19 @@ async function unmuteCall(member,msg=null){
 }
 
 // =============================
+// TICKET: MENÇÃO AUTOMÁTICA
+// =============================
+const TICKET_CATEGORY_ID = "1468014890500489447";
+const RECRUITMENT_ROLE_ID = "1468024687031484530";
+client.on("channelCreate", async channel => {
+  if(channel.type === 0 && channel.parentId === TICKET_CATEGORY_ID){
+    if(channel.name.toLowerCase().includes("ticket")){
+      try { await channel.send({ content: `<@&${RECRUITMENT_ROLE_ID}>` }); } catch(e){ console.error(e); }
+    }
+  }
+});
+
+// =============================
 // EVENTO DE MENSAGEM
 // =============================
 client.on("messageCreate", async message=>{
@@ -123,31 +136,38 @@ client.on("messageCreate", async message=>{
   const palavras = [
     {regex:/\bsetamento\b/i, msg:"Confira o canal <#1468020392005337161>", cor:"Blue"},
     {regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink"},
-    {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink"}
+    {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink"},
+    {regex:/\bregras\b/i, msg:"<#1468011045166518427>", cor:"Yellow"}
   ];
 
   for(const p of palavras){
     if(p.regex.test(message.content)){
       try{
-        const msgSent = await message.channel.send(p.msg);
+        const msgSent=await message.channel.send(p.msg);
         setTimeout(async()=>await msgSent.delete().catch(()=>{}),15000);
-        sendLog(message.guild,new EmbedBuilder().setColor(p.cor).setTitle("📌 Palavra Detectada").setDescription(`${message.author} digitou "${p.regex.source.replace(/\\b/g,"")}"`).setTimestamp());
+        sendLog(message.guild,new EmbedBuilder()
+          .setColor(p.cor)
+          .setTitle("📌 Palavra Detectada")
+          .setDescription(`${message.author} digitou "${p.regex.source.replace(/\\b/g,"")}"`)
+          .setTimestamp()
+        );
       }catch(e){console.error(e);}
     }
   }
 
+  // SPAM
   await handleSpam(message);
 
   if(!message.content.startsWith(PREFIX)) return;
-  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
-  const cmd = args.shift().toLowerCase();
-  const member = message.mentions.members.first();
+  const args=message.content.slice(PREFIX.length).trim().split(/ +/);
+  const cmd=args.shift().toLowerCase();
+  const member=message.mentions.members.first();
 
   if(!canUseCommand(message.member,cmd))
     return message.reply("Você não tem permissão para usar este comando.").then(m=>setTimeout(async()=>await m.delete().catch(()=>{}),5000));
 
   // MUTE / UNMUTE
-  if(["mutechat","mutecall","unmutechat","unmutecall"].includes(cmd) && member){
+  if(["mutechat","mutecall","unmutechat","unmutecall"].includes(cmd)&&member){
     const timeArg=args[0], motivo=args.slice(1).join(" ")||"Não informado", duration=parseDuration(timeArg);
     if(cmd==="mutechat") await muteMember(member,motivo,message);
     if(cmd==="mutecall"){
@@ -167,26 +187,12 @@ client.on("messageCreate", async message=>{
 });
 
 // =============================
-// MENÇÃO AUTOMÁTICA EM TICKETS
-// =============================
-const TICKET_CATEGORY_ID = "1468014890500489447"; // Categoria de recrutamento
-const RECRUITMENT_ROLE_ID = "1468024687031484530"; // Cargo a ser mencionado
-
-client.on("channelCreate", async channel => {
-  if(channel.type === 0 && channel.parentId === TICKET_CATEGORY_ID){
-    if(channel.name.toLowerCase().includes("ticket")){
-      try{
-        await channel.send(`<@&${RECRUITMENT_ROLE_ID}> Um recrutador entrou no seu ticket!`);
-        sendLog(channel.guild,new EmbedBuilder().setColor("Purple").setTitle("📌 Ticket Criado").setDescription(`O canal ${channel} foi criado e o cargo <@&${RECRUITMENT_ROLE_ID}> foi mencionado.`).setTimestamp());
-      }catch(e){console.error(e);}
-    }
-  }
-});
-
-// =============================
 // READY
 // =============================
-client.once("ready",()=>{ console.log(`Bot online! ${client.user.tag}`); client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda",{type:"WATCHING"}); });
+client.once("ready",()=>{ 
+  console.log(`Bot online! ${client.user.tag}`); 
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda",{type:"WATCHING"}); 
+});
 
 // =============================
 // LOGIN
