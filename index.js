@@ -141,7 +141,7 @@ client.on("messageCreate", async message=>{
     {regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
     {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
     {regex:/\bregras\b/i, msg:`<#${RULES_CHANNEL_ID}>`, cor:"Yellow", deleteTime:300000},
-    {regex:/\blink da tropa\b/i, msg:"Aqui estÃ¡ o link da Tropa da Holanda: https://discord.gg/tropadaholanda", cor:"Purple", deleteTime:30000}
+    {regex:/\blink da tropa\b/i, msg:"Aqui está o link da Tropa da Holanda: https://discord.gg/tropadaholanda", cor:"Purple", deleteTime:30000}
   ];
 
   for(const p of palavras){
