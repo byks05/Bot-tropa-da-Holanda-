@@ -1,6 +1,6 @@
 const {
   Client,
-  Gateconst {
+  Gateconst 
   Client,
   GatewayIntentBits,
   PermissionsBitField,
