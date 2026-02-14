@@ -61,7 +61,7 @@ function sendLog(guild, embed) {
 }
 
 // =============================
-// FUNÇÃO PARA VALIDAR TEMPO
+// UTILS
 // =============================
 function parseDuration(time) {
   const match = time?.match(/^(\d+)([mh])$/);
@@ -74,6 +74,10 @@ function parseDuration(time) {
   if (unit === "h") return value >= 1 && value <= MAX_HOURS ? value * 3600000 : null;
 
   return null;
+}
+
+function isStaffOrEspecial(member) {
+  return STAFF_ROLE_IDS.some(id => member.roles.cache.has(id)) || member.roles.cache.has(CARGO_ESPECIAL);
 }
 
 // =============================
@@ -94,9 +98,7 @@ async function checkSpam(message) {
   if (timestamps.length >= 5) {
     spamMap.set(userId, []);
     let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-    if (!muteRole) {
-      muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
-    }
+    if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
     await message.member.roles.add(muteRole);
     const spamMsg = await message.reply("🔇 Você foi mutado por spam!");
     setTimeout(() => {
@@ -109,22 +111,68 @@ async function checkSpam(message) {
 }
 
 // =============================
+// FUNÇÃO GENÉRICA PARA MUTE
+// =============================
+async function muteMember({ member, type = "chat", durationMs, motivo, staff }) {
+  const embed = new EmbedBuilder()
+    .setColor(type === "chat" ? "Red" : "Orange")
+    .setTitle(type === "chat" ? "🔇 Usuário Mutado" : "🎙 Usuário Mutado na Call")
+    .setDescription(`${member} foi mutado no ${type === "chat" ? "chat" : "voice"}`)
+    .addFields(
+      { name: "🆔 ID", value: member.id },
+      { name: "⏳ Tempo", value: durationMs ? `${Math.round(durationMs / 60000)}m` : "Indeterminado" },
+      { name: "📄 Motivo", value: motivo || "Não informado" },
+      { name: "👮 Staff", value: staff.tag }
+    )
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (type === "chat") {
+    let muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
+    if (!muteRole) muteRole = await member.guild.roles.create({ name: "Muted", permissions: [] });
+    await member.roles.add(muteRole);
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`unmute_${member.id}`)
+        .setLabel("Desmutar")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const msg = await member.guild.systemChannel?.send({ embeds: [embed], components: [row] });
+    sendLog(member.guild, embed);
+
+    if (durationMs) setTimeout(async () => {
+      if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
+    }, durationMs);
+  }
+
+  if (type === "voice") {
+    if (!member.voice.channel) return;
+    await member.voice.setMute(true);
+    sendLog(member.guild, embed);
+
+    if (durationMs) setTimeout(async () => {
+      if (member.voice.serverMute) await member.voice.setMute(false);
+    }, durationMs);
+  }
+}
+
+// =============================
 // EVENTO DE MENSAGEM
 // =============================
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
-
   if (await checkSpam(message)) return;
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
   const member = message.mentions.members.first();
-  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
-  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
 
-  if (!isStaff && !isEspecial) {
-    const msg = await message.reply({ content: "Você não tem permissão para usar este comando.", ephemeral: true });
+  if (!isStaffOrEspecial(message.member)) {
+    const msg = await message.reply({ content: "Você não tem permissão para usar este comando." });
     setTimeout(() => {
       message.delete().catch(() => {});
       msg.delete().catch(() => {});
@@ -188,98 +236,33 @@ client.on("messageCreate", async message => {
     const timeArg = args[1];
     const motivo = args.slice(2).join(" ") || "Não informado";
     const duration = parseDuration(timeArg);
-    if (!duration) return message.reply("Tempo inválido. Use de 1m até 999h.");
 
-    if (command === "mutechat") {
-      let muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-      if (!muteRole) muteRole = await message.guild.roles.create({ name: "Muted", permissions: [] });
-      await member.roles.add(muteRole);
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`unmute_${member.id}`)
-          .setLabel("Desmutar")
-          .setStyle(ButtonStyle.Success)
-      );
-
-      const embed = new EmbedBuilder()
-        .setColor("Red")
-        .setTitle("🔇 Usuário Mutado")
-        .setDescription(`${member} foi mutado no chat`)
-        .addFields(
-          { name: "🆔 ID", value: member.id },
-          { name: "⏳ Tempo", value: timeArg },
-          { name: "📄 Motivo", value: motivo },
-          { name: "👮 Staff", value: message.author.tag }
-        )
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: message.guild.name })
-        .setTimestamp();
-
-      const msg = await message.reply({ embeds: [embed], components: [row] });
-      sendLog(message.guild, embed);
-      setTimeout(() => {
-        message.delete().catch(() => {});
-        msg.delete().catch(() => {});
-      }, 5000);
-
-      setTimeout(async () => {
-        if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
-      }, duration);
-    }
-
-    if (command === "mutecall") {
-      if (!member.voice.channel) return message.reply("O usuário não está em call.");
-      await member.voice.setMute(true);
-
-      const embed = new EmbedBuilder()
-        .setColor("Orange")
-        .setTitle("🎙 Usuário Mutado na Call")
-        .setDescription(`${member} foi silenciado na call`)
-        .addFields(
-          { name: "🆔 ID", value: member.id },
-          { name: "⏳ Tempo", value: timeArg },
-          { name: "📄 Motivo", value: motivo },
-          { name: "👮 Staff", value: message.author.tag }
-        )
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-        .setFooter({ text: message.guild.name })
-        .setTimestamp();
-
-      const msg = await message.reply({ embeds: [embed] });
-      sendLog(message.guild, embed);
-
-      setTimeout(async () => {
-        if (member.voice.serverMute) await member.voice.setMute(false);
-      }, duration);
-    }
+    await muteMember({
+      member,
+      type: command === "mutechat" ? "chat" : "voice",
+      durationMs: duration,
+      motivo,
+      staff: message.author
+    });
   }
 
   // =============================
-  // CLEAR (apagar mensagens)
+  // CLEAR
   // =============================
   if (command === "clear") {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
-      return;
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages)) return;
 
     const target = message.mentions.users.first();
-    let amount;
+    let amount = parseInt(args[0]) || 100;
+    if (amount < 1 || amount > 100) return;
 
     if (target) {
-      amount = args[1] ? parseInt(args[1]) : 100;
-      if (isNaN(amount) || amount < 1 || amount > 100) return;
       const messages = await message.channel.messages.fetch({ limit: 100 });
       const userMessages = messages.filter(m => m.author.id === target.id).first(amount);
-      if (!userMessages.length) return;
-
-      await message.channel.bulkDelete(userMessages, true);
+      await message.channel.bulkDelete(userMessages, true).catch(() => {});
     } else {
-      amount = parseInt(args[0]);
-      if (!amount || isNaN(amount) || amount < 1 || amount > 100) return;
-
-      await message.channel.bulkDelete(amount, true);
+      await message.channel.bulkDelete(amount, true).catch(() => {});
     }
-
     message.delete().catch(() => {});
   }
 });
@@ -287,120 +270,21 @@ client.on("messageCreate", async message => {
 // =============================
 // INTERAÇÕES
 // =============================
-client.on("interactionCreate", async interaction => {
-  const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
-  const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
-  if (!isStaff && !isEspecial) return;
-
-  if (interaction.isButton()) {
-    if (interaction.customId.startsWith("unmute_")) {
-      const userId = interaction.customId.split("_")[1];
-      const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
-
-      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-      if (muteRole) await member.roles.remove(muteRole);
-
-      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
-    }
-  }
-
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
-
-    if (interaction.customId.startsWith("selectcargo_")) {
-      for (const cid of interaction.values) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
-      }
-      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
-    }
-
-    if (interaction.customId.startsWith("removercargo_")) {
-      for (const cid of interaction.values) {
-        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
-    }
-  }
-});
-
-// =============================
-// READY
-// =============================
-client.once("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
-});
-
-// =============================
-// LOGIN
-// =============================
-client.login(process.env.TOKEN);if (!isStaff && !isEspecial) return interaction.reply({ content: "Sem permissão.", ephemeral: true });
-
-  if (interaction.isButton()) {
-    if (interaction.customId.startsWith("unmute_")) {
-      const userId = interaction.customId.split("_")[1];
-      const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
-      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-      if (muteRole) await member.roles.remove(muteRole);
-      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
-    }
-  }
-
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
-
-    if (interaction.customId.startsWith("selectcargo_")) {
-      for (const cid of interaction.values) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
-      }
-      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
-    }
-
-    if (interaction.customId.startsWith("removercargo_")) {
-      for (const cid of interaction.values) {
-        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
-    }
-  }
-});
-
-// =============================
-// READY
-// =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
-});
-
-// =============================
-// LOGIN
-// =============================
-client.login(process.env.TOKEN);Sem permissão.", ephemeral: true });
+client.on("interactionCreate", async (interaction) => {
+  if (!isStaffOrEspecial(interaction.member)) return;
 
   // Botão de unmute
-  if (interaction.isButton()) {
-    if (interaction.customId.startsWith("unmute_")) {
-      const userId = interaction.customId.split("_")[1];
-      const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return interaction.reply({ content: "Membro não encontrado!", ephemeral: true });
+  if (interaction.isButton() && interaction.customId.startsWith("unmute_")) {
+    const userId = interaction.customId.split("_")[1];
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return interaction.reply({ content: "Membro não encontrado!", ephemeral: true });
 
-      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-      if (muteRole) await member.roles.remove(muteRole);
-
-      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, components: [] });
-    }
+    const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await member.roles.remove(muteRole);
+    await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, components: [] });
   }
 
-  // Select menus (add/remove cargos)
+  // Select menus
   if (interaction.isStringSelectMenu()) {
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
@@ -409,7 +293,7 @@ client.login(process.env.TOKEN);Sem permissão.", ephemeral: true });
     if (interaction.customId.startsWith("selectcargo_")) {
       for (const cid of interaction.values) {
         const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
+        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cid);
       }
       await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
     }
@@ -421,32 +305,13 @@ client.login(process.env.TOKEN);Sem permissão.", ephemeral: true });
       await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
     }
   }
-
-  // Slash command /clear
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === "clear") {
-      const user = interaction.options.getUser("target"); // @user
-      const amount = interaction.options.getInteger("amount"); // número de mensagens
-      if (!user || !amount) return interaction.reply({ content: "Faltou algum parâmetro!", ephemeral: true });
-
-      const fetchedMessages = await interaction.channel.messages.fetch({ limit: 100 });
-      const userMessages = fetchedMessages.filter(msg => msg.author.id === user.id).first(amount);
-
-      await interaction.channel.bulkDelete(userMessages, true).catch(err => {
-        console.error(err);
-        return interaction.reply({ content: "Não consegui deletar as mensagens!", ephemeral: true });
-      });
-
-      await interaction.reply({ content: `🗑 Foram deletadas ${userMessages.length} mensagens de ${user.tag}`, ephemeral: true });
-    }
-  }
 });
 
 // =============================
 // READY
 // =============================
 client.once("ready", () => {
-  console.log(`Bot online como ${client.user.tag}`);
+  console.log(`Bot online! ${client.user.tag}`);
   client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
 });
 
