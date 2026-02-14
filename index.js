@@ -5,7 +5,8 @@ const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 const client = new Client({
@@ -19,24 +20,30 @@ const client = new Client({
 });
 
 const PREFIX = "thl!";
-const STAFF_ROLE_ID = "1471998602577711337";
 const MAX_HOURS = 999;
+
+// =============================
+// 🔒 CARGOS STAFF PERMITIDOS
+// =============================
+const STAFF_ROLE_IDS = [
+  "1468070328138858710",
+  "1468069942451507221",
+  "1468069638935150635",
+  "1468017578747105390"
+];
 
 // =============================
 // 🔒 SISTEMA DE PROTEÇÃO
 // =============================
 const AUTO_MUTE_TIME = 5 * 60000; // 5 minutos
 
-// Anti-Spam
 const messageCooldown = new Map();
 const SPAM_LIMIT = 5;
 const SPAM_INTERVAL = 5000;
 
-// Anti-Caps
 const CAPS_PERCENTAGE = 70;
 const CAPS_MIN_LENGTH = 8;
 
-// Anti-Raid
 const joinTracker = [];
 const RAID_LIMIT = 5;
 const RAID_INTERVAL = 10000;
@@ -54,7 +61,6 @@ function sendLog(guild, embed) {
 // =============================
 async function getMuteRole(guild) {
   let role = guild.roles.cache.find(r => r.name === "Muted");
-
   if (!role) {
     role = await guild.roles.create({
       name: "Muted",
@@ -68,7 +74,6 @@ async function getMuteRole(guild) {
       }).catch(() => {});
     });
   }
-
   return role;
 }
 
@@ -96,7 +101,14 @@ function parseDuration(time) {
 }
 
 // =============================
-// EVENTO DE MENSAGEM
+// CHECAR SE MEMBRO TEM PERMISSÃO
+// =============================
+function isStaff(member) {
+  return STAFF_ROLE_IDS.some(id => member.roles.cache.has(id));
+}
+
+// =============================
+// EVENTO MENSAGEM
 // =============================
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
@@ -121,7 +133,7 @@ client.on("messageCreate", async message => {
   userData.lastMessage = now;
   messageCooldown.set(member.id, userData);
 
-  if (userData.count >= SPAM_LIMIT && !member.roles.cache.has(STAFF_ROLE_ID)) {
+  if (userData.count >= SPAM_LIMIT && !isStaff(member)) {
     const muteRole = await getMuteRole(message.guild);
     await member.roles.add(muteRole);
 
@@ -147,7 +159,7 @@ client.on("messageCreate", async message => {
   // =============================
   const linkRegex = /(https?:\/\/|www\.)/i;
 
-  if (linkRegex.test(message.content) && !member.roles.cache.has(STAFF_ROLE_ID)) {
+  if (linkRegex.test(message.content) && !isStaff(member)) {
     await message.delete().catch(() => {});
 
     const muteRole = await getMuteRole(message.guild);
@@ -181,7 +193,7 @@ client.on("messageCreate", async message => {
     if (letters.length > 0) {
       const percentage = (upper.length / letters.length) * 100;
 
-      if (percentage >= CAPS_PERCENTAGE && !member.roles.cache.has(STAFF_ROLE_ID)) {
+      if (percentage >= CAPS_PERCENTAGE && !isStaff(member)) {
         await message.delete().catch(() => {});
 
         const muteRole = await getMuteRole(message.guild);
@@ -213,20 +225,17 @@ client.on("messageCreate", async message => {
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  if (!member.roles.cache.has(STAFF_ROLE_ID))
+  if (!isStaff(member))
     return message.reply("Você não tem permissão.");
 
   const alvo = message.mentions.members.first();
   if (!alvo) return message.reply("Mencione um usuário.");
 
-  if (alvo.roles.cache.has(STAFF_ROLE_ID))
-    return message.reply("Você não pode usar nesse cargo.");
-
   const timeArg = args[1];
   const motivo = args.slice(2).join(" ") || "Não informado";
   const duration = parseDuration(timeArg);
 
-  if (!duration && command !== "unmutechat" && command !== "unmutecall")
+  if (!duration && !["unmutechat","unmutecall"].includes(command))
     return message.reply("Tempo inválido. Use de 1m até 999h.");
 
   // =============================
@@ -265,6 +274,9 @@ client.on("messageCreate", async message => {
     }, duration);
   }
 
+  // =============================
+  // UNMUTE CHAT
+  // =============================
   if (command === "unmutechat") {
     const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
     if (!muteRole) return;
@@ -273,6 +285,9 @@ client.on("messageCreate", async message => {
     message.reply(`🔊 ${alvo} foi desmutado.`);
   }
 
+  // =============================
+  // MUTE CALL
+  // =============================
   if (command === "mutecall") {
     if (!alvo.voice.channel)
       return message.reply("O usuário não está em call.");
@@ -297,6 +312,9 @@ client.on("messageCreate", async message => {
     }, duration);
   }
 
+  // =============================
+  // UNMUTE CALL
+  // =============================
   if (command === "unmutecall") {
     if (!alvo.voice.channel)
       return message.reply("O usuário não está em call.");
@@ -304,16 +322,45 @@ client.on("messageCreate", async message => {
     await alvo.voice.setMute(false);
     message.reply(`🔊 ${alvo} foi desmutado na call.`);
   }
+
+  // =============================
+  // SETAR CARGOS
+  // =============================
+  if (command === "setar" && args[0]?.toLowerCase() === "cargos") {
+    const target = alvo;
+
+    const categoriaMenu = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`categoria_${target.id}`)
+        .setPlaceholder("Selecione a categoria")
+        .addOptions([
+          {
+            label: "Recrutamento",
+            description: "Escolha cargos de recrutamento",
+            value: "recrutamento"
+          }
+        ])
+    );
+
+    const embed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📋 Seleção de Categoria")
+      .setDescription(`Escolha uma categoria de cargos para ${target}`)
+      .setThumbnail(target.user.displayAvatarURL({ dynamic: true }));
+
+    message.reply({ embeds: [embed], components: [categoriaMenu] });
+  }
 });
 
 // =============================
 // BOTÃO DESMUTAR
 // =============================
 client.on("interactionCreate", async interaction => {
-  if (!interaction.isButton()) return;
+  if (!interaction.isButton() && !interaction.isStringSelectMenu()) return;
 
-  if (interaction.customId.startsWith("unmute_")) {
-    if (!interaction.member.roles.cache.has(STAFF_ROLE_ID))
+  // ======= BOTÃO DESMUTAR
+  if (interaction.isButton() && interaction.customId.startsWith("unmute_")) {
+    if (!isStaff(interaction.member))
       return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
     const userId = interaction.customId.split("_")[1];
@@ -328,6 +375,73 @@ client.on("interactionCreate", async interaction => {
       embeds: [],
       components: []
     });
+  }
+
+  // ======= SELECT MENU
+  if (interaction.isStringSelectMenu()) {
+    const [tipo, userId] = interaction.customId.split("_");
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return interaction.reply({ content: "Usuário não encontrado.", ephemeral: true });
+
+    if (!isStaff(interaction.member))
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+
+    // ===== CATEGORIA
+    if (tipo === "categoria") {
+      if (interaction.values[0] === "recrutamento") {
+        const cargos = [
+          { id: "1468026315285205094", label: "Equipe Tropa da Holanda" },
+          { id: "1468283328510558208", label: "Verificado" }
+        ];
+
+        const cargoMenu = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`cargo_${member.id}`)
+            .setPlaceholder("Selecione o cargo")
+            .addOptions(
+              cargos.map(c => ({
+                label: c.label,
+                value: c.id,
+                description: `Dar cargo ${c.label} para ${member.user.username}`
+              }))
+            )
+        );
+
+        const embed = new EmbedBuilder()
+          .setColor("Green")
+          .setTitle(`📌 Cargos de Recrutamento`)
+          .setDescription(`Selecione o cargo para ${member}`)
+          .setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
+
+        await interaction.update({ embeds: [embed], components: [cargoMenu] });
+      }
+    }
+
+    // ===== CARGO
+    if (tipo === "cargo") {
+      const roleId = interaction.values[0];
+      const role = interaction.guild.roles.cache.get(roleId);
+      if (!role) return interaction.reply({ content: "Cargo não encontrado.", ephemeral: true });
+
+      if (member.roles.cache.has(role.id))
+        return interaction.reply({ content: `${member} já possui o cargo ${role.name}.`, ephemeral: true });
+
+      await member.roles.add(role);
+
+      const embed = new EmbedBuilder()
+        .setColor("Purple")
+        .setTitle("✅ Cargo Adicionado")
+        .setDescription(`${member} recebeu o cargo **${role.name}**`)
+        .addFields(
+          { name: "👮 Staff", value: interaction.user.tag },
+          { name: "🆔 ID do usuário", value: member.id }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setTimestamp();
+
+      interaction.update({ embeds: [embed], components: [] });
+      sendLog(interaction.guild, embed);
+    }
   }
 });
 
