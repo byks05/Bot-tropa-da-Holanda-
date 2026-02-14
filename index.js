@@ -257,10 +257,10 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // CLEAR (CORRIGIDO)
+  // CLEAR (via prefix)
   // =============================
   if (command === "clear") {
-    if (!message.member.permissions.has("MANAGE_MESSAGES"))
+    if (!message.member.permissions.has(PermissionsBitField.Flags.ManageMessages))
       return message.reply("Sem permissão.");
 
     const target = message.mentions.users.first();
@@ -300,24 +300,28 @@ client.on("messageCreate", async message => {
 });
 
 // =============================
-// INTERAÇÕES
+// INTERAÇÕES (async corrigido)
 // =============================
 client.on("interactionCreate", async interaction => {
   const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
   const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
   if (!isStaff && !isEspecial) return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
+  // Botão de unmute
   if (interaction.isButton()) {
     if (interaction.customId.startsWith("unmute_")) {
       const userId = interaction.customId.split("_")[1];
       const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
+      if (!member) return interaction.reply({ content: "Membro não encontrado!", ephemeral: true });
+
       const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
       if (muteRole) await member.roles.remove(muteRole);
-      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
+
+      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, components: [] });
     }
   }
 
+  // Select menus (add/remove cargos)
   if (interaction.isStringSelectMenu()) {
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
@@ -338,46 +342,23 @@ client.on("interactionCreate", async interaction => {
       await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
     }
   }
-});
 
-// =============================
-// READY
-// =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
-});
+  // Slash command /clear
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === "clear") {
+      const user = interaction.options.getUser("target"); // @user
+      const amount = interaction.options.getInteger("amount"); // número de mensagens
+      if (!user || !amount) return interaction.reply({ content: "Faltou algum parâmetro!", ephemeral: true });
 
-// =============================
-// LOGIN
-// =============================
-client.login(process.env.TOKEN);teraction.customId.split("_")[1];
-      const member = await interaction.guild.members.fetch(userId).catch(() => null);
-      if (!member) return;
-      const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
-      if (muteRole) await member.roles.remove(muteRole);
-      await interaction.update({ content: `🔊 ${member} foi desmutado por ${interaction.user.tag}`, embeds: [], components: [] });
-    }
-  }
+      const fetchedMessages = await interaction.channel.messages.fetch({ limit: 100 });
+      const userMessages = fetchedMessages.filter(msg => msg.author.id === user.id).first(amount);
 
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
+      await interaction.channel.bulkDelete(userMessages, true).catch(err => {
+        console.error(err);
+        return interaction.reply({ content: "Não consegui deletar as mensagens!", ephemeral: true });
+      });
 
-    if (interaction.customId.startsWith("selectcargo_")) {
-      for (const cid of interaction.values) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
-      }
-      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
-    }
-
-    if (interaction.customId.startsWith("removercargo_")) {
-      for (const cid of interaction.values) {
-        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+      await interaction.reply({ content: `🗑 Foram deletadas ${userMessages.length} mensagens de ${user.tag}`, ephemeral: true });
     }
   }
 });
@@ -385,8 +366,8 @@ client.login(process.env.TOKEN);teraction.customId.split("_")[1];
 // =============================
 // READY
 // =============================
-client.on("ready", () => {
-  console.log(`Bot online! ${client.user.tag}`);
+client.once("ready", () => {
+  console.log(`Bot online como ${client.user.tag}`);
   client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
 });
 
