@@ -304,5 +304,3 @@ client.once("ready",()=>{console.log(Bot online! ${client.user.tag}); client.use
 // LOGIN
 // =============================
 client.login(process.env.TOKEN);
-
-Junte os dois
