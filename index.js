@@ -24,23 +24,29 @@ const RECRUITMENT_ROLE_ID = "1468024687031484530";
 
 const CATEGORIAS = [
   {
-    label:"Faixa Rosas (Somente Meninas)",
-    options:[
-      {label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
-      {label:"Verificado", id:"1468283328510558208"}
+    label: "Faixa Rosas (Somente Meninas)",
+    options: [
+      { label: "Equipe Tropa da Holanda", id: "1468026315285205094", emoji: "🎀" },
+      { label: "Verificado", id: "1468283328510558208", emoji: "✨" }
     ],
-    maxSelect:null, 
-    allowAll:true
+    maxSelect: null, 
+    allowAll: true
   },
   {
-    label:"TropaDaHolanda",
-    options:[
-      {label:"Membro Ativo", id:"1468022534686507028"},
-      {label:"Dono do Paredão", id:"1468263594931130574"},
-      {label:"Aliados", id:"1468279104624398509"}
+    label: "TropaDaHolanda",
+    options: [
+      { label: "Membro Ativo", id: "1468022534686507028", emoji: "🔥" },
+      { label: "Dono do Paredão", id: "1468263594931130574", emoji: "🔊" },
+      { label: "Aliados", id: "1468279104624398509", emoji: "🤝" },
+      { label: "Divulgador", id: "1468652058973569078", emoji: "📢" },
+      { label: "Olheiro", id: "1468021924943888455", emoji: "👁️" },
+      { label: "Mascote", id: "1468021724598501376", emoji: "🐾" },
+      { label: "Sagaz", id: "1468021554993561661", emoji: "⚡" },
+      { label: "Leal", id: "1468021411720335432", emoji: "🛡️" },
+      { label: "Primeira Dama", id: "1468021327129743483", emoji: "👑" }
     ],
-    maxSelect:null,
-    allowAll:false
+    maxSelect: null,
+    allowAll: false
   }
 ];
 
@@ -135,7 +141,6 @@ async function unmuteCall(member,msg=null){
 client.on("messageCreate", async message=>{
   if(!message.guild||message.author.bot) return;
 
-  // PALAVRAS-CHAVE
   const palavras=[
     {regex:/\bsetamento\b/i, msg:"Confira o canal <#1468020392005337161>", cor:"Blue", deleteTime:30000},
     {regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
@@ -159,7 +164,6 @@ client.on("messageCreate", async message=>{
     }
   }
 
-  // SPAM
   await handleSpam(message);
 });
 
@@ -181,7 +185,6 @@ client.on("interactionCreate", async interaction=>{
   const parts = interaction.customId.split("_"); 
   const action = parts[0], subAction = parts[1], userId = parts[2], executorId = parts[3];
 
-  // Somente quem executou o comando pode interagir
   if(interaction.user.id !== executorId) 
     return interaction.reply({content:"❌ Apenas quem iniciou o comando pode usar este menu.", ephemeral:true});
 
@@ -189,7 +192,6 @@ client.on("interactionCreate", async interaction=>{
   if(!member) return;
   const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
 
-  // ===== SETAR CARGOS =====
   if(action === "setarcargo" || action === "Membros" || action === "TropaDaHolanda"){
     if(action === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id => executor.roles.cache.has(id)))
       return interaction.reply({content:"Você não pode selecionar cargos nessa categoria.", ephemeral:true});
@@ -200,22 +202,18 @@ client.on("interactionCreate", async interaction=>{
     }
 
     await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
-
     if(executor) sendLog(interaction.guild, new EmbedBuilder().setColor("Blue").setTitle("📌 Comando Executado").setDescription(`${executor} executou setarcargo em ${member}`).setTimestamp());
   }
 
-  // ===== REMOVER CARGOS =====
   if(action === "removercargo"){
     for(const cid of interaction.values){
       if(member.roles.cache.has(cid)) await member.roles.remove(cid);
     }
 
     await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
-
     if(executor) sendLog(interaction.guild, new EmbedBuilder().setColor("Orange").setTitle("📌 Comando Executado").setDescription(`${executor} executou removercargo em ${member}`).setTimestamp());
   }
 
-  // ===== RECRUTAMENTO CICLICO (thl!rec) =====
   if(action === "rec"){
     const recMember = member;
     const recExecutor = executor;
@@ -241,8 +239,9 @@ client.on("interactionCreate", async interaction=>{
     if(subAction === "init"){
       const choice = interaction.values[0];
       if(choice === "adicionar"){
-        const categoriasMembros = CATEGORIAS.find(c => c.label === "Faixa Rosas (Somente Meninas)");
-        const options = categoriasMembros.options.map(o => ({label:o.label, value:o.id}));
+        // Aqui buscamos a categoria correta e mapeamos os emojis
+        const cat = CATEGORIAS.find(c => c.label === "Faixa Rosas (Somente Meninas)");
+        const options = cat.options.map(o => ({label:o.label, value:o.id, emoji:o.emoji}));
         const row = new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
             .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)
@@ -262,8 +261,8 @@ client.on("interactionCreate", async interaction=>{
             .setCustomId(`rec_remove_${recMember.id}_${recExecutor.id}`)
             .setPlaceholder("Selecione cargos para remover")
             .setMinValues(1)
-            .setMaxValues(userRoles.length)
-            .addOptions(userRoles)
+            .setMaxValues(userRoles.length > 25 ? 25 : userRoles.length)
+            .addOptions(userRoles.slice(0, 25))
         );
         return interaction.update({content:`🎯 Remover cargos de ${recMember}`, embeds:[], components:[row]});
       }
@@ -301,3 +300,4 @@ client.once("ready",()=>{console.log(`Bot online! ${client.user.tag}`); client.u
 // LOGIN
 // =============================
 client.login(process.env.TOKEN);
+                                                
