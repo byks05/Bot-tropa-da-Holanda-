@@ -18,7 +18,7 @@ const PREFIX = "thl!";
 const STAFF_ROLE_IDS = ["1468070328138858710","1468069942451507221","1468069638935150635","1468017578747105390"];
 const CARGO_ESPECIAL = "1468066422490923081";
 const LOG_CHANNEL_ID = "1468722726247338115";
-const RULES_CHANNEL_ID = "1468011045166518427"; // Canal de regras
+const RULES_CHANNEL_ID = "1468011045166518427";
 const TICKET_CATEGORY_ID = "1468014890500489447";
 const RECRUITMENT_ROLE_ID = "1468024687031484530";
 
@@ -29,18 +29,18 @@ const CATEGORIAS = [
       {label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
       {label:"Verificado", id:"1468283328510558208"}
     ],
-    maxSelect:null, // pode selecionar todos
+    maxSelect:null, 
     allowAll:true
   },
   {
-    label:"Tropa da Holanda",
+    label:"TropaDaHolanda",
     options:[
       {label:"Membro Ativo", id:"1468022534686507028"},
       {label:"Dono do Paredão", id:"1468263594931130574"},
       {label:"Aliados", id:"1468279104624398509"}
     ],
-    maxSelect:null, // pode selecionar todos
-    allowAll:false, // só adms
+    maxSelect:null,
+    allowAll:false
   }
 ];
 
@@ -69,6 +69,7 @@ async function handleSpam(message){
   if(isStaff||isEspecial) return;
 
   const now=Date.now(), userId=message.author.id;
+
   if(message.content.length>=200){
     if(!bigMessageHistory.has(userId)) bigMessageHistory.set(userId,[]);
     const arr=bigMessageHistory.get(userId); arr.push(now); while(arr.length>3) arr.shift(); bigMessageHistory.set(userId,arr);
@@ -89,6 +90,7 @@ async function muteMember(member,motivo,msg=null){
   let muteRole=member.guild.roles.cache.find(r=>r.name==="Muted");
   if(!muteRole) muteRole=await member.guild.roles.create({name:"Muted",permissions:[]});
   await member.roles.add(muteRole);
+
   const embed=new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado")
     .setDescription(`${member} foi mutado automaticamente`)
     .addFields(
@@ -97,8 +99,10 @@ async function muteMember(member,motivo,msg=null){
       {name:"📄 Motivo",value:motivo},
       {name:"👮 Staff",value:msg?msg.client.user.tag:"Sistema"}
     ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+
   if(msg) await msg.channel.send({embeds:[embed]});
   sendLog(member.guild,embed);
+
   setTimeout(()=>{if(member.roles.cache.has(muteRole.id)) member.roles.remove(muteRole);},2*60*1000);
 }
 
@@ -138,6 +142,7 @@ client.on("messageCreate", async message=>{
     {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
     {regex:/\bregras\b/i, msg:`<#${RULES_CHANNEL_ID}>`, cor:"Yellow", deleteTime:300000}
   ];
+
   for(const p of palavras){
     if(p.regex.test(message.content)){
       try{
@@ -191,6 +196,55 @@ client.on("messageCreate", async message=>{
 client.on("channelCreate", async channel=>{
   if(channel.type===0 && channel.parentId===TICKET_CATEGORY_ID && channel.name.toLowerCase().includes("ticket")){
     await channel.send(`<@&${RECRUITMENT_ROLE_ID}>`);
+  }
+});
+
+// =============================
+// INTERAÇÕES (BOTÕES E SELECT MENUS)
+// =============================
+client.on("interactionCreate", async interaction=>{
+  if(!interaction.isStringSelectMenu()) return;
+
+  const parts = interaction.customId.split("_"); // Ex.: select_userId_menuName_executorId
+  const userId = parts[1], menuName = parts[2], executorId = parts[3];
+  const member = await interaction.guild.members.fetch(userId).catch(()=>null);
+  if(!member) return;
+  const executor = await interaction.guild.members.fetch(executorId).catch(()=>null);
+
+  // ===== SETAR CARGOS =====
+  if(menuName === "Membros" || menuName === "TropaDaHolanda"){
+    if(menuName === "TropaDaHolanda" && !STAFF_ROLE_IDS.some(id => executor.roles.cache.has(id)))
+      return interaction.reply({content:"Você não pode selecionar cargos nessa categoria.", ephemeral:true});
+
+    for(const cid of interaction.values){
+      const role = interaction.guild.roles.cache.get(cid);
+      if(role && !member.roles.cache.has(cid)) await member.roles.add(role);
+    }
+
+    await interaction.update({content:`✅ Cargos adicionados para ${member}`, embeds:[], components:[]});
+
+    if(executor) sendLog(interaction.guild, new EmbedBuilder()
+      .setColor(menuName==="Membros"?"Blue":"Orange")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou setarcargo em ${member}`)
+      .setTimestamp()
+    );
+  }
+
+  // ===== REMOVER CARGOS =====
+  if(menuName === "removercargo"){
+    for(const cid of interaction.values){
+      if(member.roles.cache.has(cid)) await member.roles.remove(cid);
+    }
+
+    await interaction.update({content:`🗑 Cargos removidos de ${member}`, embeds:[], components:[]});
+
+    if(executor) sendLog(interaction.guild, new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou removercargo em ${member}`)
+      .setTimestamp()
+    );
   }
 });
 
