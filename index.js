@@ -23,19 +23,14 @@ const client = new Client({
 // CONFIGURAÇÃO
 // =============================
 const PREFIX = "thl!";
-
-// CARGOS DE STAFF PARA USAR COMANDOS
 const STAFF_ROLE_IDS = [
   "1468070328138858710",
   "1468069942451507221",
   "1468069638935150635",
   "1468017578747105390"
 ];
-
-// CARGO ESPECÍFICO QUE SÓ PODE SETAR/REMOVER CARGOS
 const CARGO_ESPECIAL = "1468066422490923081";
 
-// CARGOS DISPONÍVEIS PARA SETARCARGO
 const CATEGORIAS = [
   {
     label: "Inicial",
@@ -53,6 +48,11 @@ const CATEGORIAS = [
 ];
 
 const MAX_HOURS = 999;
+const SPAM_MESSAGE_LIMIT = 5; // quantidade de msgs rápidas
+const SPAM_MESSAGE_INTERVAL = 5000; // 5 segundos
+const BIG_TEXT_LIMIT = 200; // tamanho mínimo de msg grande
+const BIG_TEXT_COUNT = 3; // muta após 3 mensagens grandes
+const MUTE_DURATION = 2 * 60 * 1000; // 2 minutos
 
 // =============================
 // LOGS
@@ -86,23 +86,66 @@ function parseDuration(time) {
 }
 
 // =============================
-// VARIÁVEIS DE ANTI-SPAM/TEXTO
+// SISTEMA DE SPAM AUTOMÁTICO
 // =============================
-const userMessages = new Map(); // Para contar mensagens rápidas
-const userBigText = new Map(); // Para contar mensagens grandes
-const BIG_TEXT_LIMIT = 200; // Quantos caracteres é considerado "grande"
-const BIG_TEXT_MAX = 3; // Quantas vezes pode mandar mensagem grande antes de mutar
-const FAST_MSG_MAX = 5; // Quantas mensagens rápidas
-const FAST_MSG_TIME = 5000; // 5 segundos para contar mensagens rápidas
+const messageHistory = new Map(); // armazena msgs rápidas
+const bigMessageHistory = new Map(); // armazena msgs grandes
+
+async function handleSpam(message) {
+  if (!message.guild || message.author.bot) return;
+
+  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
+  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
+
+  // STAFF não sofre spam
+  if (isStaff || isEspecial) return;
+
+  const userId = message.author.id;
+  const now = Date.now();
+
+  // ------------------------
+  // MENSAGENS GRANDES
+  // ------------------------
+  if (message.content.length >= BIG_TEXT_LIMIT) {
+    if (!bigMessageHistory.has(userId)) bigMessageHistory.set(userId, []);
+    const arr = bigMessageHistory.get(userId);
+
+    arr.push(now);
+    // remove antigas
+    while (arr.length > BIG_TEXT_COUNT) arr.shift();
+    bigMessageHistory.set(userId, arr);
+
+    if (arr.length >= BIG_TEXT_COUNT) {
+      // mutar
+      await muteMember(message.member, "Spam de texto grande", message);
+      bigMessageHistory.set(userId, []);
+    }
+  }
+
+  // ------------------------
+  // MENSAGENS RÁPIDAS
+  // ------------------------
+  if (!messageHistory.has(userId)) messageHistory.set(userId, []);
+  const msgs = messageHistory.get(userId);
+
+  msgs.push(now);
+  // remove msgs antigas fora do intervalo
+  const filtered = msgs.filter(t => now - t <= SPAM_MESSAGE_INTERVAL);
+  messageHistory.set(userId, filtered);
+
+  if (filtered.length >= SPAM_MESSAGE_LIMIT) {
+    await muteMember(message.member, "Spam de palavras rápidas", message);
+    messageHistory.set(userId, []);
+  }
+}
 
 // =============================
-// FUNÇÃO COMUM DE MUTE AUTOMÁTICO
+// FUNÇÃO DE MUTE
 // =============================
-async function autoMute(member, reason, durationMs, guild) {
-  // Mute de chat
-  let muteRole = guild.roles.cache.find(r => r.name === "Muted");
+async function muteMember(member, motivo, messageContext = null) {
+  let muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
   if (!muteRole) {
-    muteRole = await guild.roles.create({ name: "Muted", permissions: [] });
+    muteRole = await member.guild.roles.create({ name: "Muted", permissions: [] });
   }
 
   await member.roles.add(muteRole);
@@ -113,82 +156,49 @@ async function autoMute(member, reason, durationMs, guild) {
     .setDescription(`${member} foi mutado automaticamente`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: `${Math.floor(durationMs / 60000)} min` },
-      { name: "📄 Motivo", value: reason }
+      { name: "⏳ Tempo", value: "2 minutos" },
+      { name: "📄 Motivo", value: motivo },
+      { name: "👮 Staff", value: messageContext ? messageContext.client.user.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: guild.name })
+    .setFooter({ text: member.guild.name })
     .setTimestamp();
 
-  await guild.channels.cache
-    .filter(c => c.isTextBased())
-    .first()
-    ?.send({ embeds: [embed] }); // envia no chat público
-  sendLog(guild, embed); // envia nos logs
+  if (messageContext) await messageContext.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
 
   setTimeout(async () => {
     if (member.roles.cache.has(muteRole.id)) {
       await member.roles.remove(muteRole);
     }
-  }, durationMs);
+  }, MUTE_DURATION);
 }
 
 // =============================
-// DETECTAR SPAM/TEXTO GRANDE
+// EVENTO DE MENSAGEM
 // =============================
 client.on("messageCreate", async message => {
-  if (!message.guild || message.author.bot) return;
+  if (!message.guild) return;
 
-  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
-  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
+  // 1️⃣ verificar spam
+  await handleSpam(message);
 
-  if (isStaff || isEspecial) return; // staff autorizado ignora
-
-  const now = Date.now();
-
-  // --- Mensagem grande ---
-  if (message.content.length >= BIG_TEXT_LIMIT) {
-    let count = userBigText.get(message.author.id) || 0;
-    count++;
-    userBigText.set(message.author.id, count);
-
-    if (count >= BIG_TEXT_MAX) {
-      userBigText.set(message.author.id, 0); // reset
-      await autoMute(message.member, "Spam de texto grande", 120000, message.guild); // 2 min
-    }
-  }
-
-  // --- Mensagens rápidas ---
-  let arr = userMessages.get(message.author.id) || [];
-  arr = arr.filter(t => now - t < FAST_MSG_TIME);
-  arr.push(now);
-  userMessages.set(message.author.id, arr);
-
-  if (arr.length >= FAST_MSG_MAX) {
-    userMessages.set(message.author.id, []);
-    await autoMute(message.member, "Spam de mensagens rápidas", 120000, message.guild); // 2 min
-  }
-
-  // =============================
-  // COMANDOS MANUAIS
-  // =============================
+  // 2️⃣ comandos
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
   const member = message.mentions.members.first();
+  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
+  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
 
-  if (!isStaff && !isEspecial) {
-    return message.reply("Você não tem permissão para usar este comando.");
-  }
+  if (!isStaff && !isEspecial) return message.reply("Você não tem permissão para usar este comando.");
 
   // =============================
-  // SETAR CARGOS COM EMBED E BOTÕES
+  // SETAR CARGOS
   // =============================
   if (command === "setarcargo") {
     if (!member) return message.reply("Mencione um usuário.");
-
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargo")
       .setDescription(`Escolha o(s) cargo(s) para ${member}`)
@@ -235,7 +245,7 @@ client.on("messageCreate", async message => {
   }
 
   // =============================
-  // MUTE CHAT/CALL MANUAL
+  // MUTE CHAT / CALL (manual)
   // =============================
   if (["mutechat", "mutecall"].includes(command)) {
     if (!member) return message.reply("Mencione um usuário.");
@@ -270,9 +280,7 @@ client.on("messageCreate", async message => {
       sendLog(message.guild, embed);
 
       setTimeout(async () => {
-        if (member.roles.cache.has(muteRole.id)) {
-          await member.roles.remove(muteRole);
-        }
+        if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
       }, duration);
     }
 
@@ -298,9 +306,7 @@ client.on("messageCreate", async message => {
       sendLog(message.guild, embed);
 
       setTimeout(async () => {
-        if (member.voice.serverMute) {
-          await member.voice.setMute(false);
-        }
+        if (member.voice.serverMute) await member.voice.setMute(false);
       }, duration);
     }
   }
@@ -313,55 +319,40 @@ client.on("interactionCreate", async interaction => {
   const isStaff = STAFF_ROLE_IDS.some(id => interaction.member.roles.cache.has(id));
   const isEspecial = interaction.member.roles.cache.has(CARGO_ESPECIAL);
 
+  if (!isStaff && !isEspecial) return;
+
   if (interaction.isStringSelectMenu()) {
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
     if (!member) return;
-
-    if (!isStaff && !isEspecial)
-      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
 
     // SETAR CARGOS
     if (interaction.customId.startsWith("selectcargo_")) {
       const cargoIds = interaction.values;
       for (const cid of cargoIds) {
         const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) {
-          await member.roles.add(cargo);
-        }
+        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
       }
-      await interaction.update({
-        content: `✅ Cargos adicionados para ${member}`,
-        embeds: [],
-        components: []
-      });
+      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
     }
 
     // REMOVER CARGOS
     if (interaction.customId.startsWith("removercargo_")) {
       const cargoIds = interaction.values;
       for (const cid of cargoIds) {
-        if (member.roles.cache.has(cid)) {
-          await member.roles.remove(cid);
-        }
+        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
       }
-      await interaction.update({
-        content: `🗑 Cargos removidos de ${member}`,
-        embeds: [],
-        components: []
-      });
+      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
     }
   }
 });
 
 // =============================
-// BOT ONLINE
+// READY
 // =============================
 client.on("ready", () => {
   console.log(`Bot online! ${client.user.tag}`);
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", {
-    type: "WATCHING"
-  });
+  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: "WATCHING" });
 });
 
 client.login(process.env.TOKEN);
