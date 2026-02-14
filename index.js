@@ -35,14 +35,11 @@ const STAFF_ROLE_IDS = [
 // 🔒 SISTEMA DE PROTEÇÃO
 // =============================
 const AUTO_MUTE_TIME = 5 * 60000; // 5 minutos
-
 const messageCooldown = new Map();
 const SPAM_LIMIT = 5;
 const SPAM_INTERVAL = 5000;
-
 const CAPS_PERCENTAGE = 70;
 const CAPS_MIN_LENGTH = 8;
-
 const joinTracker = [];
 const RAID_LIMIT = 5;
 const RAID_INTERVAL = 10000;
@@ -82,7 +79,6 @@ async function getMuteRole(guild) {
 function parseDuration(time) {
   const match = time?.match(/^(\d+)([mh])$/);
   if (!match) return null;
-
   const value = parseInt(match[1]);
   const unit = match[2];
 
@@ -90,12 +86,10 @@ function parseDuration(time) {
     if (value < 1) return null;
     return value * 60000;
   }
-
   if (unit === "h") {
     if (value < 1 || value > MAX_HOURS) return null;
     return value * 3600000;
   }
-
   return null;
 }
 
@@ -111,24 +105,15 @@ function isStaff(member) {
 // =============================
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
-
   const member = message.member;
 
   // =============================
   // 🚫 ANTI-SPAM
   // =============================
   const now = Date.now();
-  const userData = messageCooldown.get(member.id) || {
-    count: 0,
-    lastMessage: now
-  };
-
-  if (now - userData.lastMessage > SPAM_INTERVAL) {
-    userData.count = 1;
-  } else {
-    userData.count += 1;
-  }
-
+  const userData = messageCooldown.get(member.id) || { count: 0, lastMessage: now };
+  if (now - userData.lastMessage > SPAM_INTERVAL) userData.count = 1;
+  else userData.count += 1;
   userData.lastMessage = now;
   messageCooldown.set(member.id, userData);
 
@@ -145,10 +130,7 @@ client.on("messageCreate", async message => {
     message.channel.send({ embeds: [embed] });
     sendLog(message.guild, embed);
 
-    setTimeout(() => {
-      member.roles.remove(muteRole).catch(() => {});
-    }, AUTO_MUTE_TIME);
-
+    setTimeout(() => member.roles.remove(muteRole).catch(() => {}), AUTO_MUTE_TIME);
     userData.count = 0;
     return;
   }
@@ -157,10 +139,8 @@ client.on("messageCreate", async message => {
   // 🔗 ANTI-LINK
   // =============================
   const linkRegex = /(https?:\/\/|www\.)/i;
-
   if (linkRegex.test(message.content) && !isStaff(member)) {
     await message.delete().catch(() => {});
-
     const muteRole = await getMuteRole(message.guild);
     await member.roles.add(muteRole);
 
@@ -172,11 +152,7 @@ client.on("messageCreate", async message => {
 
     message.channel.send({ embeds: [embed] });
     sendLog(message.guild, embed);
-
-    setTimeout(() => {
-      member.roles.remove(muteRole).catch(() => {});
-    }, AUTO_MUTE_TIME);
-
+    setTimeout(() => member.roles.remove(muteRole).catch(() => {}), AUTO_MUTE_TIME);
     return;
   }
 
@@ -184,17 +160,13 @@ client.on("messageCreate", async message => {
   // 🔠 ANTI-CAPS
   // =============================
   const content = message.content;
-
   if (content.length >= CAPS_MIN_LENGTH) {
     const letters = content.replace(/[^a-zA-Z]/g, "");
     const upper = letters.replace(/[^A-Z]/g, "");
-
     if (letters.length > 0) {
       const percentage = (upper.length / letters.length) * 100;
-
       if (percentage >= CAPS_PERCENTAGE && !isStaff(member)) {
         await message.delete().catch(() => {});
-
         const muteRole = await getMuteRole(message.guild);
         await member.roles.add(muteRole);
 
@@ -206,11 +178,7 @@ client.on("messageCreate", async message => {
 
         message.channel.send({ embeds: [embed] });
         sendLog(message.guild, embed);
-
-        setTimeout(() => {
-          member.roles.remove(muteRole).catch(() => {});
-        }, AUTO_MUTE_TIME);
-
+        setTimeout(() => member.roles.remove(muteRole).catch(() => {}), AUTO_MUTE_TIME);
         return;
       }
     }
@@ -220,12 +188,9 @@ client.on("messageCreate", async message => {
   // COMANDOS
   // =============================
   if (!message.content.startsWith(PREFIX)) return;
-
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
-
-  if (!isStaff(member))
-    return message.reply("Você não tem permissão.");
+  if (!isStaff(member)) return message.reply("Você não tem permissão.");
 
   const alvo = message.mentions.members.first();
   if (!alvo) return message.reply("Mencione um usuário.");
@@ -236,9 +201,8 @@ client.on("messageCreate", async message => {
     timeArg = args[1];
     motivo = args.slice(2).join(" ") || "Não informado";
     duration = parseDuration(timeArg);
-
     if (!duration && !["unmutechat","unmutecall"].includes(command))
-        return message.reply("Tempo inválido. Use de 1m até 999h.");
+      return message.reply("Tempo inválido. Use de 1m até 999h.");
   }
 
   // =============================
@@ -249,10 +213,7 @@ client.on("messageCreate", async message => {
     await alvo.roles.add(muteRole);
 
     const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`unmute_${alvo.id}`)
-        .setLabel("Desmutar")
-        .setStyle(ButtonStyle.Success)
+      new ButtonBuilder().setCustomId(`unmute_${alvo.id}`).setLabel("Desmutar").setStyle(ButtonStyle.Success)
     );
 
     const embed = new EmbedBuilder()
@@ -271,10 +232,7 @@ client.on("messageCreate", async message => {
 
     message.reply({ embeds: [embed], components: [row] });
     sendLog(message.guild, embed);
-
-    setTimeout(() => {
-      alvo.roles.remove(muteRole).catch(() => {});
-    }, duration);
+    setTimeout(() => alvo.roles.remove(muteRole).catch(() => {}), duration);
   }
 
   // =============================
@@ -283,7 +241,6 @@ client.on("messageCreate", async message => {
   if (command === "unmutechat") {
     const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
     if (!muteRole) return;
-
     await alvo.roles.remove(muteRole);
     message.reply(`🔊 ${alvo} foi desmutado.`);
   }
@@ -292,9 +249,7 @@ client.on("messageCreate", async message => {
   // MUTE CALL
   // =============================
   if (command === "mutecall") {
-    if (!alvo.voice.channel)
-      return message.reply("O usuário não está em call.");
-
+    if (!alvo.voice.channel) return message.reply("O usuário não está em call.");
     await alvo.voice.setMute(true);
 
     const embed = new EmbedBuilder()
@@ -305,23 +260,20 @@ client.on("messageCreate", async message => {
         { name: "⏳ Tempo", value: timeArg },
         { name: "📄 Motivo", value: motivo }
       )
+      .setThumbnail(alvo.user.displayAvatarURL({ dynamic: true }))
+      .setFooter({ text: message.guild.name })
       .setTimestamp();
 
     message.reply({ embeds: [embed] });
     sendLog(message.guild, embed);
-
-    setTimeout(() => {
-      alvo.voice.setMute(false).catch(() => {});
-    }, duration);
+    setTimeout(() => alvo.voice.setMute(false).catch(() => {}), duration);
   }
 
   // =============================
   // UNMUTE CALL
   // =============================
   if (command === "unmutecall") {
-    if (!alvo.voice.channel)
-      return message.reply("O usuário não está em call.");
-
+    if (!alvo.voice.channel) return message.reply("O usuário não está em call.");
     await alvo.voice.setMute(false);
     message.reply(`🔊 ${alvo} foi desmutado na call.`);
   }
@@ -368,6 +320,111 @@ client.on("interactionCreate", async interaction => {
 
     const userId = interaction.customId.split("_")[1];
     const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return;
+
+    const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await member.roles.remove(muteRole);
+
+    await interaction.update({
+      content: `🔊 ${member} foi desmutado.`,
+      embeds: [],
+      components: []
+    });
+  }
+
+  // ===== SELECT MENU
+  if (interaction.isStringSelectMenu()) {
+    const [tipo, userId] = interaction.customId.split("_");
+    const member = await interaction.guild.members.fetch(userId).catch(() => null);
+    if (!member) return interaction.reply({ content: "Usuário não encontrado.", ephemeral: true });
+    if (!isStaff(interaction.member))
+      return interaction.reply({ content: "Sem permissão.", ephemeral: true });
+
+    // ===== CATEGORIA
+    if (tipo === "categoria") {
+      if (interaction.values[0] === "recrutamento") {
+        const cargos = [
+          { id: "1468026315285205094", label: "Equipe Tropa da Holanda" },
+          { id: "1468283328510558208", label: "Verificado" }
+        ];
+
+        const cargoMenu = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`cargo_${member.id}`)
+            .setPlaceholder("Selecione o cargo")
+            .addOptions(
+              cargos.map(c => ({
+                label: c.label,
+                value: c.id,
+                description: `Dar cargo ${c.label} para ${member.user.username}`
+              }))
+            )
+        );
+
+        const embed = new EmbedBuilder()
+          .setColor("Green")
+          .setTitle(`📌 Cargos de Recrutamento`)
+          .setDescription(`Selecione o cargo para ${member}`)
+          .setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
+
+        await interaction.update({ embeds: [embed], components: [cargoMenu] });
+      }
+    }
+
+    // ===== CARGO
+    if (tipo === "cargo") {
+      const roleId = interaction.values[0];
+      const role = interaction.guild.roles.cache.get(roleId);
+      if (!role) return interaction.reply({ content: "Cargo não encontrado.", ephemeral: true });
+      if (member.roles.cache.has(role.id))
+        return interaction.reply({ content: `${member} já possui o cargo ${role.name}.`, ephemeral: true });
+
+      await member.roles.add(role);
+
+      const embed = new EmbedBuilder()
+        .setColor("Purple")
+        .setTitle("✅ Cargo Adicionado")
+        .setDescription(`${member} recebeu o cargo **${role.name}**`)
+        .addFields(
+          { name: "👮 Staff", value: interaction.user.tag },
+          { name: "🆔 ID do usuário", value: member.id }
+        )
+        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+        .setTimestamp();
+
+      interaction.update({ embeds: [embed], components: [] });
+      sendLog(interaction.guild, embed);
+    }
+  }
+});
+
+// =============================
+// 🚨 ANTI RAID
+// =============================
+client.on("guildMemberAdd", async member => {
+  const now = Date.now();
+  joinTracker.push(now);
+  while (joinTracker.length && now - joinTracker[0] > RAID_INTERVAL) joinTracker.shift();
+  if (joinTracker.length >= RAID_LIMIT) {
+    const embed = new EmbedBuilder()
+      .setColor("DarkRed")
+      .setTitle("🚨 RAID DETECTADO")
+      .setDescription("Muitos membros entrando rapidamente.")
+      .setTimestamp();
+
+    sendLog(member.guild, embed);
+
+    member.guild.channels.cache.forEach(channel => {
+      if (channel.permissionOverwrites) {
+        channel.permissionOverwrites.edit(member.guild.roles.everyone, { SendMessages: false }).catch(() => {});
+      }
+    });
+
+    joinTracker.length = 0;
+  }
+});
+
+client.login(process.env.TOKEN);.members.fetch(userId).catch(() => null);
     if (!member) return;
 
     const muteRole = interaction.guild.roles.cache.find(r => r.name === "Muted");
