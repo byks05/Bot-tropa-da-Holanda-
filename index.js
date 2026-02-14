@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, StringSelectM
 require("dotenv").config();
 
 const client = new Client({
-  intents: [
+  intents:[
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
@@ -17,58 +17,69 @@ const client = new Client({
 const PREFIX = "thl!";
 const STAFF_ROLE_IDS = ["1468070328138858710","1468069942451507221","1468069638935150635","1468017578747105390"];
 const CARGO_ESPECIAL = "1468066422490923081";
+const LOG_CHANNEL_ID = "1468722726247338115";
+const RULES_CHANNEL_ID = "1468011045166518427"; // Canal de regras
+const TICKET_CATEGORY_ID = "1468014890500489447";
+const RECRUITMENT_ROLE_ID = "1468024687031484530";
 
 const CATEGORIAS = [
-  { label: "Inicial", options: [{ label: "Equipe Tropa da Holanda", id: "1468026315285205094" },{ label: "Verificado", id: "1468283328510558208" }] },
-  { label: "Aliados", options: [{ label: "Aliados", id: "1468279104624398509" }] }
+  {
+    label:"Faixa Rosas (Somente Meninas)",
+    options:[
+      {label:"Equipe Tropa da Holanda", id:"1468026315285205094"},
+      {label:"Verificado", id:"1468283328510558208"}
+    ],
+    maxSelect:null, // pode selecionar todos
+    allowAll:true
+  },
+  {
+    label:"Tropa da Holanda",
+    options:[
+      {label:"Membro Ativo", id:"1468022534686507028"},
+      {label:"Dono do Paredão", id:"1468263594931130574"},
+      {label:"Aliados", id:"1468279104624398509"}
+    ],
+    maxSelect:null, // pode selecionar todos
+    allowAll:false, // só adms
+  }
 ];
-
-const MAX_HOURS=999, SPAM_MESSAGE_LIMIT=5, SPAM_MESSAGE_INTERVAL=5000, BIG_TEXT_LIMIT=200, BIG_TEXT_COUNT=3, MUTE_DURATION=2*60*1000;
-
-const LOG_CHANNEL_ID = "1468722726247338115";
-const sendLog = (guild, embed) => guild.channels.cache.get(LOG_CHANNEL_ID)?.send({ embeds: [embed] });
 
 // =============================
 // UTILS
 // =============================
-const parseDuration = time => {
-  const m = time?.match(/^(\d+)([mh])$/);
-  if(!m) return null;
-  const [_, v, u] = m;
+const parseDuration = t=>{
+  const m=t?.match(/^(\d+)([mh])$/); if(!m) return null;
+  const [_,v,u]=m;
   if(u==="m") return parseInt(v)*60000;
   if(u==="h") return parseInt(v)*3600000;
   return null;
 };
 
-const canUseCommand = (member, cmd) => {
-  const isStaff = STAFF_ROLE_IDS.some(id => member.roles.cache.has(id));
-  const isEspecial = member.roles.cache.has(CARGO_ESPECIAL);
-  return isStaff || (isEspecial && ["setarcargo","removercargo"].includes(cmd));
-};
+const sendLog = (guild, embed) => guild.channels.cache.get(LOG_CHANNEL_ID)?.send({embeds:[embed]});
+const canUseCommand=(m,c)=> STAFF_ROLE_IDS.some(id=>m.roles.cache.has(id))||(m.roles.cache.has(CARGO_ESPECIAL)&&["setarcargo","removercargo"].includes(c));
 
 // =============================
 // SPAM
 // =============================
-const messageHistory = new Map(), bigMessageHistory = new Map();
+const messageHistory=new Map(), bigMessageHistory=new Map();
 async function handleSpam(message){
   if(!message.guild||message.author.bot) return;
   const isStaff = STAFF_ROLE_IDS.some(id=>message.member.roles.cache.has(id));
   const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
   if(isStaff||isEspecial) return;
 
-  const now = Date.now(), userId = message.author.id;
-
-  if(message.content.length>=BIG_TEXT_LIMIT){
-    if(!bigMessageHistory.has(userId)) bigMessageHistory.set(userId, []);
-    const arr=bigMessageHistory.get(userId); arr.push(now); while(arr.length>BIG_TEXT_COUNT) arr.shift(); bigMessageHistory.set(userId, arr);
-    if(arr.length>=BIG_TEXT_COUNT){ await muteMember(message.member,"Spam de texto grande",message); bigMessageHistory.set(userId,[]); }
+  const now=Date.now(), userId=message.author.id;
+  if(message.content.length>=200){
+    if(!bigMessageHistory.has(userId)) bigMessageHistory.set(userId,[]);
+    const arr=bigMessageHistory.get(userId); arr.push(now); while(arr.length>3) arr.shift(); bigMessageHistory.set(userId,arr);
+    if(arr.length>=3){ await muteMember(message.member,"Spam de texto grande",message); bigMessageHistory.set(userId,[]); }
   }
 
   if(!messageHistory.has(userId)) messageHistory.set(userId,[]);
   const msgs=messageHistory.get(userId); msgs.push(now);
-  const filtered=msgs.filter(t=>now-t<=SPAM_MESSAGE_INTERVAL);
+  const filtered=msgs.filter(t=>now-t<=5000);
   messageHistory.set(userId,filtered);
-  if(filtered.length>=SPAM_MESSAGE_LIMIT){ await muteMember(message.member,"Spam de palavras rápidas",message); messageHistory.set(userId,[]); }
+  if(filtered.length>=5){ await muteMember(message.member,"Spam de palavras rápidas",message); messageHistory.set(userId,[]); }
 }
 
 // =============================
@@ -76,30 +87,30 @@ async function handleSpam(message){
 // =============================
 async function muteMember(member,motivo,msg=null){
   let muteRole=member.guild.roles.cache.find(r=>r.name==="Muted");
-  if(!muteRole) muteRole=await member.guild.roles.create({ name:"Muted", permissions:[] });
+  if(!muteRole) muteRole=await member.guild.roles.create({name:"Muted",permissions:[]});
   await member.roles.add(muteRole);
-
-  const embed=new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado").setDescription(`${member} foi mutado automaticamente`).addFields(
-    { name:"🆔 ID", value:member.id },
-    { name:"⏳ Tempo", value:"2 minutos" },
-    { name:"📄 Motivo", value:motivo },
-    { name:"👮 Staff", value: msg?msg.client.user.tag:"Sistema" }
-  ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
-
+  const embed=new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado")
+    .setDescription(`${member} foi mutado automaticamente`)
+    .addFields(
+      {name:"🆔 ID",value:member.id},
+      {name:"⏳ Tempo",value:"2 minutos"},
+      {name:"📄 Motivo",value:motivo},
+      {name:"👮 Staff",value:msg?msg.client.user.tag:"Sistema"}
+    ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
   if(msg) await msg.channel.send({embeds:[embed]});
   sendLog(member.guild,embed);
-
-  setTimeout(()=>{ if(member.roles.cache.has(muteRole.id)) member.roles.remove(muteRole); }, MUTE_DURATION);
+  setTimeout(()=>{if(member.roles.cache.has(muteRole.id)) member.roles.remove(muteRole);},2*60*1000);
 }
 
 async function unmuteMember(member,msg=null){
   const muteRole=member.guild.roles.cache.find(r=>r.name==="Muted");
   if(!muteRole) return;
-  if(member.roles.cache.has(muteRole.id)) {
+  if(member.roles.cache.has(muteRole.id)){
     await member.roles.remove(muteRole);
-    const embed=new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado").setDescription(`${member} foi desmutado`).addFields(
-      {name:"🆔 ID", value:member.id}, {name:"👮 Staff", value: msg?msg.author.tag:"Sistema"}
-    ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+    const embed=new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado")
+      .setDescription(`${member} foi desmutado`)
+      .addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
+      .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
     if(msg) await msg.channel.send({embeds:[embed]});
     sendLog(member.guild,embed);
   }
@@ -107,44 +118,31 @@ async function unmuteMember(member,msg=null){
 
 async function unmuteCall(member,msg=null){
   if(!member.voice.channel) return; await member.voice.setMute(false);
-  const embed=new EmbedBuilder().setColor("Green").setTitle("🎙 Usuário Desmutado na Call").setDescription(`${member} foi desmutado na call`).addFields(
-    {name:"🆔 ID", value:member.id}, {name:"👮 Staff", value: msg?msg.author.tag:"Sistema"}
-  ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
+  const embed=new EmbedBuilder().setColor("Green").setTitle("🎙 Usuário Desmutado na Call")
+    .setDescription(`${member} foi desmutado na call`)
+    .addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
+    .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
   if(msg) await msg.channel.send({embeds:[embed]}); sendLog(member.guild,embed);
 }
 
 // =============================
-// TICKET: MENÇÃO AUTOMÁTICA
-// =============================
-const TICKET_CATEGORY_ID = "1468014890500489447";
-const RECRUITMENT_ROLE_ID = "1468024687031484530";
-client.on("channelCreate", async channel => {
-  if(channel.type === 0 && channel.parentId === TICKET_CATEGORY_ID){
-    if(channel.name.toLowerCase().includes("ticket")){
-      try { await channel.send({ content: `<@&${RECRUITMENT_ROLE_ID}>` }); } catch(e){ console.error(e); }
-    }
-  }
-});
-
-// =============================
-// EVENTO DE MENSAGEM
+// MENSAGENS
 // =============================
 client.on("messageCreate", async message=>{
   if(!message.guild||message.author.bot) return;
 
   // PALAVRAS-CHAVE
-  const palavras = [
-    {regex:/\bsetamento\b/i, msg:"Confira o canal <#1468020392005337161>", cor:"Blue"},
-    {regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink"},
-    {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink"},
-    {regex:/\bregras\b/i, msg:"<#1468011045166518427>", cor:"Yellow"}
+  const palavras=[
+    {regex:/\bsetamento\b/i, msg:"Confira o canal <#1468020392005337161>", cor:"Blue", deleteTime:30000},
+    {regex:/\bfaixa rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
+    {regex:/\bfaixas rosa\b/i, msg:"Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", cor:"Pink", deleteTime:15000},
+    {regex:/\bregras\b/i, msg:`<#${RULES_CHANNEL_ID}>`, cor:"Yellow", deleteTime:300000}
   ];
-
   for(const p of palavras){
     if(p.regex.test(message.content)){
       try{
         const msgSent=await message.channel.send(p.msg);
-        setTimeout(async()=>await msgSent.delete().catch(()=>{}),15000);
+        setTimeout(async()=>await msgSent.delete().catch(()=>{}), p.deleteTime);
         sendLog(message.guild,new EmbedBuilder()
           .setColor(p.cor)
           .setTitle("📌 Palavra Detectada")
@@ -163,23 +161,24 @@ client.on("messageCreate", async message=>{
   const cmd=args.shift().toLowerCase();
   const member=message.mentions.members.first();
 
-  if(!canUseCommand(message.member,cmd))
-    return message.reply("Você não tem permissão para usar este comando.").then(m=>setTimeout(async()=>await m.delete().catch(()=>{}),5000));
+  if(!canUseCommand(message.member,cmd)){
+    try{const m=await message.reply("Você não tem permissão para usar este comando."); setTimeout(async()=>await m.delete().catch(()=>{}),5000);}catch(e){console.error(e);}
+  }
 
   // MUTE / UNMUTE
   if(["mutechat","mutecall","unmutechat","unmutecall"].includes(cmd)&&member){
     const timeArg=args[0], motivo=args.slice(1).join(" ")||"Não informado", duration=parseDuration(timeArg);
     if(cmd==="mutechat") await muteMember(member,motivo,message);
     if(cmd==="mutecall"){
-      if(!member.voice.channel) return message.reply("O usuário não está em call.").then(m=>setTimeout(async()=>await m.delete().catch(()=>{}),5000));
+      if(!member.voice.channel) return (await message.reply("O usuário não está em call.")).delete();
       await member.voice.setMute(true);
-      const embed=new EmbedBuilder().setColor("Orange").setTitle("🎙 Usuário Mutado na Call").setDescription(`${member} foi silenciado na call`).addFields(
-        {name:"🆔 ID", value:member.id},{name:"⏳ Tempo", value:timeArg},{name:"📄 Motivo", value:motivo},{name:"👮 Staff", value:message.author.tag}
-      ).setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:message.guild.name}).setTimestamp();
-      const msgSent=await message.reply({embeds:[embed]});
-      sendLog(message.guild,embed);
-      setTimeout(async()=>await msgSent.delete().catch(()=>{}),5000);
-      setTimeout(async()=>{ if(member.voice.serverMute) await member.voice.setMute(false); },duration);
+      const embed=new EmbedBuilder().setColor("Orange").setTitle("🎙 Usuário Mutado na Call")
+        .setDescription(`${member} foi silenciado na call`)
+        .addFields({name:"🆔 ID",value:member.id},{name:"⏳ Tempo",value:timeArg},{name:"📄 Motivo",value:motivo},{name:"👮 Staff",value:message.author.tag})
+        .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:message.guild.name}).setTimestamp();
+      const msgSent=await message.reply({embeds:[embed]}); sendLog(message.guild,embed);
+      setTimeout(()=>msgSent.delete().catch(()=>{}),5000);
+      setTimeout(async()=>{if(member.voice.serverMute) await member.voice.setMute(false);},duration);
     }
     if(cmd==="unmutechat") await unmuteMember(member,message);
     if(cmd==="unmutecall") await unmuteCall(member,message);
@@ -187,12 +186,18 @@ client.on("messageCreate", async message=>{
 });
 
 // =============================
+// TICKET MENTION
+// =============================
+client.on("channelCreate", async channel=>{
+  if(channel.type===0 && channel.parentId===TICKET_CATEGORY_ID && channel.name.toLowerCase().includes("ticket")){
+    await channel.send(`<@&${RECRUITMENT_ROLE_ID}>`);
+  }
+});
+
+// =============================
 // READY
 // =============================
-client.once("ready",()=>{ 
-  console.log(`Bot online! ${client.user.tag}`); 
-  client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda",{type:"WATCHING"}); 
-});
+client.once("ready",()=>{console.log(`Bot online! ${client.user.tag}`); client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda",{type:"WATCHING"});});
 
 // =============================
 // LOGIN
