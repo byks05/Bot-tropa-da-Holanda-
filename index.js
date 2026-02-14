@@ -24,16 +24,12 @@ const client = new Client({
 // CONFIGURAÇÃO
 // =============================
 const PREFIX = "thl!";
-
-// Staff completo
 const STAFF_ROLE_IDS = [
   "1468070328138858710",
   "1468069942451507221",
   "1468069638935150635",
   "1468017578747105390"
 ];
-
-// Cargo especial limitado
 const CARGO_ESPECIAL = "1468066422490923081";
 
 const CATEGORIAS = [
@@ -73,19 +69,24 @@ function sendLog(guild, embed) {
 function parseDuration(time) {
   const match = time?.match(/^(\d+)([mh])$/);
   if (!match) return null;
+
   const value = parseInt(match[1]);
   const unit = match[2];
+
   if (unit === "m") return value >= 1 ? value * 60000 : null;
   if (unit === "h") return value >= 1 && value <= MAX_HOURS ? value * 3600000 : null;
+
   return null;
 }
 
-function isStaff(member) {
-  return STAFF_ROLE_IDS.some(id => member.roles.cache.has(id));
-}
+// === VERIFICA PERMISSÃO PARA COMANDOS ===
+function canUseCommand(member, commandName) {
+  const isStaff = STAFF_ROLE_IDS.some(id => member.roles.cache.has(id));
+  const isEspecial = member.roles.cache.has(CARGO_ESPECIAL);
 
-function isStaffOrEspecial(member) {
-  return isStaff(member) || member.roles.cache.has(CARGO_ESPECIAL);
+  // CARGO_ESPECIAL só pode setar/remover cargos
+  if (isEspecial && !["setarcargo", "removercargo"].includes(commandName)) return false;
+  return isStaff || isEspecial;
 }
 
 // =============================
@@ -97,7 +98,9 @@ const bigMessageHistory = new Map();
 async function handleSpam(message) {
   if (!message.guild || message.author.bot) return;
 
-  if (isStaff(message.member) || message.member.roles.cache.has(CARGO_ESPECIAL)) return;
+  const isStaff = STAFF_ROLE_IDS.some(id => message.member.roles.cache.has(id));
+  const isEspecial = message.member.roles.cache.has(CARGO_ESPECIAL);
+  if (isStaff || isEspecial) return;
 
   const userId = message.author.id;
   const now = Date.now();
@@ -146,7 +149,7 @@ async function muteMember(member, motivo, messageContext = null) {
       { name: "🆔 ID", value: member.id },
       { name: "⏳ Tempo", value: "2 minutos" },
       { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: messageContext ? messageContext.author.tag : "Sistema" }
+      { name: "👮 Staff", value: messageContext ? messageContext.client.user.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
@@ -215,13 +218,17 @@ async function unmuteCall(member, messageContext = null) {
 client.on("messageCreate", async message => {
   if (!message.guild || message.author.bot) return;
 
-  // Checagem de setamento
+  // =============================
+  // CHECAGEM DE SETAMENTO
+  // =============================
   const regexSetamento = /\bsetamento\b/i;
   if (regexSetamento.test(message.content)) {
     await message.channel.send("Confira o canal <#1468020392005337161>");
   }
 
-  // Sistema de spam
+  // =============================
+  // SISTEMA DE SPAM
+  // =============================
   await handleSpam(message);
 
   if (!message.content.startsWith(PREFIX)) return;
@@ -230,17 +237,8 @@ client.on("messageCreate", async message => {
   const command = args.shift().toLowerCase();
   const member = message.mentions.members.first();
 
-  // =============================
-  // Verificação de permissão
-  // =============================
-  if (
-    !(
-      (isStaff(message.member)) ||
-      (message.member.roles.cache.has(CARGO_ESPECIAL) && ["setarcargo","removercargo"].includes(command))
-    )
-  ) {
+  if (!canUseCommand(message.member, command))
     return message.reply("Você não tem permissão para usar este comando.");
-  }
 
   // =============================
   // SETAR CARGOS
@@ -254,7 +252,7 @@ client.on("messageCreate", async message => {
     const rows = CATEGORIAS.map(cat =>
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`selectcargo_${member.id}_${cat.label}`)
+          .setCustomId(`selectcargo_${member.id}_${cat.label}_${message.author.id}`)
           .setPlaceholder(cat.label)
           .setMinValues(1)
           .setMaxValues(cat.options.length)
@@ -263,14 +261,6 @@ client.on("messageCreate", async message => {
     );
 
     await message.reply({ embeds: [embed], components: rows });
-
-    // log do comando
-    const logEmbed = new EmbedBuilder()
-      .setColor("Blue")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${message.member} executou setarcargo em ${member}`)
-      .setTimestamp();
-    sendLog(message.guild, logEmbed);
   }
 
   // =============================
@@ -287,7 +277,7 @@ client.on("messageCreate", async message => {
 
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId(`removercargo_${member.id}`)
+        .setCustomId(`removercargo_${member.id}_${message.author.id}`)
         .setPlaceholder("Selecione os cargos")
         .setMinValues(1)
         .setMaxValues(userRoles.size)
@@ -295,53 +285,29 @@ client.on("messageCreate", async message => {
     );
 
     await message.reply({ embeds: [embed], components: [row] });
-
-    // log do comando
-    const logEmbed = new EmbedBuilder()
-      .setColor("Orange")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${message.member} executou removercargo em ${member}`)
-      .setTimestamp();
-    sendLog(message.guild, logEmbed);
   }
 
   // =============================
   // MUTE / UNMUTE CHAT E CALL
   // =============================
   if (["mutechat", "mutecall", "unmutechat", "unmutecall"].includes(command) && member) {
-    if (!isStaff(message.member)) return message.reply("Apenas staff completo pode usar este comando.");
-
     const timeArg = args[0];
     const motivo = args.slice(1).join(" ") || "Não informado";
     const duration = parseDuration(timeArg);
 
-    if (command === "mutechat") {
-      await muteMember(member, motivo, message);
-      const logEmbed = new EmbedBuilder()
-        .setColor("Red")
-        .setTitle("📌 Comando Executado")
-        .setDescription(`${message.member} executou mutechat em ${member}`)
-        .addFields(
-          { name: "Motivo", value: motivo },
-          { name: "Tempo", value: timeArg || "Não informado" }
-        )
-        .setTimestamp();
-      sendLog(message.guild, logEmbed);
-    }
-
+    if (command === "mutechat") await muteMember(member, motivo, message);
     if (command === "mutecall") {
       if (!member.voice.channel) return message.reply("O usuário não está em call.");
       await member.voice.setMute(true);
-
       const embed = new EmbedBuilder()
         .setColor("Orange")
         .setTitle("🎙 Usuário Mutado na Call")
         .setDescription(`${member} foi silenciado na call`)
         .addFields(
           { name: "🆔 ID", value: member.id },
-          { name: "⏳ Tempo", value: timeArg || "Não informado" },
+          { name: "⏳ Tempo", value: timeArg },
           { name: "📄 Motivo", value: motivo },
-          { name: "👮 Staff", value: message.member.user.tag }
+          { name: "👮 Staff", value: message.author.tag }
         )
         .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
         .setFooter({ text: message.guild.name })
@@ -349,41 +315,13 @@ client.on("messageCreate", async message => {
       await message.reply({ embeds: [embed] });
       sendLog(message.guild, embed);
 
-      const logEmbed = new EmbedBuilder()
-        .setColor("Orange")
-        .setTitle("📌 Comando Executado")
-        .setDescription(`${message.member} executou mutecall em ${member}`)
-        .addFields(
-          { name: "Motivo", value: motivo },
-          { name: "Tempo", value: timeArg || "Não informado" }
-        )
-        .setTimestamp();
-      sendLog(message.guild, logEmbed);
-
       setTimeout(async () => {
         if (member.voice.serverMute) await member.voice.setMute(false);
       }, duration);
     }
 
-    if (command === "unmutechat") {
-      await unmuteMember(member, message);
-      const logEmbed = new EmbedBuilder()
-        .setColor("Green")
-        .setTitle("📌 Comando Executado")
-        .setDescription(`${message.member} executou unmutechat em ${member}`)
-        .setTimestamp();
-      sendLog(message.guild, logEmbed);
-    }
-
-    if (command === "unmutecall") {
-      await unmuteCall(member, message);
-      const logEmbed = new EmbedBuilder()
-        .setColor("Green")
-        .setTitle("📌 Comando Executado")
-        .setDescription(`${message.member} executou unmutecall em ${member}`)
-        .setTimestamp();
-      sendLog(message.guild, logEmbed);
-    }
+    if (command === "unmutechat") await unmuteMember(member, message);
+    if (command === "unmutecall") await unmuteCall(member, message);
   }
 });
 
@@ -391,46 +329,52 @@ client.on("messageCreate", async message => {
 // INTERAÇÕES (BOTÕES E SELECT MENUS)
 // =============================
 client.on("interactionCreate", async interaction => {
-  const isFullStaff = isStaff(interaction.member);
-  const isEspecialMember = interaction.member.roles.cache.has(CARGO_ESPECIAL);
-  if (!isFullStaff && !isEspecialMember) return;
+  if (!interaction.isStringSelectMenu()) return;
 
-  if (interaction.isStringSelectMenu()) {
-    const userId = interaction.customId.split("_")[1];
-    const member = await interaction.guild.members.fetch(userId).catch(() => null);
-    if (!member) return;
+  const customIdParts = interaction.customId.split("_");
+  const userId = customIdParts[1];
+  const executorId = customIdParts[2]; // quem executou o comando
+  const member = await interaction.guild.members.fetch(userId).catch(() => null);
+  if (!member) return;
 
-    // Setar cargos
-    if (interaction.customId.startsWith("selectcargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        const cargo = interaction.guild.roles.cache.get(cid);
-        if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
-      }
-      await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
+  const executor = await interaction.guild.members.fetch(executorId).catch(() => null);
 
-      const logEmbed = new EmbedBuilder()
-        .setColor("Blue")
-        .setTitle("📌 Comando Executado")
-        .setDescription(`${interaction.member} adicionou cargos em ${member}`)
-        .setTimestamp();
-      sendLog(interaction.guild, logEmbed);
+  if (interaction.customId.startsWith("selectcargo_")) {
+    const cargoIds = interaction.values;
+    for (const cid of cargoIds) {
+      const cargo = interaction.guild.roles.cache.get(cid);
+      if (cargo && !member.roles.cache.has(cid)) await member.roles.add(cargo);
     }
 
-    // Remover cargos
-    if (interaction.customId.startsWith("removercargo_")) {
-      const cargoIds = interaction.values;
-      for (const cid of cargoIds) {
-        if (member.roles.cache.has(cid)) await member.roles.remove(cid);
-      }
-      await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+    await interaction.update({ content: `✅ Cargos adicionados para ${member}`, embeds: [], components: [] });
 
-      const logEmbed = new EmbedBuilder()
+    // Log
+    if (executor) {
+      const embed = new EmbedBuilder()
+        .setColor("Blue")
+        .setTitle("📌 Comando Executado")
+        .setDescription(`${executor} executou setarcargo em ${member}`)
+        .setTimestamp();
+      sendLog(interaction.guild, embed);
+    }
+  }
+
+  if (interaction.customId.startsWith("removercargo_")) {
+    const cargoIds = interaction.values;
+    for (const cid of cargoIds) {
+      if (member.roles.cache.has(cid)) await member.roles.remove(cid);
+    }
+
+    await interaction.update({ content: `🗑 Cargos removidos de ${member}`, embeds: [], components: [] });
+
+    // Log
+    if (executor) {
+      const embed = new EmbedBuilder()
         .setColor("Orange")
         .setTitle("📌 Comando Executado")
-        .setDescription(`${interaction.member} removeu cargos de ${member}`)
+        .setDescription(`${executor} executou removercargo em ${member}`)
         .setTimestamp();
-      sendLog(interaction.guild, logEmbed);
+      sendLog(interaction.guild, embed);
     }
   }
 });
