@@ -123,7 +123,7 @@ sendLog(member.guild,embed);
 async function unmuteCall(member,msg=null){
 if(!member.voice.channel) return; await member.voice.setMute(false);
 const embed=new EmbedBuilder().setColor("Green").setTitle("🎙 Usuário Desmutado na Call")
-.setDescription(${member} foi desmutado na call)
+.setDescription(`${member} foi desmutado na call`)
 .addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
 .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
 if(msg) await msg.channel.send({embeds:[embed]}); sendLog(member.guild,embed);
