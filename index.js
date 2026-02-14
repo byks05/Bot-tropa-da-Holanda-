@@ -367,7 +367,7 @@ client.login(process.env.TOKEN);wayIntentBits,
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder
-} = require("discord.js");
+} const Discord = require("discord.js");
 require("dotenv").config();
 
 const client = new Client({
