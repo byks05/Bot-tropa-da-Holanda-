@@ -112,7 +112,7 @@ if(!muteRole) return;
 if(member.roles.cache.has(muteRole.id)){
 await member.roles.remove(muteRole);
 const embed=new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado")
-.setDescription(${member} foi desmutado)
+.setDescription(`${member} foi desmutado`)
 .addFields({name:"🆔 ID",value:member.id},{name:"👮 Staff",value:msg?msg.author.tag:"Sistema"})
 .setThumbnail(member.user.displayAvatarURL({dynamic:true})).setFooter({text:member.guild.name}).setTimestamp();
 if(msg) await msg.channel.send({embeds:[embed]});
