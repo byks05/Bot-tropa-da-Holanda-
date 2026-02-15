@@ -5,9 +5,7 @@ const {
   Client, 
   GatewayIntentBits, 
   EmbedBuilder, 
-  ChannelType,
-  ActionRowBuilder,
-  StringSelectMenuBuilder
+  ChannelType
 } = require("discord.js");
 require("dotenv").config();
 
@@ -143,41 +141,6 @@ async function muteMember(member, motivo, msg = null) {
   }, MUTE_DURATION);
 }
 
-async function unmuteMember(member, msg = null) {
-  const muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
-  if (!muteRole || !member.roles.cache.has(muteRole.id)) return;
-  await member.roles.remove(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🔊 Usuário Desmutado")
-    .setDescription(`${member} foi desmutado`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
-async function unmuteCall(member, msg = null) {
-  if (!member.voice?.channel) return;
-  try { await member.voice.setMute(false); } catch { return; }
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🎙 Usuário Desmutado na Call")
-    .setDescription(`${member} foi desmutado na call`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -209,43 +172,44 @@ client.on("messageCreate", async (message) => {
 
   // --- COMANDOS ---
   if (!message.content.startsWith(PREFIX)) return;
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const command = args.shift().toLowerCase();
+  const [commandName, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const command = commandName.toLowerCase();
 
-  // ===== REC =====
   if (command === "rec") {
-    if (!canUseCommand(message.member, "rec")) return message.reply("❌ Você não tem permissão.");
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!target) return message.reply("❌ Usuário não encontrado.");
+    if (!canUseCommand(message.member, "rec")) return message.reply("❌ Você não tem permissão para usar este comando.");
+    const member = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+    if (!member) return message.reply("❌ Usuário não encontrado.");
     const action = args[1]?.toLowerCase();
-    if (!action || !["add", "remove"].includes(action)) return message.reply("❌ Use `add` ou `remove`.");
+    const tipo = args[2]?.toLowerCase();
 
+    // CASO ESPECIAL: add menina
+    if (action === "add" && tipo === "menina") {
+      const cargosMenina = [
+        "1468283328510558208",
+        "1468026315285205094",
+        "1470715382489677920"
+      ];
+      await member.roles.add(cargosMenina).catch(() => {});
+      return message.channel.send(`✅ ${member} recebeu os cargos de menina.`);
+    }
+
+    // ADD normal
     if (action === "add") {
-      const rolesToAdd = [
+      const cargosAdd = [
         "1468283328510558208",
         "1468026315285205094"
       ];
-      const addedRoles = [];
-      for (const roleId of rolesToAdd) {
-        const role = message.guild.roles.cache.get(roleId);
-        if (role && !target.roles.cache.has(role.id)) {
-          await target.roles.add(role);
-          addedRoles.push(role.name);
-        }
-      }
-      if (addedRoles.length > 0) {
-        message.channel.send(`✅ ${target} recebeu os cargos: ${addedRoles.join(", ")}`);
-      } else {
-        message.channel.send(`❌ ${target} já possui todos os cargos.`);
-      }
-    } else if (action === "remove") {
-      const roleToRemove = message.guild.roles.cache.get("1468024885354959142");
-      if (roleToRemove && target.roles.cache.has(roleToRemove.id)) {
-        await target.roles.remove(roleToRemove);
-        message.channel.send(`✅ ${target} teve o cargo ${roleToRemove.name} removido.`);
-      } else {
-        message.channel.send(`❌ ${target} não possui o cargo a ser removido.`);
-      }
+      await member.roles.add(cargosAdd).catch(() => {});
+      return message.channel.send(`✅ ${member} recebeu os cargos normais.`);
+    }
+
+    // REMOVE normal
+    if (action === "remove") {
+      const cargosRemove = [
+        "1468024885354959142"
+      ];
+      await member.roles.remove(cargosRemove).catch(() => {});
+      return message.channel.send(`✅ ${member} teve os cargos removidos.`);
     }
   }
 });
