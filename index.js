@@ -533,29 +533,20 @@ client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
   if (!message.content.toLowerCase().startsWith("thl!setarcargos")) return;
 
+  const args = message.content.split(" ").slice(1);
+  if (!args[0]) return message.reply("❌ Você precisa mencionar um usuário! Ex: `thl!setarcargos @user`");
+
   const executor = message.member;
 
-  // ===== VERIFICA PERMISSÃO =====
-  const isStaff = IDS.STAFF.some(id => executor.roles.cache.has(id));
-  const allowedSpecial = [IDS.CARGO_ESPECIAL]; // Se quiser algum cargo especial que possa executar
-  const hasSpecial = allowedSpecial.some(id => executor.roles.cache.has(id));
+  // cargos autorizados a usar o comando
+  const isAuthorized = IDS.STAFF.some(id => executor.roles.cache.has(id)) || executor.roles.cache.has(IDS.CARGO_ESPECIAL);
+  if (!isAuthorized) return message.reply("❌ Você não tem permissão para executar este comando.");
 
-  if (!isStaff && !hasSpecial) {
-    return message.reply("❌ Você não tem permissão para executar este comando.");
-  }
+  // pega o usuário alvo
+  let target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+  if (!target) return message.reply("❌ Usuário não encontrado.");
 
-  const args = message.content.split(" ").slice(1);
-  const target =
-    message.mentions.members.first() ||
-    message.guild.members.cache.get(args[0]);
-
-  if (!target) {
-    return message.reply(
-      "❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!setarcargos @user`"
-    );
-  }
-
-  // ===== CARGOS =====
+  // ===== TODOS OS CARGOS =====
   const cargosTropa = [
     { label: "Aliados", value: "1468279104624398509" },
     { label: "Membro Ativo", value: "1468022534686507028" },
@@ -564,7 +555,7 @@ client.on("messageCreate", async (message) => {
     { label: "Mascote", value: "1468021724598501376" },
     { label: "Sagaz", value: "1468021554993561661" },
     { label: "Leal", value: "1468021411720335432" },
-    { label: "Primeira Dama", value: "1468021327129743483" }
+    { label: "Primeira dama", value: "1468021327129743483" }
   ].reverse(); // ordem invertida
 
   const cargosGestao = [
@@ -579,31 +570,32 @@ client.on("messageCreate", async (message) => {
   ].reverse(); // ordem invertida
 
   // ===== FUNÇÃO MENU PRINCIPAL =====
-  async function menuPrincipal(msg) {
+  async function menuPrincipal(interactionMessage = null) {
     const embed = new EmbedBuilder()
       .setTitle("🎯 Setar Cargos")
-      .setDescription(`Escolha uma categoria para ${target}`)
+      .setDescription(`Escolha uma categoria de cargos para adicionar a ${target}`)
       .setColor("Green");
 
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId(`setarcargo_menu_${target.id}_${executor.id}`)
-        .setPlaceholder("Escolha uma categoria")
+        .setCustomId(`setarcargo_main_${target.id}_${executor.id}`)
+        .setPlaceholder("Escolha a categoria")
         .addOptions([
-          { label: "Tropa da Holanda", value: "tropa" },
+          { label: "Tropa da Holanda", value: "tropadaholanda" },
           { label: "Gestão", value: "gestao" },
-          { label: "Concluído", value: "concluido" }
+          { label: "Concluído", value: "concluido", emoji: "✅" }
         ])
     );
 
-    if (msg) {
-      await msg.edit({ embeds: [embed], components: [row] });
-      return msg;
+    if (interactionMessage) {
+      await interactionMessage.edit({ embeds: [embed], components: [row] });
+      return interactionMessage;
     } else {
       return await message.channel.send({ embeds: [embed], components: [row] });
     }
   }
 
+  // ===== EXECUTA MENU E COLETOR =====
   try {
     let menuMessage = await menuPrincipal();
 
@@ -613,46 +605,49 @@ client.on("messageCreate", async (message) => {
     collector.on("collect", async (interaction) => {
       if (!interaction.isStringSelectMenu()) return;
 
-      // ===== MENU PRINCIPAL =====
-      if (interaction.customId.startsWith("setarcargo_menu")) {
-        const choice = interaction.values[0];
+      const choice = interaction.values[0];
 
-        if (choice === "tropa" || choice === "gestao") {
-          const options = choice === "tropa" ? cargosTropa : cargosGestao;
-
-          const addRow = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`setarcargo_add_${choice}_${target.id}_${executor.id}`)
-              .setPlaceholder("Selecione os cargos para adicionar")
-              .setMinValues(1)
-              .setMaxValues(options.length)
-              .addOptions(options)
-          );
-
-          await interaction.update({ content: "Selecione os cargos:", components: [addRow], embeds: [] });
-
-        } else if (choice === "concluido") {
-          await interaction.update({ content: "🎉 Processo concluído!", components: [], embeds: [] });
+      if (interaction.customId.startsWith("setarcargo_main")) {
+        if (choice === "concluido") {
+          await interaction.update({ content: "🎉 Operação concluída!", components: [], embeds: [] });
           collector.stop();
+          return;
         }
 
-      // ===== ADICIONAR CARGOS =====
+        // categoria escolhida
+        let cargos = choice === "tropadaholanda" ? cargosTropa : cargosGestao;
+
+        // menu para escolher os cargos
+        const addRow = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`setarcargo_add_${target.id}_${executor.id}`)
+            .setPlaceholder("Selecione os cargos para adicionar")
+            .setMinValues(1)
+            .setMaxValues(cargos.length)
+            .addOptions(cargos)
+        );
+
+        await interaction.update({ content: "Selecione os cargos para adicionar:", components: [addRow], embeds: [] });
+
       } else if (interaction.customId.startsWith("setarcargo_add")) {
-        // DEFER para evitar "interação falhou"
+        // DEFERIMOS IMEDIATAMENTE para não dar interação falhou
         await interaction.deferUpdate();
 
         // adiciona os cargos selecionados
         await target.roles.add(interaction.values).catch(console.log);
 
-        // feedback
-        await interaction.followUp({ content: `✅ Cargos adicionados em ${target}`, ephemeral: true });
-
         // volta para o menu principal
         menuMessage = await menuPrincipal(menuMessage);
+
+        // envia feedback ephemerally
+        interaction.followUp({
+          content: `✅ Cargos adicionados em ${target}`,
+          ephemeral: true
+        }).catch(console.log);
       }
     });
 
-    collector.on("end", (collected) => {
+    collector.on("end", collected => {
       console.log(`Coletadas ${collected.size} interações.`);
     });
 
