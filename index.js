@@ -4,8 +4,7 @@
 const { 
   Client, 
   GatewayIntentBits, 
-  EmbedBuilder, 
-  ChannelType 
+  EmbedBuilder
 } = require("discord.js");
 require("dotenv").config();
 
@@ -52,27 +51,27 @@ const sendLog = (guild, embed) => {
   if (channel) channel.send({ embeds: [embed] });
 };
 
-const canUseCommand = (member) => {
-  return IDS.STAFF.some(id => member.roles.cache.has(id));
+const canUseCommand = (member, command) => {
+  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
+  const hasSpecial = member.roles.cache.has(IDS.CARGO_ESPECIAL);
+  const allowedSpecialCommands = ["rec"];
+  return isStaff || (hasSpecial && allowedSpecialCommands.includes(command));
 };
 
 // =============================
-// SPAM / CAPS / BIG TEXT
+// SPAM / BIG MESSAGES
 // =============================
 const messageHistory = new Map();
 const bigMessageHistory = new Map();
 
 async function handleSpam(message) {
   if (!message.guild || message.author.bot) return;
-  const { member, author, content, channel } = message;
+  const { member, author, content } = message;
   const userId = author.id;
   const now = Date.now();
-
   const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
-  if (isStaff) return; // Staff está liberado
-
-  // Ignorar se estiver na categoria de ticket
-  if (channel.parentId === IDS.TICKET_CATEGORY) return;
+  const isEspecial = member.roles.cache.has(IDS.CARGO_ESPECIAL);
+  if (isStaff || isEspecial) return;
 
   // Texto grande
   if (content.length >= 200) {
@@ -94,14 +93,6 @@ async function handleSpam(message) {
   if (filtered.length >= 5) {
     await muteMember(member, "Spam de palavras rápidas", message);
     messageHistory.set(userId, []);
-    return;
-  }
-
-  // CapsLock ou # (letras maiúsculas)
-  const upperLetters = content.replace(/[^A-Z]/g, "");
-  if (upperLetters.length >= 5) { 
-    message.delete().catch(() => {});
-    channel.send(`${member}, não use muitas letras maiúsculas.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
   }
 }
 
@@ -118,7 +109,7 @@ async function getMuteRole(guild) {
   return role;
 }
 
-async function muteMember(member, motivo, msg = null) {
+async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) {
   const muteRole = await getMuteRole(member.guild);
   if (member.roles.cache.has(muteRole.id)) return;
   await member.roles.add(muteRole);
@@ -129,9 +120,9 @@ async function muteMember(member, motivo, msg = null) {
     .setDescription(`${member} foi mutado automaticamente`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: "2 minutos" },
+      { name: "⏳ Tempo", value: `${duration / 60000} minutos` },
       { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: msg ? msg.client.user.tag : "Sistema" }
+      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
@@ -144,7 +135,7 @@ async function muteMember(member, motivo, msg = null) {
     try {
       if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
     } catch {}
-  }, MUTE_DURATION);
+  }, duration);
 }
 
 async function unmuteMember(member, msg = null) {
@@ -165,6 +156,32 @@ async function unmuteMember(member, msg = null) {
   sendLog(member.guild, embed);
 }
 
+async function muteCall(member, motivo, durationMs, msg = null) {
+  if (!member.voice?.channel) return;
+  try { await member.voice.setMute(true); } catch { return; }
+
+  const embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle("🔇 Usuário Mutado na Call")
+    .setDescription(`${member} foi mutado na call`)
+    .addFields(
+      { name: "🆔 ID", value: member.id },
+      { name: "⏳ Tempo", value: `${durationMs / 60000} minutos` },
+      { name: "📄 Motivo", value: motivo },
+      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+    )
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
+
+  setTimeout(async () => {
+    try { await member.voice.setMute(false); } catch {}
+  }, durationMs);
+}
+
 async function unmuteCall(member, msg = null) {
   if (!member.voice?.channel) return;
   try { await member.voice.setMute(false); } catch { return; }
@@ -183,78 +200,91 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// EVENTOS
+// MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // SPAM / CAPS / BIG TEXT
+  // --- SPAM ---
   handleSpam(message);
 
-  // PALAVRAS-CHAVE
-  const KEYWORDS = [
-    { regex: /\bsetamento\b/i, reply: "Confira o canal <#1468020392005337161>", color: "Blue", deleteAfter: 30000 },
-    { regex: /\bfaixas?\srosa\b/i, reply: "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", color: "Pink", deleteAfter: 15000 },
-    { regex: /\bregras\b/i, reply: `<#${IDS.RULES_CHANNEL}>`, color: "Yellow", deleteAfter: 300000 },
-    { regex: /\blink da tropa\b/i, reply: "Aqui está o link da Tropa da Holanda: https://discord.gg/tropadaholanda", color: "Purple", deleteAfter: 30000 }
-  ];
+  // --- COMANDOS ---
+  if (!message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  const command = args.shift().toLowerCase();
 
-  for (const k of KEYWORDS) {
-    if (k.regex.test(message.content)) {
-      try {
-        const sent = await message.channel.send(k.reply);
-        setTimeout(() => sent.delete().catch(() => {}), k.deleteAfter);
-        const embed = new EmbedBuilder().setColor(k.color).setTitle("📌 Palavra Detectada").setDescription(`${message.author} digitou palavra-chave`).setTimestamp();
-        sendLog(message.guild, embed);
-        break;
-      } catch (err) { console.error(err); }
+  if (!canUseCommand(message.member, command)) return;
+
+  // ----------------------------
+  // THL!REC
+  // ----------------------------
+  if (command === "rec") {
+    const user = message.mentions.members.first();
+    const subCommand = args[1]?.toLowerCase();
+
+    if (!user) return message.reply("Mencione um usuário válido.");
+
+    if (subCommand === "add") {
+      const rolesToAdd = args.includes("menina")
+        ? ["1468283328510558208", "1468026315285205094", "1470715382489677920"]
+        : ["1468283328510558208", "1468026315285205094"];
+      await user.roles.add(rolesToAdd);
+      return message.reply(`Cargos adicionados em ${user}`);
+    } else if (subCommand === "remove") {
+      const rolesToRemove = ["1468024885354959142"];
+      await user.roles.remove(rolesToRemove);
+      return message.reply(`Cargos removidos de ${user}`);
+    } else {
+      return message.reply("Use: thl!rec <@usuário> add/remove [menina]");
     }
   }
 
-  // COMANDO REC
-  if (!message.content.startsWith(PREFIX)) return;
-  const [command, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
+  // ----------------------------
+  // THL!MUTECHAT
+  // ----------------------------
+  if (command === "mutechat") {
+    const user = message.mentions.members.first();
+    const timeArg = args[1];
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
+    const duration = parseDuration(timeArg) || MUTE_DURATION;
+    if (!user) return message.reply("Mencione um usuário válido.");
+    await muteMember(user, motivo, message, duration);
+    return;
+  }
 
-  // =============================
-  // REC COMMAND
-  // =============================
-  if (command === "rec") {
-    if (!canUseCommand(message.member)) {
-      return message.reply("Você não tem permissão para usar este comando!");
-    }
+  if (command === "unmutechat") {
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
+    await unmuteMember(user, message);
+    return;
+  }
 
-    const member = message.mentions.members.first();
-    if (!member) return message.reply("Marque um usuário para dar ou remover cargo.");
+  // ----------------------------
+  // THL!MUTECALL
+  // ----------------------------
+  if (command === "mutecall") {
+    const user = message.mentions.members.first();
+    const timeArg = args[1];
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
+    const duration = parseDuration(timeArg) || MUTE_DURATION;
+    if (!user) return message.reply("Mencione um usuário válido.");
+    await muteCall(user, motivo, duration, message);
+    return;
+  }
 
-    const subCommand = args[0]?.toLowerCase();
-    const secondArg = args[1]?.toLowerCase();
-
-    try {
-      if (subCommand === "add" && secondArg === "menina") {
-        await member.roles.add(["1468283328510558208","1468026315285205094","1470715382489677920"]);
-        message.channel.send(`Cargos "menina" adicionados a ${member}`);
-      } else if (subCommand === "add") {
-        await member.roles.add(["1468283328510558208","1468026315285205094"]);
-        message.channel.send(`Cargos adicionados a ${member}`);
-      } else if (subCommand === "remove") {
-        await member.roles.remove(["1468024885354959142"]);
-        message.channel.send(`Cargos removidos de ${member}`);
-      } else {
-        message.reply("Use: add, remove ou add menina");
-      }
-    } catch (err) {
-      console.error(err);
-      message.reply("Erro ao executar comando.");
-    }
+  if (command === "unmutecall") {
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
+    await unmuteCall(user, message);
+    return;
   }
 });
 
 // =============================
-// MENÇÃO AUTOMÁTICA EM TICKET NOVO
+// TICKET CREATE AUTOMÁTICO
 // =============================
-client.on("channelCreate", (channel) => {
-  if (!channel.guild || channel.type !== ChannelType.GuildText) return;
-  if (channel.parentId === IDS.TICKET_CATEGORY && channel.name.toLowerCase().includes("ticket")) {
+client.on("channelCreate", async (channel) => {
+  if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) { // text channel
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
