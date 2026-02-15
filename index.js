@@ -296,3 +296,232 @@ client.on("channelCreate", async (channel) => {
   }
 });
 
+// ===== SETAR CARGOS =====
+if (["setarcargo", "Membros", "TropaDaHolanda"].includes(action)) {
+
+  // Bloqueia TropaDaHolanda se não for staff
+  const isStaff = IDS.STAFF.some(id => executor.roles.cache.has(id));
+
+  if (action === "TropaDaHolanda" && !isStaff) {
+    return interaction.reply({
+      content: "❌ Você não pode selecionar cargos nessa categoria.",
+      ephemeral: true
+    });
+  }
+
+  for (const roleId of interaction.values) {
+    const role = interaction.guild.roles.cache.get(roleId);
+    if (!role) continue;
+
+    if (!member.roles.cache.has(roleId)) {
+      await member.roles.add(roleId).catch(() => {});
+    }
+  }
+
+  await interaction.update({
+    content: `✅ Cargos adicionados para ${member}`,
+    embeds: [],
+    components: []
+  });
+
+  if (executor) {
+    const embed = new EmbedBuilder()
+      .setColor("Blue")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou ${action} em ${member}`)
+      .setTimestamp();
+
+    sendLog(interaction.guild, embed);
+  }
+}
+
+
+// ===== REMOVER CARGOS =====
+if (action === "removercargo") {
+
+  for (const roleId of interaction.values) {
+    if (member.roles.cache.has(roleId)) {
+      await member.roles.remove(roleId).catch(() => {});
+    }
+  }
+
+  await interaction.update({
+    content: `🗑 Cargos removidos de ${member}`,
+    embeds: [],
+    components: []
+  });
+
+  if (executor) {
+    const embed = new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("📌 Comando Executado")
+      .setDescription(`${executor} executou removercargo em ${member}`)
+      .setTimestamp();
+
+    sendLog(interaction.guild, embed);
+  }
+}
+
+// ===== RECRUTAMENTO CICLICO (thl!rec) =====
+if (action === "rec") {
+
+  const recMember = member;
+  const recExecutor = executor;
+
+  const menuPrincipal = async () => {
+    const embed = new EmbedBuilder()
+      .setTitle("🎯 Recrutamento")
+      .setDescription(`Selecione uma ação para ${recMember}:`)
+      .setColor("Green");
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`rec_init_${recMember.id}_${recExecutor.id}`)
+        .setPlaceholder("Escolha uma ação")
+        .addOptions([
+          { label: "Adicionar", value: "adicionar", emoji: "➕" },
+          { label: "Remover", value: "remover", emoji: "➖" },
+          { label: "Concluído", value: "concluido", emoji: "✅" }
+        ])
+    );
+
+    await interaction.update({ embeds: [embed], components: [row] });
+  };
+
+  // ================= INIT =================
+  if (subAction === "init") {
+
+    const choice = interaction.values[0];
+
+    // ===== ADICIONAR =====
+    if (choice === "adicionar") {
+
+      const categoria = CATEGORIAS.find(c =>
+        c.label === "Faixa Rosas (Somente Meninas)"
+      );
+
+      if (!categoria) {
+        return interaction.update({
+          content: "❌ Categoria não encontrada.",
+          embeds: [],
+          components: []
+        });
+      }
+
+      const options = categoria.options.map(o => ({
+        label: o.label,
+        value: o.id
+      }));
+
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)
+          .setPlaceholder("Selecione cargos para adicionar")
+          .setMinValues(1)
+          .setMaxValues(options.length)
+          .addOptions(options)
+      );
+
+      return interaction.update({
+        content: `🎯 Adicionar cargos para ${recMember}`,
+        embeds: [],
+        components: [row]
+      });
+    }
+
+    // ===== REMOVER =====
+    if (choice === "remover") {
+
+      const userRoles = recMember.roles.cache
+        .filter(r => r.id !== recMember.guild.id)
+        .map(r => ({ label: r.name, value: r.id }));
+
+      if (userRoles.length === 0) {
+        return interaction.update({
+          content: `⚠️ ${recMember} não possui cargos para remover.`,
+          embeds: [],
+          components: []
+        });
+      }
+
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_remove_${recMember.id}_${recExecutor.id}`)
+          .setPlaceholder("Selecione cargos para remover")
+          .setMinValues(1)
+          .setMaxValues(userRoles.length)
+          .addOptions(userRoles)
+      );
+
+      return interaction.update({
+        content: `🎯 Remover cargos de ${recMember}`,
+        embeds: [],
+        components: [row]
+      });
+    }
+
+    // ===== CONCLUIDO =====
+    if (choice === "concluido") {
+      return interaction.update({
+        content: `✅ Recrutamento finalizado para ${recMember}`,
+        embeds: [],
+        components: []
+      });
+    }
+  }
+
+  // ================= ADD =================
+  if (subAction === "add") {
+
+    for (const roleId of interaction.values) {
+      if (!recMember.roles.cache.has(roleId)) {
+        await recMember.roles.add(roleId).catch(() => {});
+      }
+    }
+
+    if (recExecutor) {
+      const embed = new EmbedBuilder()
+        .setColor("Blue")
+        .setTitle("📌 Cargos Adicionados")
+        .setDescription(`${recExecutor} adicionou cargos a ${recMember}`)
+        .setTimestamp();
+
+      sendLog(interaction.guild, embed);
+    }
+
+    return menuPrincipal();
+  }
+
+  // ================= REMOVE =================
+  if (subAction === "remove") {
+
+    for (const roleId of interaction.values) {
+      if (recMember.roles.cache.has(roleId)) {
+        await recMember.roles.remove(roleId).catch(() => {});
+      }
+    }
+
+    if (recExecutor) {
+      const embed = new EmbedBuilder()
+        .setColor("Orange")
+        .setTitle("📌 Cargos Removidos")
+        .setDescription(`${recExecutor} removeu cargos de ${recMember}`)
+        .setTimestamp();
+
+      sendLog(interaction.guild, embed);
+    }
+
+    return menuPrincipal();
+  }
+        }
+
+client.once("ready", () => {
+  console.log(`✅ Bot online! ${client.user.tag}`);
+
+  client.user.setActivity(
+    "byks05 | https://Discord.gg/TropaDaHolanda",
+    { type: 3 } // WATCHING
+  );
+});
+
+client.login(process.env.TOKEN);
