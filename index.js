@@ -556,7 +556,7 @@ client.on("messageCreate", async (message) => {
     { label: "Sagaz", value: "1468021554993561661" },
     { label: "Leal", value: "1468021411720335432" },
     { label: "Primeira dama", value: "1468021327129743483" }
-  ].reverse(); // ordem invertida
+  ].reverse();
 
   const cargosGestao = [
     { label: "Suporte", value: "1468716461773164739" },
@@ -567,7 +567,7 @@ client.on("messageCreate", async (message) => {
     { label: "Braço Direito", value: "1468018098354393098" },
     { label: "Líder", value: "1468018959797452881" },
     { label: "🍃", value: "1468069942451507221" }
-  ].reverse(); // ordem invertida
+  ].reverse();
 
   // ===== FUNÇÃO MENU PRINCIPAL =====
   async function menuPrincipal(interactionMessage = null) {
@@ -614,10 +614,9 @@ client.on("messageCreate", async (message) => {
           return;
         }
 
-        // categoria escolhida
+        // seleciona os cargos da categoria
         let cargos = choice === "tropadaholanda" ? cargosTropa : cargosGestao;
 
-        // menu para escolher os cargos
         const addRow = new ActionRowBuilder().addComponents(
           new StringSelectMenuBuilder()
             .setCustomId(`setarcargo_add_${target.id}_${executor.id}`)
@@ -630,13 +629,12 @@ client.on("messageCreate", async (message) => {
         await interaction.update({ content: "Selecione os cargos para adicionar:", components: [addRow], embeds: [] });
 
       } else if (interaction.customId.startsWith("setarcargo_add")) {
-        // DEFERIMOS IMEDIATAMENTE para não dar interação falhou
         await interaction.deferUpdate();
 
         // adiciona os cargos selecionados
         await target.roles.add(interaction.values).catch(console.log);
 
-        // volta para o menu principal
+        // volta para o menu inicial
         menuMessage = await menuPrincipal(menuMessage);
 
         // envia feedback ephemerally
