@@ -285,64 +285,92 @@ client.on("messageCreate", async (message) => {
     })();
   }
 
-  // ===== COMANDO THL!REC =====
-  if (command === "thl!rec") {
-    (async () => {
-      const argsRec = args.slice(1);
-      if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
+// ===== COMANDO THL!REC =====
+if (command === "thl!rec") {
+  (async () => {
+    const argsRec = args.slice(1);
+    if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
 
-      const executor = message.member;
-      const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
-      if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
+    const executor = message.member;
+    const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
+    if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
 
-      const cargosAdicionar = [
-        { label: "Verificado ✔️", value: "1468283328510558208" },
-        { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
-        { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
-      ];
+    const cargos = [
+      { label: "Verificado ✔️", value: "1468283328510558208" },
+      { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
+      { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
+    ];
 
-      async function menuCargos(interactionMessage = null) {
-        const embed = new EmbedBuilder()
-          .setTitle("🎯 Recrutamento")
-          .setDescription(`Selecione os cargos que deseja adicionar para ${recMember}`)
-          .setColor("Green");
+    // Menu inicial: escolher ação
+    const actionRow = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`rec_action_${recMember.id}_${executor.id}`)
+        .setPlaceholder("Escolha uma ação")
+        .addOptions([
+          { label: "Adicionar Cargos", value: "add" },
+          { label: "Remover Cargos", value: "remove" }
+        ])
+    );
 
-        const row = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId(`rec_addroles_${recMember.id}_${executor.id}`)
-            .setPlaceholder("Selecione os cargos")
-            .setMinValues(1)
-            .setMaxValues(cargosAdicionar.length)
-            .addOptions(cargosAdicionar)
-        );
+    const embed = new EmbedBuilder()
+      .setTitle("🎯 Recrutamento")
+      .setDescription(`Selecione se deseja adicionar ou remover cargos para ${recMember}`)
+      .setColor("Green");
 
-        if (interactionMessage) {
-          await interactionMessage.edit({ embeds: [embed], components: [row] });
-          return interactionMessage;
-        } else {
-          return await message.channel.send({ embeds: [embed], components: [row] });
+    const menuMessage = await message.channel.send({ embeds: [embed], components: [actionRow] });
+
+    // Coletor da primeira escolha (add ou remove)
+    const filter = i => i.user.id === executor.id;
+    const collector = menuMessage.createMessageComponentCollector({ filter, max: 1, time: 600000 });
+
+    collector.on("collect", async interaction => {
+      if (!interaction.isStringSelectMenu()) return;
+      if (!interaction.customId.startsWith("rec_action")) return;
+
+      const action = interaction.values[0]; // add ou remove
+
+      // Menu de seleção de cargos
+      const cargoRow = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_roles_${recMember.id}_${executor.id}_${action}`)
+          .setPlaceholder("Selecione os cargos")
+          .setMinValues(1)
+          .setMaxValues(cargos.length)
+          .addOptions(cargos)
+      );
+
+      const cargoEmbed = new EmbedBuilder()
+        .setTitle(`🎯 ${action === "add" ? "Adicionar" : "Remover"} Cargos`)
+        .setDescription(`Selecione os cargos que deseja ${action === "add" ? "adicionar" : "remover"} para ${recMember}`)
+        .setColor(action === "add" ? "Green" : "Red");
+
+      await interaction.update({ embeds: [cargoEmbed], components: [cargoRow] });
+
+      // Coletor do menu de cargos
+      const roleCollector = menuMessage.createMessageComponentCollector({ filter, max: 1, time: 600000 });
+
+      roleCollector.on("collect", async i => {
+        if (!i.isStringSelectMenu()) return;
+        if (!i.customId.startsWith("rec_roles")) return;
+
+        const [_, memberId, executorId, actionType] = i.customId.split("_");
+        if (i.user.id !== executor.id) return;
+
+        const targetMember = message.guild.members.cache.get(memberId);
+        if (!targetMember) return i.reply({ content: "❌ Usuário não encontrado.", ephemeral: true });
+
+        if (actionType === "add") {
+          await targetMember.roles.add(i.values).catch(() => {});
+          await i.update({ content: `✅ Cargos adicionados em ${targetMember}`, embeds: [], components: [] });
+        } else if (actionType === "remove") {
+          await targetMember.roles.remove(i.values).catch(() => {});
+          await i.update({ content: `✅ Cargos removidos de ${targetMember}`, embeds: [], components: [] });
         }
-      }
-
-      let menuMessage = await menuCargos();
-
-      const filter = i => i.user.id === executor.id;
-      const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
-
-      collector.on("collect", async (interaction) => {
-        if (!interaction.isStringSelectMenu()) return;
-        if (!interaction.customId.startsWith("rec_addroles")) return;
-
-        await recMember.roles.add(interaction.values).catch(() => {});
-        await interaction.update({ content: `✅ Cargos adicionados em ${recMember}`, embeds: [], components: [] });
-        collector.stop();
       });
-
-    })();
-  }
-
-});
-
+    });
+  })();
+}
+  
 // =============================
 // READY & LOGIN
 // =============================
