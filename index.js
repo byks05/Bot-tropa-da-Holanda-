@@ -529,6 +529,175 @@ if (command === "thl!mutecall") {
 });
 
 // =============================
+// COMANDO THL!SETARCARGOS
+// =============================
+
+client.on("messageCreate", async (message) => {
+  if (!message.guild) return;
+  if (!message.content.toLowerCase().startsWith("thl!setarcargos")) return;
+
+  const allowedExecutors = IDS.STAFF; // só esses IDs podem executar
+  if (!allowedExecutors.includes(message.member.id)) {
+    return message.reply("❌ Você não tem permissão para executar este comando.");
+  }
+
+  const args = message.content.split(" ").slice(1); // tudo após o comando
+  let target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+  if (!target) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID!");
+
+  const executor = message.member;
+
+  // ===== TODOS OS CARGOS POSSÍVEIS =====
+  const cargosTH = [
+    { label: "Primeira dama", value: "1468021327129743483" },
+    { label: "Leal", value: "1468021411720335432" },
+    { label: "Sagaz", value: "1468021554993561661" },
+    { label: "Mascote", value: "1468021724598501376" },
+    { label: "Olheiro", value: "1468021924943888455" },
+    { label: "Divulgador", value: "1468652058973569078" },
+    { label: "Membro Ativo", value: "1468022534686507028" },
+    { label: "Aliados", value: "1468279104624398509" }
+  ];
+
+  const cargosGestao = [
+    { label: "🍃", value: "1468069942451507221" },
+    { label: "líder", value: "1468018959797452881" },
+    { label: "braço direito", value: "1468018098354393098" },
+    { label: "☠️", value: "1468070328138858710" },
+    { label: "gerente", value: "1468019077984293111" },
+    { label: "mod", value: "1468019282633035857" },
+    { label: "supervisor", value: "1468019717938614456" },
+    { label: "suporte", value: "1468716461773164739" }
+  ];
+
+  // Função que envia o menu principal
+  async function enviarMenu(target, executor, cargos, interactionMessage = null) {
+    const embed = new EmbedBuilder()
+      .setTitle("🎯 Setar Cargos")
+      .setDescription(`Selecione os cargos para adicionar a ${target}`)
+      .setColor("Green");
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`setarcargos_${target.id}_${executor.id}`)
+        .setPlaceholder("Escolha os cargos")
+        .setMinValues(1)
+        .setMaxValues(cargos.length)
+        .addOptions(cargos)
+    );
+
+    if (interactionMessage) {
+      await interactionMessage.edit({ embeds: [embed], components: [row] });
+      return interactionMessage;
+    } else {
+      return await message.channel.send({ embeds: [embed], components: [row] });
+    }
+  }
+
+  try {
+    const menuMessageTH = await enviarMenu(target, executor, cargosTH);
+    const menuMessageGestao = await enviarMenu(target, executor, cargosGestao);
+
+    const filter = (i) => i.user.id === executor.id;
+    const collector = menuMessageTH.createMessageComponentCollector({ filter, time: 600000 });
+
+    collector.on("collect", async (interaction) => {
+      if (!interaction.isStringSelectMenu()) return;
+
+      if (interaction.customId.startsWith("setarcargos")) {
+        const rolesToAdd = interaction.values;
+        await target.roles.add(rolesToAdd).catch(console.log);
+        await interaction.reply({ content: `✅ Cargos adicionados a ${target}`, ephemeral: true });
+        // Mantém o menu aberto caso queira adicionar mais cargos
+      }
+    });
+
+    collector.on("end", collected => {
+      console.log(`Coletadas ${collected.size} interações em Setar Cargos.`);
+    });
+
+  } catch (err) {
+    console.log("Erro no comando thl!setarcargos:", err);
+    message.reply("❌ Ocorreu um erro ao executar o comando.");
+  }
+});
+
+// =============================
+// COMANDO THL!REMOVERCARGO
+// =============================
+
+client.on("messageCreate", async (message) => {
+  if (!message.guild) return;
+  if (!message.content.toLowerCase().startsWith("thl!removercargo")) return;
+
+  const allowedExecutors = IDS.STAFF;
+  if (!allowedExecutors.includes(message.member.id)) {
+    return message.reply("❌ Você não tem permissão para executar este comando.");
+  }
+
+  const args = message.content.split(" ").slice(1);
+  let target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
+  if (!target) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID!");
+
+  const executor = message.member;
+
+  async function enviarMenuRemover(target, executor, interactionMessage = null) {
+    const userRoles = target.roles.cache
+      .filter(r => r.id !== target.guild.id)
+      .map(r => ({ label: r.name, value: r.id }));
+
+    if (userRoles.length === 0) {
+      return message.reply("❌ Este usuário não possui cargos para remover.");
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle("🗑 Remover Cargos")
+      .setDescription(`Selecione os cargos para remover de ${target}`)
+      .setColor("Orange");
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`removercargo_${target.id}_${executor.id}`)
+        .setPlaceholder("Escolha os cargos para remover")
+        .setMinValues(1)
+        .setMaxValues(userRoles.length)
+        .addOptions(userRoles)
+    );
+
+    if (interactionMessage) {
+      await interactionMessage.edit({ embeds: [embed], components: [row] });
+      return interactionMessage;
+    } else {
+      return await message.channel.send({ embeds: [embed], components: [row] });
+    }
+  }
+
+  try {
+    const menuMessage = await enviarMenuRemover(target, executor);
+
+    const filter = (i) => i.user.id === executor.id;
+    const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
+
+    collector.on("collect", async (interaction) => {
+      if (!interaction.isStringSelectMenu()) return;
+      if (!interaction.customId.startsWith("removercargo")) return;
+
+      const rolesToRemove = interaction.values;
+      await target.roles.remove(rolesToRemove).catch(console.log);
+      await interaction.reply({ content: `🗑 Cargos removidos de ${target}`, ephemeral: true });
+    });
+
+    collector.on("end", collected => {
+      console.log(`Coletadas ${collected.size} interações em Remover Cargos.`);
+    });
+
+  } catch (err) {
+    console.log("Erro no comando thl!removercargo:", err);
+    message.reply("❌ Ocorreu um erro ao executar o comando.");
+  }
+});
+
+// =============================
 // MENCIONAR CARGO AUTOMÁTICO EM TICKETS
 // =============================
 
