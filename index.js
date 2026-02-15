@@ -287,46 +287,48 @@ const command = args[0].toLowerCase();
 
 // ===== MUTE CHAT =====
 if (command === "thl!mutechat") {
-if (!message.member.permissions.has("ManageMessages")) {
-return message.reply("❌ Você não tem permissão para usar este comando.");
-}
+  (async () => {  // <<< função async imediata
+    if (!message.member.permissions.has("ManageMessages")) {
+      return message.reply("❌ Você não tem permissão para usar este comando.");
+    }
 
-const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
-if (!member) return message.reply("❌ Usuário não encontrado.");
+    const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
+    if (!member) return message.reply("❌ Usuário não encontrado.");
 
-// Pegar a duração do comando (args[2] ou args[1] se não houver mention)
-const durationArg = args[2] || (args[1] && !message.mentions.members.first() ? args[1] : null);
-const duration = parseDuration(durationArg) ?? 2 * 60 * 1000; // default 2 minutos
+    // Pegar a duração do comando (args[2] ou args[1] se não houver mention)
+    const durationArg = args[2] || (args[1] && !message.mentions.members.first() ? args[1] : null);
+    const duration = parseDuration(durationArg) ?? 2 * 60 * 1000; // default 2 minutos
 
-try {
-const muteRole = await getMuteRole(message.guild); 
-await member.roles.add(muteRole);
+    try {
+      const muteRole = await getMuteRole(message.guild); 
+      await member.roles.add(muteRole);
 
-message.channel.send(`🔇 ${member} foi mutado no chat por ${durationArg ?? "2m"}.`);  
+      message.channel.send(`🔇 ${member} foi mutado no chat por ${durationArg ?? "2m"}.`);  
 
-// Remover o mute depois do tempo definido  
-setTimeout(async () => {  
-  if (member.roles.cache.has(muteRole.id)) {  
-    await member.roles.remove(muteRole).catch(() => {});  
-    message.channel.send(`🔊 ${member} foi desmutado automaticamente.`);  
-  }  
-}, duration);  
+      // Remover o mute depois do tempo definido  
+      setTimeout(async () => {  
+        if (member.roles.cache.has(muteRole.id)) {  
+          await member.roles.remove(muteRole).catch(() => {});  
+          message.channel.send(`🔊 ${member} foi desmutado automaticamente.`);  
+        }  
+      }, duration);  
 
-// Log  
-sendLog(message.guild, new EmbedBuilder()  
-  .setColor("Red")  
-  .setTitle("🔇 Usuário Mutado no Chat")  
-  .setDescription(`${member} foi mutado por ${message.author}`)  
-  .addFields(  
-    { name: "⏱ Duração", value: durationArg ?? "2 minutos" }  
-  )  
-  .setTimestamp()  
-);
+      // Log  
+      sendLog(message.guild, new EmbedBuilder()  
+        .setColor("Red")  
+        .setTitle("🔇 Usuário Mutado no Chat")  
+        .setDescription(`${member} foi mutado por ${message.author}`)  
+        .addFields(  
+          { name: "⏱ Duração", value: durationArg ?? "2 minutos" }  
+        )  
+        .setTimestamp()  
+      );
 
-} catch (err) {
-console.error(err);
-message.reply("❌ Não foi possível mutar o usuário.");
-}
+    } catch (err) {
+      console.error(err);
+      message.reply("❌ Não foi possível mutar o usuário.");
+    }
+  })(); // <<< chama a função imediatamente
 }
 
 // ===== UNMUTE CHAT =====
