@@ -361,9 +361,26 @@ client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (!message.content.toLowerCase().startsWith("thl!rec")) return;
 
+  const args = message.content.split(" ").slice(1); // tudo depois do comando
+  if (!args[0]) 
+    return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!rec @user` ou `thl!rec 1452004282688737515`");
+
   const executor = message.member;
-  const recMember = message.mentions.members.first();
-  if (!recMember) return message.reply("❌ Você precisa mencionar um usuário! Ex: `thl!rec @user`");
+
+  // Tenta pegar pelo mention primeiro
+  let recMember = message.mentions.members.first();
+
+  // Se não houver mention, tenta pegar pelo ID
+  if (!recMember) {
+    recMember = message.guild.members.cache.get(args[0]);
+  }
+
+  if (!recMember) 
+    return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
+
+  // Chama a função do menu principal, passando executor e recMember
+  menuPrincipal(recMember, executor);
+});
 
   const cargosAdicionar = [
     "1468283328510558208", // verificado ✔️
