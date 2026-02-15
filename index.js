@@ -275,6 +275,7 @@ client.on("messageCreate", async (message) => {
       console.error(err);
     }
   }
+});
 
 // ============================
 // COMANDOS THL!
@@ -331,6 +332,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Não foi possível mutar o usuário.");
     }
   }
+});
 
   // ===== UNMUTE CHAT =====
   if (command === "thl!unmutechat") {
@@ -355,6 +357,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Não foi possível desmutar o usuário.");
     }
   }
+});
 
   // ===== MUTE CALL =====
   if (command === "thl!mutecall") {
@@ -389,6 +392,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Não foi possível mutar o usuário na call.");
     }
   }
+});
 
   // ===== UNMUTE CALL =====
   if (command === "thl!unmutecall") {
@@ -411,6 +415,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Não foi possível desmutar o usuário na call.");
     }
   }
+});
 
   // ===== COMANDO THL!REC =====
   if (command === "thl!rec") {
@@ -643,6 +648,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Ocorreu um erro ao executar o comando.");
     }
   }
+});
 
   // ===== COMANDO THL!REMOVERCARGOS =====
   if (command === "thl!removercargos") {
