@@ -415,7 +415,14 @@ client.on("messageCreate", async (message) => {
   }
 });
   // ===== COMANDO THL!REC =====
-if (command === "thl!rec") {
+client.on("messageCreate", (message) => {
+  if (message.author.bot) return;
+  if (!message.content.startsWith("thl!")) return;
+
+  const args = message.content.slice(4).trim().split(/ +/); // remove o prefixo
+  const command = args.shift().toLowerCase(); // pega o comando
+
+  if (command === "rec") {
   (async () => { // 🔹 IIFE async para permitir await
     const argsRec = args.slice(1);
     if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!rec @user`");
