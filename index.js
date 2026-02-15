@@ -276,7 +276,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
- // ============================
+// ============================
 // COMANDOS THL!
 // ============================
 
@@ -524,7 +524,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 });
-  
+
 // ============================
 // COMANDOS THL!SETARCARGOS E REMOVERCARGOS
 // ============================
@@ -683,6 +683,7 @@ client.on("messageCreate", async (message) => {
     collector.on("end", collected => console.log(`Coletadas ${collected.size} interações.`));
   }
 });
+  
 // =============================
 // MENCIONAR CARGO AUTOMÁTICO EM TICKETS
 // =============================
