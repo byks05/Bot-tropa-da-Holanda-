@@ -614,51 +614,51 @@ client.on("messageCreate", async (message) => {
 // =============================
 
 client.on("messageCreate", async (message) => {
-if (!message.guild || message.author.bot) return;
-if (!message.content.toLowerCase().startsWith("thl!removercargos")) return;
+  if (!message.guild || message.author.bot) return;
+  if (!message.content.toLowerCase().startsWith("thl!removercargos")) return;
 
-const executor = message.member;
-const allowedIds = IDS.STAFF.concat([IDS.CARGO_ESPECIAL]);
-if (!allowedIds.some(id => executor.roles.cache.has(id))) {
-return message.reply("❌ Você não tem permissão para executar este comando.");
-}
+  const executor = message.member;
+  const allowedIds = IDS.STAFF.concat([IDS.CARGO_ESPECIAL]);
+  if (!allowedIds.some(id => executor.roles.cache.has(id))) {
+    return message.reply("❌ Você não tem permissão para executar este comando.");
+  }
 
-const target = message.mentions.members.first() || message.guild.members.cache.get(message.content.split(" ")[1]);
-if (!target) return message.reply("❌ Usuário não encontrado.");
+  const target = message.mentions.members.first() || message.guild.members.cache.get(message.content.split(" ")[1]);
+  if (!target) return message.reply("❌ Usuário não encontrado.");
 
-const userRoles = target.roles.cache.filter(r => r.id !== target.guild.id);
-if (userRoles.size === 0) return message.reply("❌ Este usuário não possui cargos para remover.");
+  const userRoles = target.roles.cache.filter(r => r.id !== target.guild.id);
+  if (userRoles.size === 0) return message.reply("❌ Este usuário não possui cargos para remover.");
 
-const removeRow = new ActionRowBuilder().addComponents(
-new StringSelectMenuBuilder()
-.setCustomId(removercargos_${target.id}_${executor.id})
-.setPlaceholder("Selecione os cargos para remover")
-.setMinValues(1)
-.setMaxValues(userRoles.size)
-.addOptions(userRoles.map(r => ({ label: r.name, value: r.id })))
-);
+  const removeRow = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`removercargos_${target.id}_${executor.id}`) // USAR CRASES
+      .setPlaceholder("Selecione os cargos para remover")
+      .setMinValues(1)
+      .setMaxValues(userRoles.size)
+      .addOptions(userRoles.map(r => ({ label: r.name, value: r.id })))
+  );
 
-const embed = new EmbedBuilder()
-.setTitle("🗑 Remover Cargos")
-.setDescription(Selecione os cargos que deseja remover de ${target})
-.setColor("Orange");
+  const embed = new EmbedBuilder()
+    .setTitle("🗑 Remover Cargos")
+    .setDescription(`Selecione os cargos que deseja remover de ${target}`) // USAR CRASES
+    .setColor("Orange");
 
-const menuMessage = await message.channel.send({ embeds: [embed], components: [removeRow] });
+  const menuMessage = await message.channel.send({ embeds: [embed], components: [removeRow] });
 
-const filter = (i) => i.user.id === executor.id;
-const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
+  const filter = (i) => i.user.id === executor.id;
+  const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
 
-collector.on("collect", async (interaction) => {
-if (!interaction.isStringSelectMenu()) return;
-if (!interaction.customId.startsWith("removercargos")) return;
+  collector.on("collect", async (interaction) => {
+    if (!interaction.isStringSelectMenu()) return;
+    if (!interaction.customId.startsWith("removercargos")) return;
 
-await target.roles.remove(interaction.values).catch(console.log);  
-await interaction.update({ content: `✅ Cargos removidos de ${target}`, embeds: [], components: [] });
+    await target.roles.remove(interaction.values).catch(console.log);  
+    await interaction.update({ content: `✅ Cargos removidos de ${target}`, embeds: [], components: [] });
+  });
 
+  collector.on("end", collected => console.log(`Coletadas ${collected.size} interações.`)); // USAR CRASES
 });
 
-collector.on("end", collected => console.log(Coletadas ${collected.size} interações.));
-});
 
 // =============================
 // MENCIONAR CARGO AUTOMÁTICO EM TICKETS
