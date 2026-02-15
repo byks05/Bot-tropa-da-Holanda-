@@ -528,7 +528,7 @@ if (command === "thl!mutecall") {
   await handleSpam(message);
 });
 
-// ===== COMANDO THL!SETARCARGOS =====
+// ===== COMANDO THL!SETARCARGOS CORRIGIDO =====
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
   if (!message.content.toLowerCase().startsWith("thl!setarcargos")) return;
@@ -607,6 +607,7 @@ client.on("messageCreate", async (message) => {
 
       const choice = interaction.values[0];
 
+      // ===== MENU INICIAL =====
       if (interaction.customId.startsWith("setarcargo_main")) {
         if (choice === "concluido") {
           await interaction.update({ content: "🎉 Operação concluída!", components: [], embeds: [] });
@@ -614,7 +615,6 @@ client.on("messageCreate", async (message) => {
           return;
         }
 
-        // seleciona os cargos da categoria
         let cargos = choice === "tropadaholanda" ? cargosTropa : cargosGestao;
 
         const addRow = new ActionRowBuilder().addComponents(
@@ -628,20 +628,17 @@ client.on("messageCreate", async (message) => {
 
         await interaction.update({ content: "Selecione os cargos para adicionar:", components: [addRow], embeds: [] });
 
-      } else if (interaction.customId.startsWith("setarcargo_add")) {
-        await interaction.deferUpdate();
-
-        // adiciona os cargos selecionados
+      } 
+      // ===== MENU ADICIONAR CARGOS =====
+      else if (interaction.customId.startsWith("setarcargo_add")) {
+        // adiciona cargos selecionados
         await target.roles.add(interaction.values).catch(console.log);
 
-        // volta para o menu inicial
-        menuMessage = await menuPrincipal(menuMessage);
+        // confirma ephemerally
+        await interaction.followUp({ content: `✅ Cargos adicionados em ${target}`, ephemeral: true });
 
-        // envia feedback ephemerally
-        interaction.followUp({
-          content: `✅ Cargos adicionados em ${target}`,
-          ephemeral: true
-        }).catch(console.log);
+        // volta para menu principal
+        menuMessage = await menuPrincipal(menuMessage);
       }
     });
 
