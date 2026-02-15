@@ -766,7 +766,7 @@ client.on("interactionCreate", async (interaction) => {
         await member.roles.remove(roleId).catch(() => {});
       }
     }
-
+  }
     await interaction.update({
       content: `🗑 Cargos removidos de ${member}`,
       embeds: [],
@@ -797,9 +797,8 @@ client.once("ready", () => {
     { type: 3 } // 3 = Watching
   );
 });
-
 // =============================
 // LOGIN
 // =============================
-});
+
 client.login(process.env.TOKEN);
