@@ -513,8 +513,6 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   return menuPrincipal();
-}
-
 } // fecha if(action === "rec")
 
 }); // ← FECHA interactionCreate
