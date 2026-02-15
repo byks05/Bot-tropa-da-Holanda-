@@ -268,41 +268,66 @@ client.on("messageCreate", async (message) => {
     })();
   }
 
-  // ===== COMANDO thl!rec =====
-  if (command === "thl!rec") {
-    (async () => {
-      const argsRec = args.slice(1);
-      if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
-      const executor = message.member;
-      const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
-      if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
-      const cargosAdicionar = [
-        { label: "Verificado ✔️", value: "1468283328510558208" },
-        { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
-        { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
-      ];
+ // ===== COMANDO thl!rec =====
+if (command === "thl!rec") {
+  (async () => {
+    const argsRec = args.slice(1);
+    if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
 
-      const embed = new EmbedBuilder().setTitle("🎯 Recrutamento").setDescription(`Selecione uma ação para ${recMember}`).setColor("Green");
-      const row = new ActionRowBuilder().addComponents(new StringSelectMenuBuilder().setCustomId(`rec_init_${recMember.id}_${executor.id}`).setPlaceholder("Escolha uma ação").addOptions([
-        { label: "Adicionar cargos", value: "adicionar", emoji: "➕" },
-        { label: "Remover cargos", value: "remover", emoji: "➖" },
-        { label: "Concluído", value: "concluido", emoji: "✅" }
-      ]));
-      const menuMessage = await message.channel.send({ embeds: [embed], components: [row] });
+    const executor = message.member;
+    const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
+    if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
 
-      const filter = i => i.user.id === executor.id;
-      const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
-      collector.on("collect", async (interaction) => {
-        if (!interaction.isStringSelectMenu()) return;
-        const choice = interaction.values[0];
-        if (choice === "concluido") { await interaction.update({ content: "🎉 Recrutamento concluído!", embeds: [], components: [] }); collector.stop(); return; }
-        if (choice === "adicionar") { await recMember.roles.add(cargosAdicionar.map(c => c.value)).catch(() => {}); await interaction.update({ content: `✅ Cargos adicionados em ${recMember}`, components: [], embeds: [] }); }
-      });
-    })();
-  }
+    const cargosAdicionar = [
+      { label: "Verificado ✔️", value: "1468283328510558208" },
+      { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
+      { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
+    ];
 
-});
+    // Função para criar menu de seleção de cargos
+    async function menuCargos(interactionMessage = null) {
+      const embed = new EmbedBuilder()
+        .setTitle("🎯 Recrutamento")
+        .setDescription(`Selecione os cargos que deseja adicionar para ${recMember}`)
+        .setColor("Green");
 
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_addroles_${recMember.id}_${executor.id}`)
+          .setPlaceholder("Selecione os cargos")
+          .setMinValues(1)
+          .setMaxValues(cargosAdicionar.length)
+          .addOptions(cargosAdicionar)
+      );
+
+      if (interactionMessage) {
+        await interactionMessage.edit({ embeds: [embed], components: [row] });
+        return interactionMessage;
+      } else {
+        return await message.channel.send({ embeds: [embed], components: [row] });
+      }
+    }
+
+    // Envia menu
+    let menuMessage = await menuCargos();
+
+    // Coletor de interações
+    const filter = i => i.user.id === executor.id;
+    const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
+
+    collector.on("collect", async (interaction) => {
+      if (!interaction.isStringSelectMenu()) return;
+      if (!interaction.customId.startsWith("rec_addroles")) return;
+
+      // Adiciona apenas os cargos selecionados
+      await recMember.roles.add(interaction.values).catch(() => {});
+      await interaction.update({ content: `✅ Cargos adicionados em ${recMember}`, embeds: [], components: [] });
+
+      collector.stop(); // fecha o menu após a seleção
+    });
+  })();
+}
+  
 // =============================
 // READY
 // =============================
