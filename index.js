@@ -331,29 +331,29 @@ if (command === "thl!mutechat") {
   })(); // <<< chama a função imediatamente
 }
 
-// ===== UNMUTE CHAT =====
 if (command === "thl!unmutechat") {
-const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
-if (!member) return message.reply("❌ Usuário não encontrado.");
+  (async () => {
+    const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
+    if (!member) return message.reply("❌ Usuário não encontrado.");
 
-try {  
-  const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");  
-  if (muteRole && member.roles.cache.has(muteRole.id)) {  
-    await member.roles.remove(muteRole);  
-    message.channel.send(`🔊 ${member} foi desmutado no chat.`);  
+    try {  
+      const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");  
+      if (muteRole && member.roles.cache.has(muteRole.id)) {  
+        await member.roles.remove(muteRole);  
+        message.channel.send(`🔊 ${member} foi desmutado no chat.`);  
 
-    sendLog(message.guild, new EmbedBuilder()  
-      .setColor("Green")  
-      .setTitle("🔊 Usuário Desmutado no Chat")  
-      .setDescription(`${member} foi desmutado por ${message.author}`)  
-      .setTimestamp()  
-    );  
-  }  
-} catch (err) {  
-  console.error(err);  
-  message.reply("❌ Não foi possível desmutar o usuário.");  
-}
-
+        sendLog(message.guild, new EmbedBuilder()  
+          .setColor("Green")  
+          .setTitle("🔊 Usuário Desmutado no Chat")  
+          .setDescription(`${member} foi desmutado por ${message.author}`)  
+          .setTimestamp()  
+        );  
+      }  
+    } catch (err) {  
+      console.error(err);  
+      message.reply("❌ Não foi possível desmutar o usuário.");  
+    }
+  })();
 }
 
 // ===== MUTE CALL =====
