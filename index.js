@@ -358,65 +358,65 @@ if (command === "thl!unmutechat") {
 
 // ===== MUTE CALL =====
 if (command === "thl!mutecall") {
-const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
-if (!member) return message.reply("❌ Usuário não encontrado.");
+  (async () => {
+    const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
+    if (!member) return message.reply("❌ Usuário não encontrado.");
+    if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
 
-if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
+    // Pegar a duração do comando (args[2] ou args[1] se não houver mention)
+    const durationArg = args[2] || (args[1] && !message.mentions.members.first() ? args[1] : null);
+    const duration = parseDuration(durationArg) ?? 2 * 60 * 1000; // default 2 minutos
 
-// Pegar a duração do comando (args[2] ou args[1] se não houver mention)
-const durationArg = args[2] || (args[1] && !message.mentions.members.first() ? args[1] : null);
-const duration = parseDuration(durationArg) ?? 2 * 60 * 1000; // default 2 minutos
+    try {
+      await member.voice.setMute(true);
+      message.channel.send(`🔇 ${member} foi mutado na call por ${durationArg ?? "2m"}.`);
 
-try {
-await member.voice.setMute(true);
-message.channel.send(🔇 ${member} foi mutado na call por ${durationArg ?? "2m"}.);
+      // Desmutar automaticamente depois do tempo definido
+      setTimeout(async () => {
+        if (member.voice.mute) {
+          await member.voice.setMute(false).catch(() => {});
+          message.channel.send(`🔊 ${member} foi desmutado automaticamente da call.`);
+        }
+      }, duration);
 
-// Desmutar automaticamente depois do tempo definido  
-setTimeout(async () => {  
-  if (member.voice.mute) {  
-    await member.voice.setMute(false).catch(() => {});  
-    message.channel.send(`🔊 ${member} foi desmutado automaticamente da call.`);  
-  }  
-}, duration);  
+      // Log
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("🔇 Usuário Mutado na Call")
+        .setDescription(`${member} foi mutado por ${message.author}`)
+        .addFields({ name: "⏱ Duração", value: durationArg ?? "2 minutos" })
+        .setTimestamp()
+      );
 
-// Log  
-sendLog(message.guild, new EmbedBuilder()  
-  .setColor("Red")  
-  .setTitle("🔇 Usuário Mutado na Call")  
-  .setDescription(`${member} foi mutado por ${message.author}`)  
-  .addFields(  
-    { name: "⏱ Duração", value: durationArg ?? "2 minutos" }  
-  )  
-  .setTimestamp()  
-);
-
-} catch (err) {
-console.error(err);
-message.reply("❌ Não foi possível mutar o usuário na call.");
-}
+    } catch (err) {
+      console.error(err);
+      message.reply("❌ Não foi possível mutar o usuário na call.");
+    }
+  })();
 }
 
 // ===== UNMUTE CALL =====
 if (command === "thl!unmutecall") {
-const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
-if (!member) return message.reply("❌ Usuário não encontrado.");
-if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
+  (async () => {
+    const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
+    if (!member) return message.reply("❌ Usuário não encontrado.");
+    if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
 
-try {  
-  await member.voice.setMute(false);  
-  message.channel.send(`🔊 ${member} foi desmutado na call.`);  
+    try {
+      await member.voice.setMute(false);
+      message.channel.send(`🔊 ${member} foi desmutado na call.`);
 
-  sendLog(message.guild, new EmbedBuilder()  
-    .setColor("Green")  
-    .setTitle("🔊 Usuário Desmutado na Call")  
-    .setDescription(`${member} foi desmutado por ${message.author}`)  
-    .setTimestamp()  
-  );  
-} catch (err) {  
-  console.error(err);  
-  message.reply("❌ Não foi possível desmutar o usuário na call.");  
-}
-
+      sendLog(message.guild, new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🔊 Usuário Desmutado na Call")
+        .setDescription(`${member} foi desmutado por ${message.author}`)
+        .setTimestamp()
+      );
+    } catch (err) {
+      console.error(err);
+      message.reply("❌ Não foi possível desmutar o usuário na call.");
+    }
+  })();
 }
 
 // ===== COMANDO THL!REC =====
