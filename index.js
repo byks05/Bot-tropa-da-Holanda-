@@ -282,9 +282,12 @@ client.on("messageCreate", async (message) => {
 // COMANDOS THL!
 // ============================
 
-const args = message.content.trim().split(/\s+/);
-const command = args[0].toLowerCase();
+client.on("messageCreate", (message) => {
+    if (!message.guild || message.author.bot) return; // Ignora DMs e bots
 
+    const args = message.content.trim().split(/\s+/);
+    const command = args[0].toLowerCase();
+  
 // ===== MUTE CHAT =====
 if (command === "thl!mutechat") {
   (async () => {  // <<< função async imediata
