@@ -280,87 +280,81 @@ client.on("messageCreate", async (message) => {
 });
 
 
-// =============================
-// TICKET MENTION
-// =============================
+client.on("interactionCreate", async (interaction) => {
 
-client.on("channelCreate", async (channel) => {
-  if (
-    channel.type === ChannelType.GuildText &&
-    channel.parentId === IDS.TICKET_CATEGORY &&
-    channel.name.toLowerCase().includes("ticket")
-  ) {
-    try {
-      await channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
-    } catch {}
-  }
-});
+  if (!interaction.isStringSelectMenu()) return;
 
-// ===== SETAR CARGOS =====
-if (["setarcargo", "Membros", "TropaDaHolanda"].includes(action)) {
+  const parts = interaction.customId.split("_");
+  const action = parts[0];
+  const userId = parts[2];
+  const executorId = parts[3];
 
-  // Bloqueia TropaDaHolanda se não for staff
-  const isStaff = IDS.STAFF.some(id => executor.roles.cache.has(id));
+  const member = await interaction.guild.members.fetch(userId).catch(() => null);
+  const executor = await interaction.guild.members.fetch(executorId).catch(() => null);
+  if (!member) return;
 
-  if (action === "TropaDaHolanda" && !isStaff) {
-    return interaction.reply({
-      content: "❌ Você não pode selecionar cargos nessa categoria.",
-      ephemeral: true
+  // ===== SETAR CARGOS =====
+  if (["setarcargo", "Membros", "TropaDaHolanda"].includes(action)) {
+
+    const isStaff = IDS.STAFF.some(id => executor?.roles.cache.has(id));
+
+    if (action === "TropaDaHolanda" && !isStaff) {
+      return interaction.reply({
+        content: "❌ Você não pode selecionar cargos nessa categoria.",
+        ephemeral: true
+      });
+    }
+
+    for (const roleId of interaction.values) {
+      if (!member.roles.cache.has(roleId)) {
+        await member.roles.add(roleId).catch(() => {});
+      }
+    }
+
+    await interaction.update({
+      content: `✅ Cargos adicionados para ${member}`,
+      embeds: [],
+      components: []
     });
-  }
 
-  for (const roleId of interaction.values) {
-    const role = interaction.guild.roles.cache.get(roleId);
-    if (!role) continue;
+    if (executor) {
+      const embed = new EmbedBuilder()
+        .setColor("Blue")
+        .setTitle("📌 Comando Executado")
+        .setDescription(`${executor} executou ${action} em ${member}`)
+        .setTimestamp();
 
-    if (!member.roles.cache.has(roleId)) {
-      await member.roles.add(roleId).catch(() => {});
+      sendLog(interaction.guild, embed);
     }
   }
 
-  await interaction.update({
-    content: `✅ Cargos adicionados para ${member}`,
-    embeds: [],
-    components: []
-  });
+  // ===== REMOVER CARGOS =====
+  if (action === "removercargo") {
 
-  if (executor) {
-    const embed = new EmbedBuilder()
-      .setColor("Blue")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${executor} executou ${action} em ${member}`)
-      .setTimestamp();
+    for (const roleId of interaction.values) {
+      if (member.roles.cache.has(roleId)) {
+        await member.roles.remove(roleId).catch(() => {});
+      }
+    }
 
-    sendLog(interaction.guild, embed);
-  }
-}
+    await interaction.update({
+      content: `🗑 Cargos removidos de ${member}`,
+      embeds: [],
+      components: []
+    });
 
+    if (executor) {
+      const embed = new EmbedBuilder()
+        .setColor("Orange")
+        .setTitle("📌 Comando Executado")
+        .setDescription(`${executor} executou removercargo em ${member}`)
+        .setTimestamp();
 
-// ===== REMOVER CARGOS =====
-if (action === "removercargo") {
-
-  for (const roleId of interaction.values) {
-    if (member.roles.cache.has(roleId)) {
-      await member.roles.remove(roleId).catch(() => {});
+      sendLog(interaction.guild, embed);
     }
   }
 
-  await interaction.update({
-    content: `🗑 Cargos removidos de ${member}`,
-    embeds: [],
-    components: []
-  });
-
-  if (executor) {
-    const embed = new EmbedBuilder()
-      .setColor("Orange")
-      .setTitle("📌 Comando Executado")
-      .setDescription(`${executor} executou removercargo em ${member}`)
-      .setTimestamp();
-
-    sendLog(interaction.guild, embed);
-  }
-}
+});
 
 // ===== RECRUTAMENTO CICLICO (thl!rec) =====
 if (action === "rec") {
