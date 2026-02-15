@@ -357,8 +357,6 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // ===== COMANDO THL!REC =====
-const { Client, EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
-
 client.on("messageCreate", async (message) => {
   if (!message.guild) return;
   if (!message.content.toLowerCase().startsWith("thl!rec")) return;
