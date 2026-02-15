@@ -441,8 +441,6 @@ client.on("messageCreate", async (message) => {
   });
 });
 
-client.login('SEU_TOKEN_AQUI');
-
 client.once("ready", () => {
   console.log(`✅ Bot online! ${client.user.tag}`);
 
