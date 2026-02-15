@@ -4,7 +4,8 @@
 const { 
   Client, 
   GatewayIntentBits, 
-  EmbedBuilder
+  EmbedBuilder, 
+  ChannelType
 } = require("discord.js");
 require("dotenv").config();
 
@@ -97,194 +98,134 @@ async function handleSpam(message) {
 }
 
 // =============================
-// MUTE / UNMUTE
-// =============================
-const MUTE_DURATION = 2 * 60 * 1000;
-
-async function getMuteRole(guild) {
-  let role = guild.roles.cache.find(r => r.name === "Muted");
-  if (!role) {
-    role = await guild.roles.create({ name: "Muted", permissions: [] });
-  }
-  return role;
-}
-
-async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) {
-  const muteRole = await getMuteRole(member.guild);
-  if (member.roles.cache.has(muteRole.id)) return;
-  await member.roles.add(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado")
-    .setDescription(`${member} foi mutado automaticamente`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: `${duration / 60000} minutos` },
-      { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  setTimeout(async () => {
-    try {
-      if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
-    } catch {}
-  }, duration);
-}
-
-async function unmuteMember(member, msg = null) {
-  const muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
-  if (!muteRole || !member.roles.cache.has(muteRole.id)) return;
-  await member.roles.remove(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🔊 Usuário Desmutado")
-    .setDescription(`${member} foi desmutado`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
-async function muteCall(member, motivo, durationMs, msg = null) {
-  if (!member.voice?.channel) return;
-  try { await member.voice.setMute(true); } catch { return; }
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado na Call")
-    .setDescription(`${member} foi mutado na call`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: `${durationMs / 60000} minutos` },
-      { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  setTimeout(async () => {
-    try { await member.voice.setMute(false); } catch {}
-  }, durationMs);
-}
-
-async function unmuteCall(member, msg = null) {
-  if (!member.voice?.channel) return;
-  try { await member.voice.setMute(false); } catch { return; }
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🎙 Usuário Desmutado na Call")
-    .setDescription(`${member} foi desmutado na call`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
-// =============================
-// MESSAGE CREATE
+// CAPSLOCK / MENSAGENS COM #
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // --- SPAM ---
-  handleSpam(message);
+  const member = message.member;
+  const content = message.content;
 
-  // --- COMANDOS ---
-  if (!message.content.startsWith(PREFIX)) return;
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const command = args.shift().toLowerCase();
+  const isAuthorized = IDS.STAFF.some(id => member.roles.cache.has(id));
 
-  if (!canUseCommand(message.member, command)) return;
-
-  // ----------------------------
-  // THL!REC
-  // ----------------------------
-  if (command === "rec") {
-    const user = message.mentions.members.first();
-    const subCommand = args[1]?.toLowerCase();
-
-    if (!user) return message.reply("Mencione um usuário válido.");
-
-    if (subCommand === "add") {
-      const rolesToAdd = args.includes("menina")
-        ? ["1468283328510558208", "1468026315285205094", "1470715382489677920"]
-        : ["1468283328510558208", "1468026315285205094"];
-      await user.roles.add(rolesToAdd);
-      return message.reply(`Cargos adicionados em ${user}`);
-    } else if (subCommand === "remove") {
-      const rolesToRemove = ["1468024885354959142"];
-      await user.roles.remove(rolesToRemove);
-      return message.reply(`Cargos removidos de ${user}`);
+  if (!isAuthorized) {
+    const letters = content.replace(/[^a-zA-Z]/g, "");
+    const firstUpperIndex = letters.search(/[A-Z]/);
+    let upperLettersCount = 0;
+    if (firstUpperIndex !== -1) {
+      const lettersFromFirstUpper = letters.slice(firstUpperIndex);
+      upperLettersCount = lettersFromFirstUpper.replace(/[^A-Z]/g, "").length;
+      var upperRatio = lettersFromFirstUpper.length ? upperLettersCount / lettersFromFirstUpper.length : 0;
     } else {
-      return message.reply("Use: thl!rec <@usuário> add/remove [menina]");
+      var upperRatio = 0;
+    }
+
+    if (upperRatio > 0.7 || content.includes("#")) {
+      try {
+        await message.delete();
+        const embed = new EmbedBuilder()
+          .setColor("Red")
+          .setTitle("⚠ Mensagem removida")
+          .setDescription(`${member} digitou mensagem em CAPSLOCK ou com #`)
+          .setTimestamp();
+        sendLog(message.guild, embed);
+      } catch (err) {
+        console.error("Erro ao deletar mensagem:", err);
+      }
+      return;
     }
   }
 
-  // ----------------------------
-  // THL!MUTECHAT
-  // ----------------------------
-  if (command === "mutechat") {
-    const user = message.mentions.members.first();
-    const timeArg = args[1];
-    const motivo = args.slice(2).join(" ") || "Sem motivo";
-    const duration = parseDuration(timeArg) || MUTE_DURATION;
-    if (!user) return message.reply("Mencione um usuário válido.");
-    await muteMember(user, motivo, message, duration);
-    return;
+  handleSpam(message);
+});
+
+// =============================
+// COMANDOS
+// =============================
+client.on("messageCreate", async (message) => {
+  if (!message.guild || message.author.bot || !message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
+  const member = message.member;
+
+  if (!canUseCommand(member, command)) return;
+
+  // =============================
+  // RECRUTAMENTO (add / remove)
+  // =============================
+  if (command === "rec") {
+    const target = message.mentions.members.first();
+    if (!target) return message.reply("Mencione alguém.");
+    const action = args[0]?.toLowerCase();
+
+    let rolesToAdd = [];
+    let rolesToRemove = [];
+
+    if (action === "add") {
+      if (args[1] === "menina") {
+        rolesToAdd = [
+          "1468283328510558208",
+          "1468026315285205094",
+          "1470715382489677920"
+        ];
+      } else {
+        rolesToAdd = [
+          "1468283328510558208",
+          "1468026315285205094"
+        ];
+      }
+      await target.roles.add(rolesToAdd);
+      message.channel.send(`✅ ${target} recebeu os cargos.`);
+    } else if (action === "remove") {
+      rolesToRemove = ["1468024885354959142"];
+      await target.roles.remove(rolesToRemove);
+      message.channel.send(`✅ ${target} perdeu os cargos.`);
+    }
   }
 
-  if (command === "unmutechat") {
-    const user = message.mentions.members.first();
-    if (!user) return message.reply("Mencione um usuário válido.");
-    await unmuteMember(user, message);
-    return;
+  // =============================
+  // MUTE / UNMUTE CHAT
+  // =============================
+  if (command === "mutechat" || command === "unmutechat") {
+    const target = message.mentions.members.first();
+    const time = parseDuration(args[1]);
+    const reason = args.slice(2).join(" ") || "Sem motivo";
+
+    if (!target) return message.reply("Mencione alguém.");
+    if (command === "mutechat") {
+      await target.timeout(time ?? null, reason).catch(() => {});
+      message.channel.send(`✅ ${target} foi mutado no chat por ${time ? args[1] : "indefinidamente"} | Motivo: ${reason}`);
+    } else {
+      await target.timeout(null).catch(() => {});
+      message.channel.send(`✅ ${target} foi desmutado no chat.`);
+    }
   }
 
-  // ----------------------------
-  // THL!MUTECALL
-  // ----------------------------
-  if (command === "mutecall") {
-    const user = message.mentions.members.first();
-    const timeArg = args[1];
-    const motivo = args.slice(2).join(" ") || "Sem motivo";
-    const duration = parseDuration(timeArg) || MUTE_DURATION;
-    if (!user) return message.reply("Mencione um usuário válido.");
-    await muteCall(user, motivo, duration, message);
-    return;
-  }
+  // =============================
+  // MUTE / UNMUTE CALL
+  // =============================
+  if (command === "mutecall" || command === "unmutecall") {
+    const target = message.mentions.members.first();
+    const time = parseDuration(args[1]);
+    const reason = args.slice(2).join(" ") || "Sem motivo";
 
-  if (command === "unmutecall") {
-    const user = message.mentions.members.first();
-    if (!user) return message.reply("Mencione um usuário válido.");
-    await unmuteCall(user, message);
-    return;
+    if (!target) return message.reply("Mencione alguém.");
+    if (command === "mutecall") {
+      if (target.voice.channel) await target.voice.setMute(true, reason);
+      message.channel.send(`✅ ${target} foi mutado na call por ${time ? args[1] : "indefinidamente"} | Motivo: ${reason}`);
+      if (time) setTimeout(() => target.voice.setMute(false, "Tempo de mute expirou"), time);
+    } else {
+      if (target.voice.channel) await target.voice.setMute(false);
+      message.channel.send(`✅ ${target} foi desmutado na call.`);
+    }
   }
 });
 
 // =============================
-// TICKET CREATE AUTOMÁTICO
+// TICKET MENTION
 // =============================
 client.on("channelCreate", async (channel) => {
-  if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) { // text channel
+  if (channel.type === ChannelType.GuildText && channel.parentId === IDS.TICKET_CATEGORY) {
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
