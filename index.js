@@ -408,8 +408,13 @@ client.on("messageCreate", async (message) => {
     await message.channel.send({ embeds: [embed], components: [row] });
   };
 
+  async function executarMenu(recMember, executor) {
   const filter = i => i.user.id === executor.id;
   await menuPrincipal(recMember, executor);
+}
+
+// e depois chama:
+executarMenu(recMember, executor);
 
   const collector = message.channel.createMessageComponentCollector({ filter, time: 600000 });
 
