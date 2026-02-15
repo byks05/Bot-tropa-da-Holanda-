@@ -56,15 +56,18 @@ const canUseCommand = (member) => {
 };
 
 // =============================
-// SPAM / BIG MESSAGES
+// SPAM / BIG MESSAGES / CAPSLOCK
 // =============================
 const messageHistory = new Map();
 const bigMessageHistory = new Map();
 
 async function handleSpam(message) {
-  const { member, author, content } = message;
+  const { member, author, content, channel } = message;
   if (!message.guild || author.bot) return;
-  if (canUseCommand(member)) return;
+  if (canUseCommand(member)) return; // staff ignorada
+
+  const isTicketChannel = channel.parentId === IDS.TICKET_CATEGORY || channel.name.toLowerCase().includes("ticket");
+  if (isTicketChannel) return; // libera tudo nos tickets
 
   const userId = author.id;
   const now = Date.now();
@@ -90,6 +93,24 @@ async function handleSpam(message) {
     await muteMember(member, "Spam de palavras rápidas", message);
     messageHistory.set(userId, []);
   }
+
+  // CAPSLOCK / #
+  let capsCount = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content[i];
+    if (char >= "A" && char <= "Z") capsCount++;
+    if (char === "#") capsCount++;
+  }
+  if (capsCount >= 2) {
+    await message.delete().catch(() => {});
+    const embed = new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("⚠️ Mensagem apagada")
+      .setDescription(`${member} enviou mensagem em capslock ou com #`)
+      .setTimestamp();
+    sendLog(message.guild, embed);
+    return;
+  }
 }
 
 // =============================
@@ -99,7 +120,9 @@ const MUTE_DURATION = 2 * 60 * 1000;
 
 async function getMuteRole(guild) {
   let role = guild.roles.cache.find(r => r.name === "Muted");
-  if (!role) role = await guild.roles.create({ name: "Muted", permissions: [] });
+  if (!role) {
+    role = await guild.roles.create({ name: "Muted", permissions: [] });
+  }
   return role;
 }
 
@@ -116,7 +139,7 @@ async function muteMember(member, motivo, msg = null) {
       { name: "🆔 ID", value: member.id },
       { name: "⏳ Tempo", value: "2 minutos" },
       { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+      { name: "👮 Staff", value: msg ? msg.client.user.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
@@ -150,36 +173,56 @@ async function unmuteMember(member, msg = null) {
   sendLog(member.guild, embed);
 }
 
+async function muteCall(member, durationMs, motivo, msg = null) {
+  if (!member.voice?.channel) return;
+  try { await member.voice.setMute(true); } catch { return; }
+  setTimeout(async () => {
+    try { await member.voice.setMute(false); } catch {}
+  }, durationMs);
+
+  const embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle("🔇 Usuário Mutado na Call")
+    .setDescription(`${member} foi mutado na call`)
+    .addFields(
+      { name: "🆔 ID", value: member.id },
+      { name: "⏳ Tempo", value: `${durationMs / 60000} minutos` },
+      { name: "📄 Motivo", value: motivo },
+      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+    )
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
+}
+
+async function unmuteCall(member, msg = null) {
+  if (!member.voice?.channel) return;
+  try { await member.voice.setMute(false); } catch { return; }
+
+  const embed = new EmbedBuilder()
+    .setColor("Green")
+    .setTitle("🎙 Usuário Desmutado na Call")
+    .setDescription(`${member} foi desmutado na call`)
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
+}
+
 // =============================
-// MESSAGE CREATE UNIFICADO
+// MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  const { member, content } = message;
-
-  // --- CAPSLOCK / LETRAS GRANDES ---
-  if (!canUseCommand(member)) {
-    let capsCount = 0;
-    for (let i = 0; i < content.length; i++) {
-      const char = content[i];
-      if (char >= "A" && char <= "Z") capsCount++;
-      if (char === "#") capsCount++;
-    }
-    if (capsCount >= 2) { // 2 ou mais letras maiúsculas
-      await message.delete().catch(() => {});
-      const embed = new EmbedBuilder()
-        .setColor("Orange")
-        .setTitle("⚠️ Mensagem apagada")
-        .setDescription(`${member} enviou mensagem em capslock ou com #`)
-        .setTimestamp();
-      sendLog(message.guild, embed);
-      return;
-    }
-  }
-
-  // --- SPAM / BIG MESSAGES ---
-  await handleSpam(message);
+  // --- SPAM / CAPSLOCK / MENSAGENS GRANDES ---
+  handleSpam(message);
 
   // --- PALAVRAS-CHAVE ---
   const KEYWORDS = [
@@ -190,27 +233,82 @@ client.on("messageCreate", async (message) => {
   ];
 
   for (const k of KEYWORDS) {
-    if (k.regex.test(content)) {
+    if (k.regex.test(message.content)) {
       try {
         const sent = await message.channel.send(k.reply);
         setTimeout(() => sent.delete().catch(() => {}), k.deleteAfter);
-        const embed = new EmbedBuilder()
-          .setColor(k.color)
-          .setTitle("📌 Palavra Detectada")
-          .setDescription(`${member} digitou palavra-chave`)
-          .setTimestamp();
+        const embed = new EmbedBuilder().setColor(k.color).setTitle("📌 Palavra Detectada").setDescription(`${message.author} digitou palavra-chave`).setTimestamp();
         sendLog(message.guild, embed);
         break;
-      } catch {}
+      } catch (err) { console.error(err); }
     }
   }
 
   // --- COMANDOS ---
-  if (!content.startsWith(PREFIX)) return;
-  const args = content.slice(PREFIX.length).trim().split(/ +/);
+  if (!message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const cmd = args.shift().toLowerCase();
 
-  // Aqui você adiciona seus comandos thl!rec, mutechat, mutecall etc.
+  if (cmd === "rec") {
+    if (!canUseCommand(message.member)) return;
+    const target = message.mentions.members.first();
+    if (!target) return message.reply("Mencione alguém para usar este comando.");
+    const action = args[0]?.toLowerCase();
+    const roleName = args[1]?.toLowerCase();
+
+    if (action === "add") {
+      let rolesToAdd = ["1468283328510558208", "1468026315285205094"];
+      if (roleName === "menina") rolesToAdd.push("1470715382489677920");
+      await target.roles.add(rolesToAdd);
+      message.channel.send(`✅ ${target} recebeu os cargos.`);
+    } else if (action === "remove") {
+      await target.roles.remove(["1468024885354959142"]);
+      message.channel.send(`✅ ${target} teve os cargos removidos.`);
+    }
+  }
+
+  if (cmd === "mutechat") {
+    if (!canUseCommand(message.member)) return;
+    const target = message.mentions.members.first();
+    const motivo = args.slice(1).join(" ") || "Sem motivo";
+    if (!target) return;
+    await muteMember(target, motivo, message);
+  }
+
+  if (cmd === "unmutechat") {
+    if (!canUseCommand(message.member)) return;
+    const target = message.mentions.members.first();
+    if (!target) return;
+    await unmuteMember(target, message);
+  }
+
+  if (cmd === "mutecall") {
+    if (!canUseCommand(message.member)) return;
+    const target = message.mentions.members.first();
+    const durationMs = parseDuration(args[1]) || 2 * 60_000;
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
+    if (!target) return;
+    await muteCall(target, durationMs, motivo, message);
+  }
+
+  if (cmd === "unmutecall") {
+    if (!canUseCommand(message.member)) return;
+    const target = message.mentions.members.first();
+    if (!target) return;
+    await unmuteCall(target, message);
+  }
 });
 
+// =============================
+// NOVO CANAL DE TICKET
+// =============================
+client.on("channelCreate", async (channel) => {
+  if (channel.type !== 0) return; // apenas texto
+  if (channel.parentId !== IDS.TICKET_CATEGORY && !channel.name.toLowerCase().includes("ticket")) return;
+  channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
+});
+
+// =============================
+// LOGIN
+// =============================
 client.login(process.env.TOKEN);
