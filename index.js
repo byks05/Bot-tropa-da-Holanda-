@@ -208,10 +208,12 @@ client.on("messageCreate", async (message) => {
   }
 
   // --- COMANDOS ---
+  if (!message.content.startsWith(PREFIX)) return;
+
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // ===== MUTE CHAT =====
+  // --- MUTE / UNMUTE CHAT E CALL ---
   if (command === "thl!mutechat") {
     (async () => {
       if (!message.member.permissions.has("ManageMessages")) return message.reply("❌ Você não tem permissão para usar este comando.");
@@ -223,25 +225,32 @@ client.on("messageCreate", async (message) => {
         const muteRole = await getMuteRole(message.guild);
         await member.roles.add(muteRole);
         message.channel.send(`🔇 ${member} foi mutado no chat por ${durationArg ?? "2m"}.`);
-        setTimeout(async () => { if (member.roles.cache.has(muteRole.id)) { await member.roles.remove(muteRole).catch(() => {}); message.channel.send(`🔊 ${member} foi desmutado automaticamente.`); } }, duration);
+        setTimeout(async () => { 
+          if (member.roles.cache.has(muteRole.id)) { 
+            await member.roles.remove(muteRole).catch(() => {}); 
+            message.channel.send(`🔊 ${member} foi desmutado automaticamente.`); 
+          } 
+        }, duration);
         sendLog(message.guild, new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado no Chat").setDescription(`${member} foi mutado por ${message.author}`).addFields({ name: "⏱ Duração", value: durationArg ?? "2 minutos" }).setTimestamp());
       } catch (err) { console.error(err); message.reply("❌ Não foi possível mutar o usuário."); }
     })();
   }
 
-  // ===== UNMUTE CHAT =====
   if (command === "thl!unmutechat") {
     (async () => {
       const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
       if (!member) return message.reply("❌ Usuário não encontrado.");
       try {
         const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-        if (muteRole && member.roles.cache.has(muteRole.id)) { await member.roles.remove(muteRole); message.channel.send(`🔊 ${member} foi desmutado no chat.`); sendLog(message.guild, new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado no Chat").setDescription(`${member} foi desmutado por ${message.author}`).setTimestamp()); }
+        if (muteRole && member.roles.cache.has(muteRole.id)) { 
+          await member.roles.remove(muteRole); 
+          message.channel.send(`🔊 ${member} foi desmutado no chat.`); 
+          sendLog(message.guild, new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado no Chat").setDescription(`${member} foi desmutado por ${message.author}`).setTimestamp()); 
+        }
       } catch (err) { console.error(err); message.reply("❌ Não foi possível desmutar o usuário."); }
     })();
   }
 
-  // ===== MUTE CALL =====
   if (command === "thl!mutecall") {
     (async () => {
       const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
@@ -252,92 +261,94 @@ client.on("messageCreate", async (message) => {
       try {
         await member.voice.setMute(true);
         message.channel.send(`🔇 ${member} foi mutado na call por ${durationArg ?? "2m"}.`);
-        setTimeout(async () => { if (member.voice.mute) { await member.voice.setMute(false).catch(() => {}); message.channel.send(`🔊 ${member} foi desmutado automaticamente da call.`); } }, duration);
+        setTimeout(async () => { 
+          if (member.voice.mute) { 
+            await member.voice.setMute(false).catch(() => {}); 
+            message.channel.send(`🔊 ${member} foi desmutado automaticamente da call.`); 
+          } 
+        }, duration);
         sendLog(message.guild, new EmbedBuilder().setColor("Red").setTitle("🔇 Usuário Mutado na Call").setDescription(`${member} foi mutado por ${message.author}`).addFields({ name: "⏱ Duração", value: durationArg ?? "2 minutos" }).setTimestamp());
       } catch (err) { console.error(err); message.reply("❌ Não foi possível mutar o usuário na call."); }
     })();
   }
 
-  // ===== UNMUTE CALL =====
   if (command === "thl!unmutecall") {
     (async () => {
       const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
       if (!member) return message.reply("❌ Usuário não encontrado.");
       if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
-      try { await member.voice.setMute(false); message.channel.send(`🔊 ${member} foi desmutado na call.`); sendLog(message.guild, new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado na Call").setDescription(`${member} foi desmutado por ${message.author}`).setTimestamp()); } catch (err) { console.error(err); message.reply("❌ Não foi possível desmutar o usuário na call."); }
+      try { 
+        await member.voice.setMute(false); 
+        message.channel.send(`🔊 ${member} foi desmutado na call.`); 
+        sendLog(message.guild, new EmbedBuilder().setColor("Green").setTitle("🔊 Usuário Desmutado na Call").setDescription(`${member} foi desmutado por ${message.author}`).setTimestamp()); 
+      } catch (err) { console.error(err); message.reply("❌ Não foi possível desmutar o usuário na call."); }
     })();
   }
 
-// ===== COMANDO thl!rec =====
-if (command === "thl!rec") {
-  (async () => {
-    const argsRec = args.slice(1);
-    if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
+  // ===== COMANDO THL!REC =====
+  if (command === "thl!rec") {
+    (async () => {
+      const argsRec = args.slice(1);
+      if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: thl!rec @user");
 
-    const executor = message.member;
-    const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
-    if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
+      const executor = message.member;
+      const recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
+      if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
 
-    const cargosAdicionar = [
-      { label: "Verificado ✔️", value: "1468283328510558208" },
-      { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
-      { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
-    ];
+      const cargosAdicionar = [
+        { label: "Verificado ✔️", value: "1468283328510558208" },
+        { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
+        { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
+      ];
 
-    // Função para criar menu de seleção de cargos
-    async function menuCargos(interactionMessage = null) {
-      const embed = new EmbedBuilder()
-        .setTitle("🎯 Recrutamento")
-        .setDescription(`Selecione os cargos que deseja adicionar para ${recMember}`)
-        .setColor("Green");
+      async function menuCargos(interactionMessage = null) {
+        const embed = new EmbedBuilder()
+          .setTitle("🎯 Recrutamento")
+          .setDescription(`Selecione os cargos que deseja adicionar para ${recMember}`)
+          .setColor("Green");
 
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_addroles_${recMember.id}_${executor.id}`)
-          .setPlaceholder("Selecione os cargos")
-          .setMinValues(1)
-          .setMaxValues(cargosAdicionar.length)
-          .addOptions(cargosAdicionar)
-      );
+        const row = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`rec_addroles_${recMember.id}_${executor.id}`)
+            .setPlaceholder("Selecione os cargos")
+            .setMinValues(1)
+            .setMaxValues(cargosAdicionar.length)
+            .addOptions(cargosAdicionar)
+        );
 
-      if (interactionMessage) {
-        await interactionMessage.edit({ embeds: [embed], components: [row] });
-        return interactionMessage;
-      } else {
-        return await message.channel.send({ embeds: [embed], components: [row] });
+        if (interactionMessage) {
+          await interactionMessage.edit({ embeds: [embed], components: [row] });
+          return interactionMessage;
+        } else {
+          return await message.channel.send({ embeds: [embed], components: [row] });
+        }
       }
-    }
 
-    // Envia menu
-    let menuMessage = await menuCargos();
+      let menuMessage = await menuCargos();
 
-    // Coletor de interações
-    const filter = i => i.user.id === executor.id;
-    const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
+      const filter = i => i.user.id === executor.id;
+      const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
 
-    collector.on("collect", async (interaction) => {
-      if (!interaction.isStringSelectMenu()) return;
-      if (!interaction.customId.startsWith("rec_addroles")) return;
+      collector.on("collect", async (interaction) => {
+        if (!interaction.isStringSelectMenu()) return;
+        if (!interaction.customId.startsWith("rec_addroles")) return;
 
-      // Adiciona apenas os cargos selecionados
-      await recMember.roles.add(interaction.values).catch(() => {});
-      await interaction.update({ content: `✅ Cargos adicionados em ${recMember}`, embeds: [], components: [] });
+        await recMember.roles.add(interaction.values).catch(() => {});
+        await interaction.update({ content: `✅ Cargos adicionados em ${recMember}`, embeds: [], components: [] });
+        collector.stop();
+      });
 
-      collector.stop(); // fecha o menu após a seleção
-    });
+    })();
+  }
 
-  })(); // ✅ Fecha a função assíncrona
-} // ✅ Fecha o if do comando
-  
+});
+
 // =============================
-// READY
+// READY & LOGIN
 // =============================
 client.once("ready", () => {
   console.log(`✅ Bot online! ${client.user.tag}`);
   client.user.setActivity("byks05 | https://Discord.gg/TropaDaHolanda", { type: 3 });
 });
 
-// =============================
-// LOGIN
-// =============================
 client.login(process.env.TOKEN);
