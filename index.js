@@ -534,16 +534,14 @@ if (command === "thl!mutecall") {
 
 client.on("messageCreate", async (message) => {
   if (!message.guild) return;
-  if (!message.content.toLowerCase().startsWith("thl!setarcargos")) return;
+  if (!message.content.toLowerCase().startsWith("thl!setarcargo")) return;
 
-  const allowedExecutors = IDS.STAFF; // só esses IDs podem executar
-  if (!allowedExecutors.includes(message.member.id)) {
+  // Checa permissões
+  const isStaff = IDS.STAFF.includes(message.member.id);
+  const canManageRoles = message.member.permissions.has("ManageRoles");
+  if (!isStaff && !canManageRoles) {
     return message.reply("❌ Você não tem permissão para executar este comando.");
   }
-
-  const args = message.content.split(" ").slice(1); // tudo após o comando
-  let target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-  if (!target) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID!");
 
   const executor = message.member;
 
