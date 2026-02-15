@@ -488,12 +488,19 @@ if (choice === "concluido") {
 }
 
  // ================= REMOVE =================
-if (subAction === "remove") {
-  for (const roleId of interaction.values) {
-    if (recMember.roles.cache.has(roleId)) {
-      await recMember.roles.remove(roleId).catch(() => {});
+// Exemplo dentro do listener de interações
+client.on("interactionCreate", async (interaction) => {
+  const recMember = interaction.guild.members.cache.get("ID_DO_MEMBER");
+  const subAction = "remove"; // ou onde você define isso
+
+  if (subAction === "remove") {
+    for (const roleId of interaction.values) {
+      if (recMember.roles.cache.has(roleId)) {
+        await recMember.roles.remove(roleId).catch(() => {});
+      }
     }
   }
+});
 
   if (recExecutor) {
     const embed = new EmbedBuilder()
