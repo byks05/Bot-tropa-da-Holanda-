@@ -801,6 +801,5 @@ client.once("ready", () => {
 // =============================
 // LOGIN
 // =============================
-
-client.login(process.env.TOKEN);
 });
+client.login(process.env.TOKEN);
