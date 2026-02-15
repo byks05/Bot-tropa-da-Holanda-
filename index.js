@@ -356,7 +356,92 @@ client.on("interactionCreate", async (interaction) => {
 
 });
 
+// ===== COMANDO THL!REC =====
+client.on("messageCreate", async (message) => {
+  if (!message.guild) return;
+  if (!message.content.toLowerCase().startsWith("thl!rec")) return;
 
+  const executor = message.member;
+  const recMember = message.mentions.members.first();
+  if (!recMember) return message.reply("❌ Você precisa mencionar um usuário! Ex: `thl!rec @user`");
+
+  const cargosAdicionar = [
+    "1468283328510558208", // verificado ✔️
+    "1468026315285205094", // equipe tropa da Holanda 🇳🇱
+    "1472223890821611714"  // faixas rosas 🎀
+  ];
+
+  const menuPrincipal = async () => {
+    const embed = new EmbedBuilder()
+      .setTitle("🎯 Recrutamento")
+      .setDescription(`Selecione uma ação para ${recMember}:`)
+      .setColor("Green");
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`rec_init_${recMember.id}_${executor.id}`)
+        .setPlaceholder("Escolha uma ação")
+        .addOptions([
+          { label: "Adicionar", value: "adicionar", emoji: "➕" },
+          { label: "Remover", value: "remover", emoji: "➖" },
+          { label: "Concluído", value: "concluido", emoji: "✅" }
+        ])
+    );
+
+    await message.channel.send({ embeds: [embed], components: [row] });
+  };
+
+  const filter = i => i.user.id === executor.id;
+  await menuPrincipal();
+
+  const collector = message.channel.createMessageComponentCollector({ filter, time: 600000 });
+
+  collector.on("collect", async (interaction) => {
+    if (!interaction.isStringSelectMenu()) return;
+
+    if (interaction.customId.startsWith("rec_init")) {
+      const choice = interaction.values[0];
+
+      if (choice === "adicionar") {
+        // Adiciona todos os cargos do array
+        await recMember.roles.add(cargosAdicionar).catch(e => console.log(e));
+        await interaction.reply({ content: `✅ Todos os cargos de adicionar foram aplicados em ${recMember}`, ephemeral: true });
+        await menuPrincipal(); // volta para o menu principal
+      } else if (choice === "remover") {
+        // Opções de remover: todos os cargos do user
+        const userRoles = recMember.roles.cache.filter(r => r.id !== recMember.guild.id);
+        const removerOptions = userRoles.map(r => ({ label: r.name, value: r.id }));
+
+        if (removerOptions.length === 0) {
+          await interaction.reply({ content: "❌ Este usuário não possui cargos para remover.", ephemeral: true });
+          return menuPrincipal();
+        }
+
+        const removeRow = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`rec_remove_${recMember.id}_${executor.id}`)
+            .setPlaceholder("Selecione os cargos para remover")
+            .setMinValues(1)
+            .setMaxValues(removerOptions.length)
+            .addOptions(removerOptions)
+        );
+
+        await interaction.update({ content: "Selecione os cargos para remover:", components: [removeRow], embeds: [] });
+      } else if (choice === "concluido") {
+        await interaction.update({ content: "🎉 Recrutamento concluído!", components: [], embeds: [] });
+        collector.stop();
+      }
+    } else if (interaction.customId.startsWith("rec_remove")) {
+      // Remove os cargos selecionados
+      const rolesToRemove = interaction.values;
+      await recMember.roles.remove(rolesToRemove).catch(e => console.log(e));
+      await interaction.reply({ content: `✅ Os cargos foram removidos de ${recMember}`, ephemeral: true });
+      await menuPrincipal(); // volta para o menu principal
+    }
+  });
+});
+
+client.login('SEU_TOKEN_AQUI');
 
 client.once("ready", () => {
   console.log(`✅ Bot online! ${client.user.tag}`);
