@@ -28,7 +28,7 @@ const IDS = {
     "1468017578747105390",
     "1468069638935150635"
   ],
-  CARGO_ESPECIAL: "1468066422490923081",
+  CARGO_ESPECIAL: "1468066422490923081", // Apenas para thl!rec
   LOG_CHANNEL: "1468722726247338115",
   RULES_CHANNEL: "1468011045166518427",
   TICKET_CATEGORY: "1468014890500489447",
@@ -51,6 +51,12 @@ const sendLog = (guild, embed) => {
   if (channel) channel.send({ embeds: [embed] });
 };
 
+const canUseCommand = (member, command) => {
+  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
+  const allowedSpecialCommands = ["rec"];
+  return isStaff || (command === "rec" && member.roles.cache.has(IDS.CARGO_ESPECIAL));
+};
+
 // =============================
 // MUTE / UNMUTE
 // =============================
@@ -64,7 +70,7 @@ async function getMuteRole(guild) {
   return role;
 }
 
-async function muteMember(member, motivo, msg = null) {
+async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) {
   const muteRole = await getMuteRole(member.guild);
   if (member.roles.cache.has(muteRole.id)) return;
   await member.roles.add(muteRole);
@@ -75,8 +81,8 @@ async function muteMember(member, motivo, msg = null) {
     .setDescription(`${member} foi mutado`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: "2 minutos" },
-      { name: "📄 Motivo", value: motivo },
+      { name: "⏳ Tempo", value: `${duration/60000} minutos` },
+      { name: "📄 Motivo", value: motivo ?? "Não especificado" },
       { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -90,7 +96,7 @@ async function muteMember(member, motivo, msg = null) {
     try {
       if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
     } catch {}
-  }, MUTE_DURATION);
+  }, duration);
 }
 
 async function unmuteMember(member, msg = null) {
@@ -102,10 +108,7 @@ async function unmuteMember(member, msg = null) {
     .setColor("Green")
     .setTitle("🔊 Usuário Desmutado")
     .setDescription(`${member} foi desmutado`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -114,18 +117,18 @@ async function unmuteMember(member, msg = null) {
   sendLog(member.guild, embed);
 }
 
-async function muteCall(member, tempo, motivo, msg = null) {
-  if (!member.voice?.channel) return;
+async function muteCall(member, motivo, msg = null, duration = MUTE_DURATION) {
+  if (!member.voice.channel) return;
   try { await member.voice.setMute(true); } catch { return; }
 
   const embed = new EmbedBuilder()
     .setColor("Red")
     .setTitle("🔇 Usuário Mutado na Call")
-    .setDescription(`${member} foi mutado na call`)
+    .setDescription(`${member} foi mutado`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: tempo || "Indefinido" },
-      { name: "📄 Motivo", value: motivo || "Não especificado" },
+      { name: "⏳ Tempo", value: `${duration/60000} minutos` },
+      { name: "📄 Motivo", value: motivo ?? "Não especificado" },
       { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -135,10 +138,9 @@ async function muteCall(member, tempo, motivo, msg = null) {
   if (msg?.channel) await msg.channel.send({ embeds: [embed] });
   sendLog(member.guild, embed);
 
-  if (tempo) {
-    const t = parseDuration(tempo);
-    if (t) setTimeout(async () => { try { await member.voice.setMute(false); } catch {} }, t);
-  }
+  setTimeout(async () => {
+    try { if (member.voice.mute) await member.voice.setMute(false); } catch {}
+  }, duration);
 }
 
 async function unmuteCall(member, msg = null) {
@@ -149,10 +151,7 @@ async function unmuteCall(member, msg = null) {
     .setColor("Green")
     .setTitle("🎙 Usuário Desmutado na Call")
     .setDescription(`${member} foi desmutado na call`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -162,7 +161,7 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// SPAM / CAPS / BIG TEXT
+// EVENTO MESSAGE CREATE
 // =============================
 const messageHistory = new Map();
 const bigMessageHistory = new Map();
@@ -170,138 +169,107 @@ const bigMessageHistory = new Map();
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  const { member, content, channel } = message;
+  const member = message.member;
+  const content = message.content;
 
-  // Staff não sofre punições
-  if (IDS.STAFF.some(id => member.roles.cache.has(id))) return;
+  // --- MENÇÃO AUTOMÁTICA NO TICKET ---
+  if (
+    message.channel.parentId === IDS.TICKET_CATEGORY || 
+    message.channel.name.toLowerCase().includes("ticket")
+  ) {
+    await message.channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
+  }
 
-  // ================= SPAM =================
+  // --- SPAM / TEXTO GRANDE / CAPSLOCK ---
   const userId = message.author.id;
-  const now = Date.now();
+  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
 
-  // Mensagem grande
-  if (!channel.parentId === IDS.TICKET_CATEGORY && content.length >= 200) {
-    const history = bigMessageHistory.get(userId) ?? [];
-    history.push(now);
-    if (history.length > 3) history.shift();
-    bigMessageHistory.set(userId, history);
-    if (history.length >= 3) {
-      await muteMember(member, "Spam de texto grande", message);
-      bigMessageHistory.set(userId, []);
+  if (!isStaff && message.channel.parentId !== IDS.TICKET_CATEGORY) {
+    // CapsLock
+    const upperLetters = content.replace(/[^A-Z]/g, "").length;
+    if (upperLetters >= 5) {
+      await message.delete().catch(() => {});
+      await message.channel.send(`${member}, mensagens em caps lock não são permitidas.`).then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+      return;
+    }
+
+    // Texto grande
+    if (content.length >= 200) {
+      const history = bigMessageHistory.get(userId) ?? [];
+      history.push(Date.now());
+      if (history.length > 3) history.shift();
+      bigMessageHistory.set(userId, history);
+      if (history.length >= 3) {
+        await muteMember(member, "Spam de texto grande", message);
+        bigMessageHistory.set(userId, []);
+        return;
+      }
+    }
+
+    // Spam rápido
+    const history = messageHistory.get(userId) ?? [];
+    const filtered = [...history, Date.now()].filter(t => Date.now() - t <= 5000);
+    messageHistory.set(userId, filtered);
+    if (filtered.length >= 5) {
+      await muteMember(member, "Spam de palavras rápidas", message);
+      messageHistory.set(userId, []);
       return;
     }
   }
 
-  // Spam rápido
-  const history = messageHistory.get(userId) ?? [];
-  const filtered = [...history, now].filter(t => now - t <= 5000);
-  messageHistory.set(userId, filtered);
-  if (filtered.length >= 5) {
-    await muteMember(member, "Spam de palavras rápidas", message);
-    messageHistory.set(userId, []);
-    return;
-  }
-
-  // ================= CAPSLOCK =================
-  if (!channel.parentId === IDS.TICKET_CATEGORY) {
-    let upperCount = (content.match(/[A-Z]/g) || []).length;
-    if (upperCount >= 5) message.delete().catch(() => {});
-  }
-
-  // ================= PALAVRAS CHAVE =================
-  const KEYWORDS = [
-    { regex: /\bsetamento\b/i, reply: "Confira o canal <#1468020392005337161>", color: "Blue", deleteAfter: 30000 },
-    { regex: /\bfaixas?\srosa\b/i, reply: "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", color: "Pink", deleteAfter: 15000 },
-    { regex: /\bregras\b/i, reply: `<#${IDS.RULES_CHANNEL}>`, color: "Yellow", deleteAfter: 300000 },
-    { regex: /\blink da tropa\b/i, reply: "Aqui está o link da Tropa da Holanda: https://discord.gg/tropadaholanda", color: "Purple", deleteAfter: 30000 }
-  ];
-
-  for (const k of KEYWORDS) {
-    if (k.regex.test(content)) {
-      try {
-        const sent = await channel.send(k.reply);
-        setTimeout(() => sent.delete().catch(() => {}), k.deleteAfter);
-        const embed = new EmbedBuilder()
-          .setColor(k.color)
-          .setTitle("📌 Palavra Detectada")
-          .setDescription(`${member} digitou palavra-chave`)
-          .setTimestamp();
-        sendLog(message.guild, embed);
-        break;
-      } catch (err) { console.error(err); }
-    }
-  }
-
-  // ================= COMANDOS =================
+  // --- COMANDOS ---
   if (!content.startsWith(PREFIX)) return;
-  const args = content.slice(PREFIX.length).trim().split(/\s+/);
-  const cmd = args[0].toLowerCase();
+  const args = content.trim().split(/\s+/);
+  const command = args[0].slice(PREFIX.length).toLowerCase();
 
-  // ----------------- REC -----------------
-  if (cmd === "rec") {
-    if (!IDS.STAFF.some(id => member.roles.cache.has(id))) return message.reply("❌ Você não tem permissão.");
+  if (!canUseCommand(member, command)) return;
+
+  // --- THL!REC ---
+  if (command === "rec") {
+    const sub = args[2]?.toLowerCase();
     const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Mencione alguém.");
+    if (!target) return message.reply("❌ Usuário não encontrado.");
 
-    const action = args[2]?.toLowerCase();
-    const extra = args[3]?.toLowerCase();
+    const addIds = ["1468283328510558208","1468026315285205094"];
+    const addMeninaIds = ["1468283328510558208","1468026315285205094","1470715382489677920"];
+    const removeIds = ["1468024885354959142"];
 
-    if (action === "add") {
-      let rolesToAdd = ["1468283328510558208", "1468026315285205094"];
-      if (extra === "menina") rolesToAdd.push("1470715382489677920");
-      await target.roles.add(rolesToAdd).catch(() => message.reply("❌ Erro ao adicionar cargos."));
-      return message.channel.send(`✅ ${target} recebeu: ${rolesToAdd.join(", ")}`);
-    }
-
-    if (action === "remove") {
-      const rolesToRemove = ["1468024885354959142"];
-      await target.roles.remove(rolesToRemove).catch(() => message.reply("❌ Erro ao remover cargos."));
-      return message.channel.send(`✅ ${target} perdeu: ${rolesToRemove.join(", ")}`);
-    }
-
-    return message.reply("❌ Use: thl!rec @usuário add [menina] ou remove");
+    try {
+      if (sub === "add") await target.roles.add(addIds);
+      else if (sub === "remove") await target.roles.remove(removeIds);
+      else if (sub === "menina") await target.roles.add(addMeninaIds);
+      else return message.reply("❌ Subcomando inválido. Use add, remove ou menina.");
+      await message.reply(`✅ Comando executado com sucesso.`);
+    } catch (err) { console.error(err); message.reply("❌ Não foi possível executar o comando."); }
   }
 
-  // ----------------- MUTE CHAT -----------------
-  if (cmd === "mutechat") {
-    if (!IDS.STAFF.some(id => member.roles.cache.has(id))) return message.reply("❌ Sem permissão.");
+  // --- MUTE / UNMUTE ---
+  if (command === "mutechat") {
     const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Mencione alguém.");
-    const motivo = args[2] || "Não especificado";
-    await muteMember(target, motivo, message);
+    const duration = parseDuration(args[2]) ?? MUTE_DURATION;
+    const motivo = args.slice(3).join(" ") || null;
+    if (!target) return message.reply("❌ Usuário não encontrado.");
+    await muteMember(target, motivo, message, duration);
   }
 
-  if (cmd === "unmutechat") {
-    if (!IDS.STAFF.some(id => member.roles.cache.has(id))) return message.reply("❌ Sem permissão.");
+  if (command === "unmutechat") {
     const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Mencione alguém.");
+    if (!target) return message.reply("❌ Usuário não encontrado.");
     await unmuteMember(target, message);
   }
 
-  // ----------------- MUTE CALL -----------------
-  if (cmd === "mutecall") {
-    if (!IDS.STAFF.some(id => member.roles.cache.has(id))) return message.reply("❌ Sem permissão.");
+  if (command === "mutecall") {
     const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Mencione alguém.");
-    const tempo = args[2]; 
-    const motivo = args.slice(3).join(" ") || "Não especificado";
-    await muteCall(target, tempo, motivo, message);
+    const duration = parseDuration(args[2]) ?? MUTE_DURATION;
+    const motivo = args.slice(3).join(" ") || null;
+    if (!target) return message.reply("❌ Usuário não encontrado.");
+    await muteCall(target, motivo, message, duration);
   }
 
-  if (cmd === "unmutecall") {
-    if (!IDS.STAFF.some(id => member.roles.cache.has(id))) return message.reply("❌ Sem permissão.");
+  if (command === "unmutecall") {
     const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Mencione alguém.");
+    if (!target) return message.reply("❌ Usuário não encontrado.");
     await unmuteCall(target, message);
-  }
-});
-
-// =============================
-// EVENTO CREATE CHANNEL (TICKET)
-// =============================
-client.on("channelCreate", async channel => {
-  if (channel.parentId === IDS.TICKET_CATEGORY || channel.name.toLowerCase().includes("ticket")) {
-    channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
 
