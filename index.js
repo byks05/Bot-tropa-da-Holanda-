@@ -219,11 +219,15 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// PALAVRAS-CHAVE
+// MENSAGENS DE PALAVRAS-CHAVE E COMANDOS
 // =============================
 
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
+
+  // ============================
+  // PALAVRAS-CHAVE
+  // ============================
 
   const KEYWORDS = [
     {
@@ -267,21 +271,14 @@ client.on("messageCreate", async (message) => {
 
       sendLog(message.guild, embed);
       break;
-
     } catch (err) {
       console.error(err);
     }
   }
 
-  await handleSpam(message);
-});
-
-// =============================
-// COMANDOS THL!
-// =============================
-
-client.on("messageCreate", async (message) => {
-  if (!message.guild || message.author.bot) return;
+  // ============================
+  // COMANDOS THL!
+  // ============================
 
   const args = message.content.trim().split(/\s+/);
   const command = args[0].toLowerCase();
@@ -341,7 +338,6 @@ client.on("messageCreate", async (message) => {
   if (command === "thl!mutecall") {
     const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
     if (!member) return message.reply("❌ Usuário não encontrado.");
-
     if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
 
     try {
@@ -364,7 +360,6 @@ client.on("messageCreate", async (message) => {
   if (command === "thl!unmutecall") {
     const member = message.mentions.members.first() || message.guild.members.cache.get(args[1]);
     if (!member) return message.reply("❌ Usuário não encontrado.");
-
     if (!member.voice.channel) return message.reply("❌ Usuário não está em uma call.");
 
     try {
@@ -384,139 +379,118 @@ client.on("messageCreate", async (message) => {
   }
 
   // ===== COMANDO THL!REC =====
-const { ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
+  if (command === "thl!rec") {
+    const argsRec = args.slice(1);
+    if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!rec @user`");
 
-client.on("messageCreate", async (message) => {
-  if (!message.guild) return;
-  if (!message.content.toLowerCase().startsWith("thl!rec")) return;
+    const executor = message.member;
+    let recMember = message.mentions.members.first() || message.guild.members.cache.get(argsRec[0]);
+    if (!recMember) return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
 
-  const args = message.content.split(" ").slice(1); // tudo depois do comando
-  if (!args[0])
-    return message.reply(
-      "❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!rec @user` ou `thl!rec 1452004282688737515`"
-    );
+    const cargosAdicionar = [
+      { label: "Verificado ✔️", value: "1468283328510558208" },
+      { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
+      { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
+    ];
 
-  const executor = message.member;
+    async function menuPrincipal(recMember, executor, interactionMessage = null) {
+      const embed = new EmbedBuilder()
+        .setTitle("🎯 Recrutamento")
+        .setDescription(`Selecione uma ação para ${recMember}`)
+        .setColor("Green");
 
-  // Tenta pegar pelo mention primeiro
-  let recMember = message.mentions.members.first();
+      const row = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`rec_init_${recMember.id}_${executor.id}`)
+          .setPlaceholder("Escolha uma ação")
+          .addOptions([
+            { label: "Adicionar cargos", value: "adicionar", emoji: "➕" },
+            { label: "Remover cargos", value: "remover", emoji: "➖" },
+            { label: "Concluído", value: "concluido", emoji: "✅" }
+          ])
+      );
 
-  // Se não houver mention, tenta pegar pelo ID
-  if (!recMember) {
-    recMember = message.guild.members.cache.get(args[0]);
-  }
+      if (interactionMessage) {
+        await interactionMessage.edit({ embeds: [embed], components: [row] });
+        return interactionMessage;
+      } else {
+        return await message.channel.send({ embeds: [embed], components: [row] });
+      }
+    }
 
-  if (!recMember)
-    return message.reply("❌ Não consegui encontrar esse usuário no servidor!");
+    try {
+      const menuMessage = await menuPrincipal(recMember, executor);
 
-  // ===== TODOS OS CARGOS POSSÍVEIS PARA ADICIONAR =====
-  const cargosAdicionar = [
-    { label: "Verificado ✔️", value: "1468283328510558208" },
-    { label: "Equipe Tropa da Holanda 🇳🇱", value: "1468026315285205094" },
-    { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
-  ];
+      const filter = (i) => i.user.id === executor.id;
+      const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
 
-  // ===== FUNÇÃO MENU PRINCIPAL =====
-  async function menuPrincipal(recMember, executor, interactionMessage = null) {
-    const embed = new EmbedBuilder()
-      .setTitle("🎯 Recrutamento")
-      .setDescription(`Selecione uma ação para ${recMember}`)
-      .setColor("Green");
+      collector.on("collect", async (interaction) => {
+        if (!interaction.isStringSelectMenu()) return;
 
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId(`rec_init_${recMember.id}_${executor.id}`)
-        .setPlaceholder("Escolha uma ação")
-        .addOptions([
-          { label: "Adicionar cargos", value: "adicionar", emoji: "➕" },
-          { label: "Remover cargos", value: "remover", emoji: "➖" },
-          { label: "Concluído", value: "concluido", emoji: "✅" }
-        ])
-    );
+        if (interaction.customId.startsWith("rec_init")) {
+          const choice = interaction.values[0];
 
-    if (interactionMessage) {
-      await interactionMessage.edit({ embeds: [embed], components: [row] });
-      return interactionMessage;
-    } else {
-      return await message.channel.send({ embeds: [embed], components: [row] });
+          if (choice === "adicionar") {
+            const addRow = new ActionRowBuilder().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(`rec_add_${recMember.id}_${executor.id}`)
+                .setPlaceholder("Selecione os cargos para adicionar")
+                .setMinValues(1)
+                .setMaxValues(cargosAdicionar.length)
+                .addOptions(cargosAdicionar)
+            );
+            await interaction.update({ content: "Selecione os cargos para adicionar:", components: [addRow], embeds: [] });
+
+          } else if (choice === "remover") {
+            const userRoles = recMember.roles.cache.filter(r => r.id !== recMember.guild.id);
+            const removerOptions = userRoles.map(r => ({ label: r.name, value: r.id }));
+
+            if (removerOptions.length === 0) {
+              await interaction.reply({ content: "❌ Este usuário não possui cargos para remover.", ephemeral: true });
+              return menuPrincipal(recMember, executor, menuMessage);
+            }
+
+            const removeRow = new ActionRowBuilder().addComponents(
+              new StringSelectMenuBuilder()
+                .setCustomId(`rec_remove_${recMember.id}_${executor.id}`)
+                .setPlaceholder("Selecione os cargos para remover")
+                .setMinValues(1)
+                .setMaxValues(removerOptions.length)
+                .addOptions(removerOptions)
+            );
+
+            await interaction.update({ content: "Selecione os cargos para remover:", components: [removeRow], embeds: [] });
+
+          } else if (choice === "concluido") {
+            await interaction.update({ content: "🎉 Recrutamento concluído!", components: [], embeds: [] });
+            collector.stop();
+          }
+
+        } else if (interaction.customId.startsWith("rec_add")) {
+          const rolesToAdd = interaction.values;
+          await recMember.roles.add(rolesToAdd).catch(console.log);
+          await interaction.reply({ content: `✅ Cargos adicionados em ${recMember}`, ephemeral: true });
+          await menuPrincipal(recMember, executor, menuMessage);
+
+        } else if (interaction.customId.startsWith("rec_remove")) {
+          const rolesToRemove = interaction.values;
+          await recMember.roles.remove(rolesToRemove).catch(console.log);
+          await interaction.reply({ content: `✅ Cargos removidos de ${recMember}`, ephemeral: true });
+          await menuPrincipal(recMember, executor, menuMessage);
+        }
+      });
+
+      collector.on("end", collected => {
+        console.log(`Coletadas ${collected.size} interações.`);
+      });
+
+    } catch (err) {
+      console.log("Erro no comando thl!rec:", err);
+      message.reply("❌ Ocorreu um erro ao executar o comando.");
     }
   }
 
-  // ===== EXECUTA MENU E COLETOR =====
-  try {
-    const menuMessage = await menuPrincipal(recMember, executor);
-
-    const filter = (i) => i.user.id === executor.id;
-    const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
-
-    collector.on("collect", async (interaction) => {
-      if (!interaction.isStringSelectMenu()) return;
-
-      if (interaction.customId.startsWith("rec_init")) {
-        const choice = interaction.values[0];
-
-        if (choice === "adicionar") {
-          // Menu para escolher cargos a adicionar
-          const addRow = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`rec_add_${recMember.id}_${executor.id}`)
-              .setPlaceholder("Selecione os cargos para adicionar")
-              .setMinValues(1)
-              .setMaxValues(cargosAdicionar.length)
-              .addOptions(cargosAdicionar)
-          );
-
-          await interaction.update({ content: "Selecione os cargos para adicionar:", components: [addRow], embeds: [] });
-
-        } else if (choice === "remover") {
-          const userRoles = recMember.roles.cache.filter(r => r.id !== recMember.guild.id);
-          const removerOptions = userRoles.map(r => ({ label: r.name, value: r.id }));
-
-          if (removerOptions.length === 0) {
-            await interaction.reply({ content: "❌ Este usuário não possui cargos para remover.", ephemeral: true });
-            return menuPrincipal(recMember, executor, menuMessage);
-          }
-
-          const removeRow = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-              .setCustomId(`rec_remove_${recMember.id}_${executor.id}`)
-              .setPlaceholder("Selecione os cargos para remover")
-              .setMinValues(1)
-              .setMaxValues(removerOptions.length)
-              .addOptions(removerOptions)
-          );
-
-          await interaction.update({ content: "Selecione os cargos para remover:", components: [removeRow], embeds: [] });
-
-        } else if (choice === "concluido") {
-          await interaction.update({ content: "🎉 Recrutamento concluído!", components: [], embeds: [] });
-          collector.stop();
-        }
-
-      } else if (interaction.customId.startsWith("rec_add")) {
-        // Adiciona os cargos selecionados
-        const rolesToAdd = interaction.values;
-        await recMember.roles.add(rolesToAdd).catch(console.log);
-        await interaction.reply({ content: `✅ Cargos adicionados em ${recMember}`, ephemeral: true });
-        await menuPrincipal(recMember, executor, menuMessage);
-
-      } else if (interaction.customId.startsWith("rec_remove")) {
-        // Remove os cargos selecionados
-        const rolesToRemove = interaction.values;
-        await recMember.roles.remove(rolesToRemove).catch(console.log);
-        await interaction.reply({ content: `✅ Cargos removidos de ${recMember}`, ephemeral: true });
-        await menuPrincipal(recMember, executor, menuMessage);
-      }
-    });
-
-    collector.on("end", collected => {
-      console.log(`Coletadas ${collected.size} interações.`);
-    });
-
-  } catch (err) {
-    console.log("Erro no comando thl!rec:", err);
-    message.reply("❌ Ocorreu um erro ao executar o comando.");
-  }
+  await handleSpam(message);
 });
 
 // =============================
@@ -530,7 +504,7 @@ client.on("channelCreate", async (channel) => {
       channel.parentId === "1468014890500489447" &&
       channel.name.toLowerCase().startsWith("ticket")
     ) {
-      const recruitmentRole = channel.guild.roles.cache.get("1468024687031484530");
+      const recruitmentRole = channel.guild.roles.cache.get(IDS.RECRUITMENT_ROLE);
       if (!recruitmentRole) return;
 
       setTimeout(async () => {
@@ -549,7 +523,6 @@ client.on("channelCreate", async (channel) => {
 // =============================
 
 client.on("interactionCreate", async (interaction) => {
-
   if (!interaction.isStringSelectMenu()) return;
 
   const parts = interaction.customId.split("_");
@@ -563,7 +536,6 @@ client.on("interactionCreate", async (interaction) => {
 
   // ===== SETAR CARGOS =====
   if (["setarcargo", "Membros", "TropaDaHolanda"].includes(action)) {
-
     const isStaff = IDS.STAFF.some(id => executor?.roles.cache.has(id));
 
     if (action === "TropaDaHolanda" && !isStaff) {
@@ -598,7 +570,6 @@ client.on("interactionCreate", async (interaction) => {
 
   // ===== REMOVER CARGOS =====
   if (action === "removercargo") {
-
     for (const roleId of interaction.values) {
       if (member.roles.cache.has(roleId)) {
         await member.roles.remove(roleId).catch(() => {});
@@ -621,7 +592,6 @@ client.on("interactionCreate", async (interaction) => {
       sendLog(interaction.guild, embed);
     }
   }
-
 });
 
 // =============================
@@ -633,8 +603,12 @@ client.once("ready", () => {
 
   client.user.setActivity(
     "byks05 | https://Discord.gg/TropaDaHolanda",
-    { type: 3 }
+    { type: 3 } // 3 = Watching
   );
 });
+
+// =============================
+// LOGIN
+// =============================
 
 client.login(process.env.TOKEN);
