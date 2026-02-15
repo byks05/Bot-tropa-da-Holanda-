@@ -515,8 +515,8 @@ client.on("messageCreate", async (message) => {
       });
 
       collector.on("end", collected => {
-        console.log(`Coletadas ${collected.size} interações.`);
-      });
+    console.log(`Coletadas ${collected.size} interações.`);
+});
 
     } catch (err) {
       console.log("Erro no comando thl!rec:", err);
