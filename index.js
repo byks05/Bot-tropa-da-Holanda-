@@ -782,7 +782,6 @@ client.on("interactionCreate", async (interaction) => {
 
       sendLog(interaction.guild, embed);
     }
-  }
 });
 
 // =============================
