@@ -415,7 +415,8 @@ client.on("messageCreate", async (message) => {
   }
 });
   // ===== COMANDO THL!REC =====
-  if (command === "thl!rec") {
+if (command === "thl!rec") {
+  (async () => { // 🔹 IIFE async para permitir await
     const argsRec = args.slice(1);
     if (!argsRec[0]) return message.reply("❌ Você precisa mencionar um usuário ou colocar o ID! Ex: `thl!rec @user`");
 
@@ -429,6 +430,7 @@ client.on("messageCreate", async (message) => {
       { label: "Faixas Rosas 🎀", value: "1472223890821611714" }
     ];
 
+    // Função principal do menu
     async function menuPrincipal(recMember, executor, interactionMessage = null) {
       const embed = new EmbedBuilder()
         .setTitle("🎯 Recrutamento")
@@ -455,7 +457,7 @@ client.on("messageCreate", async (message) => {
     }
 
     try {
-      const menuMessage = await menuPrincipal(recMember, executor);
+      const menuMessage = await menuPrincipal(recMember, executor); // ✅ Agora funciona
 
       const filter = (i) => i.user.id === executor.id;
       const collector = menuMessage.createMessageComponentCollector({ filter, time: 600000 });
@@ -517,16 +519,15 @@ client.on("messageCreate", async (message) => {
       });
 
       collector.on("end", collected => {
-    console.log(`Coletadas ${collected.size} interações.`);
-});
+        console.log(`Coletadas ${collected.size} interações.`);
+      });
 
     } catch (err) {
       console.log("Erro no comando thl!rec:", err);
       message.reply("❌ Ocorreu um erro ao executar o comando.");
     }
-  }
-});
-
+  })(); // 🔹 fim da IIFE async
+}
 // ============================
 // COMANDOS THL!SETARCARGOS E REMOVERCARGOS
 // ============================
