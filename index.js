@@ -4,7 +4,8 @@
 const { 
   Client, 
   GatewayIntentBits, 
-  EmbedBuilder
+  EmbedBuilder, 
+  ChannelType 
 } = require("discord.js");
 require("dotenv").config();
 
@@ -28,7 +29,7 @@ const IDS = {
     "1468017578747105390",
     "1468069638935150635"
   ],
-  CARGO_ESPECIAL: "1468066422490923081", // Apenas para thl!rec
+  CARGO_ESPECIAL: "1468066422490923081",
   LOG_CHANNEL: "1468722726247338115",
   RULES_CHANNEL: "1468011045166518427",
   TICKET_CATEGORY: "1468014890500489447",
@@ -53,9 +54,47 @@ const sendLog = (guild, embed) => {
 
 const canUseCommand = (member, command) => {
   const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
+  const hasSpecial = member.roles.cache.has(IDS.CARGO_ESPECIAL);
   const allowedSpecialCommands = ["rec"];
-  return isStaff || (command === "rec" && member.roles.cache.has(IDS.CARGO_ESPECIAL));
+  return isStaff || (hasSpecial && allowedSpecialCommands.includes(command));
 };
+
+// =============================
+// SPAM / BIG MESSAGES
+// =============================
+const messageHistory = new Map();
+const bigMessageHistory = new Map();
+
+async function handleSpam(message) {
+  if (!message.guild || message.author.bot) return;
+  const { member, author, content } = message;
+  const userId = author.id;
+  const now = Date.now();
+  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
+  if (isStaff) return;
+
+  // Texto grande
+  if (content.length >= 200) {
+    const history = bigMessageHistory.get(userId) ?? [];
+    history.push(now);
+    if (history.length > 3) history.shift();
+    bigMessageHistory.set(userId, history);
+    if (history.length >= 3) {
+      await muteMember(member, "Spam de texto grande", message);
+      bigMessageHistory.set(userId, []);
+      return;
+    }
+  }
+
+  // Spam rápido
+  const history = messageHistory.get(userId) ?? [];
+  const filtered = [...history, now].filter(t => now - t <= 5000);
+  messageHistory.set(userId, filtered);
+  if (filtered.length >= 5) {
+    await muteMember(member, "Spam de palavras rápidas", message);
+    messageHistory.set(userId, []);
+  }
+}
 
 // =============================
 // MUTE / UNMUTE
@@ -70,7 +109,7 @@ async function getMuteRole(guild) {
   return role;
 }
 
-async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) {
+async function muteMember(member, motivo, msg = null) {
   const muteRole = await getMuteRole(member.guild);
   if (member.roles.cache.has(muteRole.id)) return;
   await member.roles.add(muteRole);
@@ -78,12 +117,12 @@ async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) 
   const embed = new EmbedBuilder()
     .setColor("Red")
     .setTitle("🔇 Usuário Mutado")
-    .setDescription(`${member} foi mutado`)
+    .setDescription(`${member} foi mutado automaticamente`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: `${duration/60000} minutos` },
-      { name: "📄 Motivo", value: motivo ?? "Não especificado" },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+      { name: "⏳ Tempo", value: "2 minutos" },
+      { name: "📄 Motivo", value: motivo },
+      { name: "👮 Staff", value: msg ? msg.client.user.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
@@ -96,7 +135,7 @@ async function muteMember(member, motivo, msg = null, duration = MUTE_DURATION) 
     try {
       if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
     } catch {}
-  }, duration);
+  }, MUTE_DURATION);
 }
 
 async function unmuteMember(member, msg = null) {
@@ -117,18 +156,18 @@ async function unmuteMember(member, msg = null) {
   sendLog(member.guild, embed);
 }
 
-async function muteCall(member, motivo, msg = null, duration = MUTE_DURATION) {
-  if (!member.voice.channel) return;
+async function muteCall(member, time, motivo, msg = null) {
+  if (!member.voice?.channel) return;
   try { await member.voice.setMute(true); } catch { return; }
 
   const embed = new EmbedBuilder()
     .setColor("Red")
     .setTitle("🔇 Usuário Mutado na Call")
-    .setDescription(`${member} foi mutado`)
+    .setDescription(`${member} foi mutado na call`)
     .addFields(
       { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: `${duration/60000} minutos` },
-      { name: "📄 Motivo", value: motivo ?? "Não especificado" },
+      { name: "⏳ Tempo", value: time },
+      { name: "📄 Motivo", value: motivo },
       { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
     )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
@@ -138,9 +177,8 @@ async function muteCall(member, motivo, msg = null, duration = MUTE_DURATION) {
   if (msg?.channel) await msg.channel.send({ embeds: [embed] });
   sendLog(member.guild, embed);
 
-  setTimeout(async () => {
-    try { if (member.voice.mute) await member.voice.setMute(false); } catch {}
-  }, duration);
+  const durMs = parseDuration(time);
+  if (durMs) setTimeout(async () => { try { await member.voice.setMute(false); } catch {} }, durMs);
 }
 
 async function unmuteCall(member, msg = null) {
@@ -161,119 +199,67 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// EVENTO MESSAGE CREATE
+// REC COMMAND
 // =============================
-const messageHistory = new Map();
-const bigMessageHistory = new Map();
-
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  const member = message.member;
-  const content = message.content;
+  // SPAM / CAPSLOCK
+  handleSpam(message);
 
-  // --- MENÇÃO AUTOMÁTICA NO TICKET ---
-  if (
-    message.channel.parentId === IDS.TICKET_CATEGORY || 
-    message.channel.name.toLowerCase().includes("ticket")
-  ) {
-    await message.channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
-  }
+  const staffIds = IDS.STAFF;
 
-  // --- SPAM / TEXTO GRANDE / CAPSLOCK ---
-  const userId = message.author.id;
-  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
+  if (!message.content.startsWith(PREFIX)) return;
+  const args = message.content.slice(PREFIX.length).trim().split(/ +/g);
+  const command = args.shift().toLowerCase();
 
-  if (!isStaff && message.channel.parentId !== IDS.TICKET_CATEGORY) {
-    // CapsLock
-    const upperLetters = content.replace(/[^A-Z]/g, "").length;
-    if (upperLetters >= 5) {
-      await message.delete().catch(() => {});
-      await message.channel.send(`${member}, mensagens em caps lock não são permitidas.`).then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
-      return;
-    }
-
-    // Texto grande
-    if (content.length >= 200) {
-      const history = bigMessageHistory.get(userId) ?? [];
-      history.push(Date.now());
-      if (history.length > 3) history.shift();
-      bigMessageHistory.set(userId, history);
-      if (history.length >= 3) {
-        await muteMember(member, "Spam de texto grande", message);
-        bigMessageHistory.set(userId, []);
-        return;
-      }
-    }
-
-    // Spam rápido
-    const history = messageHistory.get(userId) ?? [];
-    const filtered = [...history, Date.now()].filter(t => Date.now() - t <= 5000);
-    messageHistory.set(userId, filtered);
-    if (filtered.length >= 5) {
-      await muteMember(member, "Spam de palavras rápidas", message);
-      messageHistory.set(userId, []);
-      return;
-    }
-  }
-
-  // --- COMANDOS ---
-  if (!content.startsWith(PREFIX)) return;
-  const args = content.trim().split(/\s+/);
-  const command = args[0].slice(PREFIX.length).toLowerCase();
-
-  if (!canUseCommand(member, command)) return;
-
-  // --- THL!REC ---
+  // REC
   if (command === "rec") {
-    const sub = args[2]?.toLowerCase();
-    const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Usuário não encontrado.");
+    if (!staffIds.some(id => message.member.roles.cache.has(id))) {
+      return message.reply("Você não tem permissão para usar este comando!");
+    }
 
-    const addIds = ["1468283328510558208","1468026315285205094"];
-    const addMeninaIds = ["1468283328510558208","1468026315285205094","1470715382489677920"];
-    const removeIds = ["1468024885354959142"];
+    const member = message.mentions.members.first();
+    if (!member) return message.reply("Marque um usuário para dar ou remover cargo.");
+
+    const subCommand = args[0]?.toLowerCase();
 
     try {
-      if (sub === "add") await target.roles.add(addIds);
-      else if (sub === "remove") await target.roles.remove(removeIds);
-      else if (sub === "menina") await target.roles.add(addMeninaIds);
-      else return message.reply("❌ Subcomando inválido. Use add, remove ou menina.");
-      await message.reply(`✅ Comando executado com sucesso.`);
-    } catch (err) { console.error(err); message.reply("❌ Não foi possível executar o comando."); }
-  }
-
-  // --- MUTE / UNMUTE ---
-  if (command === "mutechat") {
-    const target = message.mentions.members.first();
-    const duration = parseDuration(args[2]) ?? MUTE_DURATION;
-    const motivo = args.slice(3).join(" ") || null;
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await muteMember(target, motivo, message, duration);
-  }
-
-  if (command === "unmutechat") {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await unmuteMember(target, message);
-  }
-
-  if (command === "mutecall") {
-    const target = message.mentions.members.first();
-    const duration = parseDuration(args[2]) ?? MUTE_DURATION;
-    const motivo = args.slice(3).join(" ") || null;
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await muteCall(target, motivo, message, duration);
-  }
-
-  if (command === "unmutecall") {
-    const target = message.mentions.members.first();
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await unmuteCall(target, message);
+      if (subCommand === "add") {
+        await member.roles.add(["1468283328510558208","1468026315285205094"]);
+        message.channel.send(`Cargos adicionados a ${member}`);
+      } else if (subCommand === "remove") {
+        await member.roles.remove(["1468024885354959142"]);
+        message.channel.send(`Cargos removidos de ${member}`);
+      } else if (subCommand === "add" && args[1]?.toLowerCase() === "menina") {
+        await member.roles.add(["1468283328510558208","1468026315285205094","1470715382489677920"]);
+        message.channel.send(`Cargos "menina" adicionados a ${member}`);
+      } else {
+        message.reply("Use: add, remove ou add menina");
+      }
+    } catch (err) {
+      console.error(err);
+      message.reply("Erro ao executar comando.");
+    }
   }
 });
 
 // =============================
-// LOGIN
+// NOVOS CANAIS DE TICKET
+// =============================
+client.on("channelCreate", async (channel) => {
+  if (channel.type !== 0) return;
+  if (
+    channel.parentId === IDS.TICKET_CATEGORY ||
+    channel.name.toLowerCase().includes("ticket")
+  ) {
+    try {
+      await channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
+    } catch (err) { console.error("Erro ao enviar menção no canal:", err); }
+  }
+});
+
+// =============================
+// BOT LOGIN
 // =============================
 client.login(process.env.TOKEN);
