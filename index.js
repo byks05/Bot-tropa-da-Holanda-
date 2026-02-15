@@ -409,7 +409,7 @@ client.on("messageCreate", async (message) => {
   };
 
   const filter = i => i.user.id === executor.id;
-  await menuPrincipal();
+  await menuPrincipal(recMember, executor);
 
   const collector = message.channel.createMessageComponentCollector({ filter, time: 600000 });
 
