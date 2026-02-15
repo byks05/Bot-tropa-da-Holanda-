@@ -299,7 +299,7 @@ const durationArg = args[2] || (args[1] && !message.mentions.members.first() ? a
 const duration = parseDuration(durationArg) ?? 2 * 60 * 1000; // default 2 minutos
 
 try {
-const muteRole = await getMuteRole(message.guild);
+const muteRole = await getMuteRole(message.guild); 
 await member.roles.add(muteRole);
 
 message.channel.send(`🔇 ${member} foi mutado no chat por ${durationArg ?? "2m"}.`);  
