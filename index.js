@@ -268,7 +268,7 @@ client.on("messageCreate", async (message) => {
     })();
   }
 
- // ===== COMANDO thl!rec =====
+// ===== COMANDO thl!rec =====
 if (command === "thl!rec") {
   (async () => {
     const argsRec = args.slice(1);
@@ -325,8 +325,9 @@ if (command === "thl!rec") {
 
       collector.stop(); // fecha o menu após a seleção
     });
-  })();
-}
+
+  })(); // ✅ Fecha a função assíncrona
+} // ✅ Fecha o if do comando
   
 // =============================
 // READY
