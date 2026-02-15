@@ -137,7 +137,9 @@ async function muteMember(member, motivo, msg = null) {
   sendLog(member.guild, embed);
 
   setTimeout(async () => {
-    try { if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole); } catch {}
+    try {
+      if (member.roles.cache.has(muteRole.id)) await member.roles.remove(muteRole);
+    } catch {}
   }, MUTE_DURATION);
 }
 
@@ -150,10 +152,7 @@ async function unmuteMember(member, msg = null) {
     .setColor("Green")
     .setTitle("🔊 Usuário Desmutado")
     .setDescription(`${member} foi desmutado`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -170,10 +169,7 @@ async function unmuteCall(member, msg = null) {
     .setColor("Green")
     .setTitle("🎙 Usuário Desmutado na Call")
     .setDescription(`${member} foi desmutado na call`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -183,15 +179,15 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// EVENTO MESSAGE CREATE
+// MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // SPAM
+  // --- SPAM ---
   handleSpam(message);
 
-  // PALAVRAS-CHAVE
+  // --- PALAVRAS-CHAVE ---
   const KEYWORDS = [
     { regex: /\bsetamento\b/i, reply: "Confira o canal <#1468020392005337161>", color: "Blue", deleteAfter: 30000 },
     { regex: /\bfaixas?\srosa\b/i, reply: "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", color: "Pink", deleteAfter: 15000 },
@@ -204,22 +200,15 @@ client.on("messageCreate", async (message) => {
       try {
         const sent = await message.channel.send(k.reply);
         setTimeout(() => sent.delete().catch(() => {}), k.deleteAfter);
-        const embed = new EmbedBuilder()
-          .setColor(k.color)
-          .setTitle("📌 Palavra Detectada")
-          .setDescription(`${message.author} digitou palavra-chave`)
-          .setTimestamp();
+        const embed = new EmbedBuilder().setColor(k.color).setTitle("📌 Palavra Detectada").setDescription(`${message.author} digitou palavra-chave`).setTimestamp();
         sendLog(message.guild, embed);
         break;
       } catch (err) { console.error(err); }
     }
   }
 
-  // =============================
-  // COMANDOS
-  // =============================
+  // --- COMANDOS ---
   if (!message.content.startsWith(PREFIX)) return;
-
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift().toLowerCase();
 
@@ -231,51 +220,33 @@ client.on("messageCreate", async (message) => {
     const action = args[1]?.toLowerCase();
     if (!action || !["add", "remove"].includes(action)) return message.reply("❌ Use `add` ou `remove`.");
 
-    const role = message.guild.roles.cache.get(IDS.RECRUITMENT_ROLE);
-    if (!role) return message.reply("❌ Cargo de recrutamento não encontrado.");
-
     if (action === "add") {
-      if (target.roles.cache.has(role.id)) return message.reply("❌ Usuário já possui o cargo.");
-      await target.roles.add(role);
-      message.channel.send(`✅ ${target} recebeu o cargo de recrutamento.`);
-    } else {
-      if (!target.roles.cache.has(role.id)) return message.reply("❌ Usuário não possui o cargo.");
-      await target.roles.remove(role);
-      message.channel.send(`✅ ${target} teve o cargo de recrutamento removido.`);
+      const rolesToAdd = [
+        "1468283328510558208",
+        "1468026315285205094"
+      ];
+      const addedRoles = [];
+      for (const roleId of rolesToAdd) {
+        const role = message.guild.roles.cache.get(roleId);
+        if (role && !target.roles.cache.has(role.id)) {
+          await target.roles.add(role);
+          addedRoles.push(role.name);
+        }
+      }
+      if (addedRoles.length > 0) {
+        message.channel.send(`✅ ${target} recebeu os cargos: ${addedRoles.join(", ")}`);
+      } else {
+        message.channel.send(`❌ ${target} já possui todos os cargos.`);
+      }
+    } else if (action === "remove") {
+      const roleToRemove = message.guild.roles.cache.get("1468024885354959142");
+      if (roleToRemove && target.roles.cache.has(roleToRemove.id)) {
+        await target.roles.remove(roleToRemove);
+        message.channel.send(`✅ ${target} teve o cargo ${roleToRemove.name} removido.`);
+      } else {
+        message.channel.send(`❌ ${target} não possui o cargo a ser removido.`);
+      }
     }
-  }
-
-  // ===== MUTE / UNMUTE CHAT =====
-  if (command === "mutechat") {
-    if (!message.member.permissions.has("ManageMessages")) return message.reply("❌ Você não tem permissão.");
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    const duration = parseDuration(args[1]) ?? 2 * 60_000;
-    await muteMember(target, "Mutado via comando", message);
-    setTimeout(() => unmuteMember(target), duration);
-  }
-
-  if (command === "unmutechat") {
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await unmuteMember(target, message);
-  }
-
-  // ===== MUTE / UNMUTE CALL =====
-  if (command === "mutecall") {
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    if (!target.voice.channel) return message.reply("❌ Usuário não está em uma call.");
-    const duration = parseDuration(args[1]) ?? 2 * 60_000;
-    await target.voice.setMute(true);
-    message.channel.send(`🔇 ${target} foi mutado na call.`);
-    setTimeout(() => unmuteCall(target), duration);
-  }
-
-  if (command === "unmutecall") {
-    const target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!target) return message.reply("❌ Usuário não encontrado.");
-    await unmuteCall(target, message);
   }
 });
 
