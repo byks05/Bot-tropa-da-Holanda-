@@ -487,27 +487,26 @@ if (choice === "concluido") {
     return menuPrincipal();
 }
 
-  // ================= REMOVE =================
-  if (subAction === "remove") {
-
-    for (const roleId of interaction.values) {
-      if (recMember.roles.cache.has(roleId)) {
-        await recMember.roles.remove(roleId).catch(() => {});
-      }
+ // ================= REMOVE =================
+if (subAction === "remove") {
+  for (const roleId of interaction.values) {
+    if (recMember.roles.cache.has(roleId)) {
+      await recMember.roles.remove(roleId).catch(() => {});
     }
-
-    if (recExecutor) {
-      const embed = new EmbedBuilder()
-        .setColor("Orange")
-        .setTitle("📌 Cargos Removidos")
-        .setDescription(`${recExecutor} removeu cargos de ${recMember}`)
-        .setTimestamp();
-
-      sendLog(interaction.guild, embed);
-    }
-
-    return menuPrincipal();
   }
+
+  if (recExecutor) {
+    const embed = new EmbedBuilder()
+      .setColor("Orange")
+      .setTitle("📌 Cargos Removidos")
+      .setDescription(`${recExecutor} removeu cargos de ${recMember}`)
+      .setTimestamp();
+
+    sendLog(interaction.guild, embed);
+  }
+
+  return menuPrincipal();
+}
 
 } // fecha if(action === "rec")
 
