@@ -511,7 +511,7 @@ client.on("interactionCreate", async (interaction) => {
 
     sendLog(interaction.guild, embed);
   }
-
+{
   return menuPrincipal();
 } // fecha if(action === "rec")
 
