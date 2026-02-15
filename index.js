@@ -515,7 +515,6 @@ client.on("interactionCreate", async (interaction) => {
   return menuPrincipal();
 } // fecha if(action === "rec")
 
-}); // ← FECHA interactionCreate
 
 client.once("ready", () => {
   console.log(`✅ Bot online! ${client.user.tag}`);
