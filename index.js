@@ -413,7 +413,7 @@ client.on("messageCreate", async (message) => {
       message.reply("❌ Não foi possível desmutar o usuário na call.");
     }
   }
-
+});
   // ===== COMANDO THL!REC =====
   if (command === "thl!rec") {
     const argsRec = args.slice(1);
