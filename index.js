@@ -539,9 +539,18 @@ client.on("messageCreate", async (message) => {
   const executor = message.member;
 
   // cargos autorizados a usar o comando
-  const isAuthorized = IDS.STAFF.some(id => executor.roles.cache.has(id)) || executor.roles.cache.has(IDS.CARGO_ESPECIAL);
-  if (!isAuthorized) return message.reply("❌ Você não tem permissão para executar este comando.");
+  // ===== AUTORIZAÇÃO =====
+  const allowedIds = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468069942451507221",
+    "1468070328138858710"
+  ];
 
+  if (command.startsWith("thl!") && !allowedIds.some(id => message.member.roles.cache.has(id))) {
+    return message.reply("❌ Você não tem permissão para executar este comando.");
+  }
+  
   // pega o usuário alvo
   let target = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
   if (!target) return message.reply("❌ Usuário não encontrado.");
@@ -583,7 +592,6 @@ client.on("messageCreate", async (message) => {
         .addOptions([
           { label: "Tropa da Holanda", value: "tropadaholanda" },
           { label: "Gestão", value: "gestao" },
-          { label: "Concluído", value: "concluido", emoji: "✅" }
         ])
     );
 
