@@ -141,16 +141,50 @@ async function muteMember(member, motivo, msg = null) {
   }, MUTE_DURATION);
 }
 
+async function unmuteMember(member, msg = null) {
+  const muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
+  if (!muteRole || !member.roles.cache.has(muteRole.id)) return;
+  await member.roles.remove(muteRole);
+
+  const embed = new EmbedBuilder()
+    .setColor("Green")
+    .setTitle("🔊 Usuário Desmutado")
+    .setDescription(`${member} foi desmutado`)
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
+}
+
+async function unmuteCall(member, msg = null) {
+  if (!member.voice?.channel) return;
+  try { await member.voice.setMute(false); } catch { return; }
+
+  const embed = new EmbedBuilder()
+    .setColor("Green")
+    .setTitle("🎙 Usuário Desmutado na Call")
+    .setDescription(`${member} foi desmutado na call`)
+    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+    .setFooter({ text: member.guild.name })
+    .setTimestamp();
+
+  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
+  sendLog(member.guild, embed);
+}
+
 // =============================
-// MESSAGE CREATE
+// MESSAGE CREATE UNIFICADO
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // --- SPAM ---
   handleSpam(message);
 
-  // --- PALAVRAS-CHAVE ---
+  // PALAVRAS-CHAVE
   const KEYWORDS = [
     { regex: /\bsetamento\b/i, reply: "Confira o canal <#1468020392005337161>", color: "Blue", deleteAfter: 30000 },
     { regex: /\bfaixas?\srosa\b/i, reply: "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", color: "Pink", deleteAfter: 15000 },
@@ -170,47 +204,38 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // --- COMANDOS ---
-  if (!message.content.startsWith(PREFIX)) return;
-  const [commandName, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const command = commandName.toLowerCase();
+  // COMANDO REC
+  if (message.content.startsWith(`${PREFIX}rec`)) {
+    if (!canUseCommand(message.member, "rec")) return;
+    const args = message.content.split(" ").filter(Boolean);
+    const target = message.mentions.members.first();
+    if (!target) return;
 
-  if (command === "rec") {
-    if (!canUseCommand(message.member, "rec")) return message.reply("❌ Você não tem permissão para usar este comando.");
-    const member = message.mentions.members.first() || message.guild.members.cache.get(args[0]);
-    if (!member) return message.reply("❌ Usuário não encontrado.");
-    const action = args[1]?.toLowerCase();
-    const tipo = args[2]?.toLowerCase();
+    const subCommand = args[2]?.toLowerCase();
+    const extra = args[3]?.toLowerCase();
 
-    // CASO ESPECIAL: add menina
-    if (action === "add" && tipo === "menina") {
-      const cargosMenina = [
-        "1468283328510558208",
-        "1468026315285205094",
-        "1470715382489677920"
-      ];
-      await member.roles.add(cargosMenina).catch(() => {});
-      return message.channel.send(`✅ ${member} recebeu os cargos de menina.`);
+    if (subCommand === "add") {
+      let cargos = ["1468283328510558208","1468026315285205094"];
+      if (extra === "menina") cargos.push("1470715382489677920");
+      await target.roles.add(cargos);
+      message.channel.send(`Cargos adicionados a ${target}`);
+    } else if (subCommand === "remove") {
+      await target.roles.remove(["1468024885354959142"]);
+      message.channel.send(`Cargo removido de ${target}`);
     }
+  }
+});
 
-    // ADD normal
-    if (action === "add") {
-      const cargosAdd = [
-        "1468283328510558208",
-        "1468026315285205094"
-      ];
-      await member.roles.add(cargosAdd).catch(() => {});
-      return message.channel.send(`✅ ${member} recebeu os cargos normais.`);
+// =============================
+// MENÇÃO AUTOMÁTICA EM TICKETS
+// =============================
+client.on("channelCreate", async (channel) => {
+  try {
+    if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) {
+      await channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
     }
-
-    // REMOVE normal
-    if (action === "remove") {
-      const cargosRemove = [
-        "1468024885354959142"
-      ];
-      await member.roles.remove(cargosRemove).catch(() => {});
-      return message.channel.send(`✅ ${member} teve os cargos removidos.`);
-    }
+  } catch (err) {
+    console.error("Erro ao enviar menção no ticket:", err);
   }
 });
 
