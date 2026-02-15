@@ -52,26 +52,27 @@ const sendLog = (guild, embed) => {
   if (channel) channel.send({ embeds: [embed] });
 };
 
-const canUseCommand = (member, command) => {
-  const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
-  const hasSpecial = member.roles.cache.has(IDS.CARGO_ESPECIAL);
-  const allowedSpecialCommands = ["rec"];
-  return isStaff || (hasSpecial && allowedSpecialCommands.includes(command));
+const canUseCommand = (member) => {
+  return IDS.STAFF.some(id => member.roles.cache.has(id));
 };
 
 // =============================
-// SPAM / BIG MESSAGES
+// SPAM / CAPS / BIG TEXT
 // =============================
 const messageHistory = new Map();
 const bigMessageHistory = new Map();
 
 async function handleSpam(message) {
   if (!message.guild || message.author.bot) return;
-  const { member, author, content } = message;
+  const { member, author, content, channel } = message;
   const userId = author.id;
   const now = Date.now();
+
   const isStaff = IDS.STAFF.some(id => member.roles.cache.has(id));
-  if (isStaff) return;
+  if (isStaff) return; // Staff está liberado
+
+  // Ignorar se estiver na categoria de ticket
+  if (channel.parentId === IDS.TICKET_CATEGORY) return;
 
   // Texto grande
   if (content.length >= 200) {
@@ -93,6 +94,14 @@ async function handleSpam(message) {
   if (filtered.length >= 5) {
     await muteMember(member, "Spam de palavras rápidas", message);
     messageHistory.set(userId, []);
+    return;
+  }
+
+  // CapsLock ou # (letras maiúsculas)
+  const upperLetters = content.replace(/[^A-Z]/g, "");
+  if (upperLetters.length >= 5) { 
+    message.delete().catch(() => {});
+    channel.send(`${member}, não use muitas letras maiúsculas.`).then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
   }
 }
 
@@ -156,31 +165,6 @@ async function unmuteMember(member, msg = null) {
   sendLog(member.guild, embed);
 }
 
-async function muteCall(member, time, motivo, msg = null) {
-  if (!member.voice?.channel) return;
-  try { await member.voice.setMute(true); } catch { return; }
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado na Call")
-    .setDescription(`${member} foi mutado na call`)
-    .addFields(
-      { name: "🆔 ID", value: member.id },
-      { name: "⏳ Tempo", value: time },
-      { name: "📄 Motivo", value: motivo },
-      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
-    )
-    .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-    .setFooter({ text: member.guild.name })
-    .setTimestamp();
-
-  if (msg?.channel) await msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  const durMs = parseDuration(time);
-  if (durMs) setTimeout(async () => { try { await member.voice.setMute(false); } catch {} }, durMs);
-}
-
 async function unmuteCall(member, msg = null) {
   if (!member.voice?.channel) return;
   try { await member.voice.setMute(false); } catch { return; }
@@ -199,23 +183,43 @@ async function unmuteCall(member, msg = null) {
 }
 
 // =============================
-// REC COMMAND
+// EVENTOS
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // SPAM / CAPSLOCK
+  // SPAM / CAPS / BIG TEXT
   handleSpam(message);
 
-  const staffIds = IDS.STAFF;
+  // PALAVRAS-CHAVE
+  const KEYWORDS = [
+    { regex: /\bsetamento\b/i, reply: "Confira o canal <#1468020392005337161>", color: "Blue", deleteAfter: 30000 },
+    { regex: /\bfaixas?\srosa\b/i, reply: "Servidor das Faixas Rosa da Tropa da Holanda. Somente meninas: https://discord.gg/seaaSXG5yJ", color: "Pink", deleteAfter: 15000 },
+    { regex: /\bregras\b/i, reply: `<#${IDS.RULES_CHANNEL}>`, color: "Yellow", deleteAfter: 300000 },
+    { regex: /\blink da tropa\b/i, reply: "Aqui está o link da Tropa da Holanda: https://discord.gg/tropadaholanda", color: "Purple", deleteAfter: 30000 }
+  ];
 
+  for (const k of KEYWORDS) {
+    if (k.regex.test(message.content)) {
+      try {
+        const sent = await message.channel.send(k.reply);
+        setTimeout(() => sent.delete().catch(() => {}), k.deleteAfter);
+        const embed = new EmbedBuilder().setColor(k.color).setTitle("📌 Palavra Detectada").setDescription(`${message.author} digitou palavra-chave`).setTimestamp();
+        sendLog(message.guild, embed);
+        break;
+      } catch (err) { console.error(err); }
+    }
+  }
+
+  // COMANDO REC
   if (!message.content.startsWith(PREFIX)) return;
-  const args = message.content.slice(PREFIX.length).trim().split(/ +/g);
-  const command = args.shift().toLowerCase();
+  const [command, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
 
-  // REC
+  // =============================
+  // REC COMMAND
+  // =============================
   if (command === "rec") {
-    if (!staffIds.some(id => message.member.roles.cache.has(id))) {
+    if (!canUseCommand(message.member)) {
       return message.reply("Você não tem permissão para usar este comando!");
     }
 
@@ -223,17 +227,18 @@ client.on("messageCreate", async (message) => {
     if (!member) return message.reply("Marque um usuário para dar ou remover cargo.");
 
     const subCommand = args[0]?.toLowerCase();
+    const secondArg = args[1]?.toLowerCase();
 
     try {
-      if (subCommand === "add") {
+      if (subCommand === "add" && secondArg === "menina") {
+        await member.roles.add(["1468283328510558208","1468026315285205094","1470715382489677920"]);
+        message.channel.send(`Cargos "menina" adicionados a ${member}`);
+      } else if (subCommand === "add") {
         await member.roles.add(["1468283328510558208","1468026315285205094"]);
         message.channel.send(`Cargos adicionados a ${member}`);
       } else if (subCommand === "remove") {
         await member.roles.remove(["1468024885354959142"]);
         message.channel.send(`Cargos removidos de ${member}`);
-      } else if (subCommand === "add" && args[1]?.toLowerCase() === "menina") {
-        await member.roles.add(["1468283328510558208","1468026315285205094","1470715382489677920"]);
-        message.channel.send(`Cargos "menina" adicionados a ${member}`);
       } else {
         message.reply("Use: add, remove ou add menina");
       }
@@ -245,21 +250,16 @@ client.on("messageCreate", async (message) => {
 });
 
 // =============================
-// NOVOS CANAIS DE TICKET
+// MENÇÃO AUTOMÁTICA EM TICKET NOVO
 // =============================
-client.on("channelCreate", async (channel) => {
-  if (channel.type !== 0) return;
-  if (
-    channel.parentId === IDS.TICKET_CATEGORY ||
-    channel.name.toLowerCase().includes("ticket")
-  ) {
-    try {
-      await channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
-    } catch (err) { console.error("Erro ao enviar menção no canal:", err); }
+client.on("channelCreate", (channel) => {
+  if (!channel.guild || channel.type !== ChannelType.GuildText) return;
+  if (channel.parentId === IDS.TICKET_CATEGORY && channel.name.toLowerCase().includes("ticket")) {
+    channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
 
 // =============================
-// BOT LOGIN
+// LOGIN
 // =============================
 client.login(process.env.TOKEN);
