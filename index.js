@@ -382,78 +382,80 @@ if (action === "rec") {
     await interaction.update({ embeds: [embed], components: [row] });
   };
 
-  // ================= INIT =================
-  if (subAction === "init") {
+// ================= INIT =================
+if (subAction === "init") {
 
-    const choice = interaction.values[0];
+  const choice = interaction.values[0];
 
-    // ===== ADICIONAR =====
-    if (choice === "adicionar") {
+  // ===== ADICIONAR =====
+  if (choice === "adicionar") {
 
-      const categoria = CATEGORIAS.find(c =>
-        c.label === "Faixa Rosas (Somente Meninas)"
-      );
+    const categoria = CATEGORIAS.find(c =>
+      c.label === "Faixa Rosas (Somente Meninas)"
+    );
 
-      if (!categoria) {
-        return interaction.update({
-          content: "❌ Categoria não encontrada.",
-          embeds: [],
-          components: []
-        });
-      }
-
-      const options = categoria.options.map(o => ({
-        label: o.label,
-        value: o.id
-      }));
-
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)
-          .setPlaceholder("Selecione cargos para adicionar")
-          .setMinValues(1)
-          .setMaxValues(options.length)
-          .addOptions(options)
-      );
-
+    if (!categoria) {
       return interaction.update({
-        content: `🎯 Adicionar cargos para ${recMember}`,
+        content: "❌ Categoria não encontrada.",
         embeds: [],
-        components: [row]
+        components: []
       });
     }
 
+    const options = categoria.options.map(o => ({
+      label: o.label,
+      value: o.id
+    }));
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`rec_add_${recMember.id}_${recExecutor.id}`)
+        .setPlaceholder("Selecione cargos para adicionar")
+        .setMinValues(1)
+        .setMaxValues(options.length)
+        .addOptions(options)
+    );
+
+    return interaction.update({
+      content: `🎯 Adicionar cargos para ${recMember}`,
+      embeds: [],
+      components: [row]
+    });
+  }
+  
     // ===== REMOVER =====
     if (choice === "remover") {
 
-      const userRoles = recMember.roles.cache
-        .filter(r => r.id !== recMember.guild.id)
-        .map(r => ({ label: r.name, value: r.id }));
+  const userRoles = recMember.roles.cache
+    .filter(r => r.id !== recMember.guild.id)
+    .map(r => ({ label: r.name, value: r.id }));
 
-      if (userRoles.length === 0) {
-        return interaction.update({
-          content: `⚠️ ${recMember} não possui cargos para remover.`,
-          embeds: [],
-          components: []
-        });
-      }
+  if (!userRoles.length) {
+    return interaction.update({
+      content: `⚠️ ${recMember} não possui cargos para remover.`,
+      embeds: [],
+      components: []
+    });
+  }
 
-      const row = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId(`rec_remove_${recMember.id}_${recExecutor.id}`)
-          .setPlaceholder("Selecione cargos para remover")
-          .setMinValues(1)
-          .setMaxValues(userRoles.length)
-          .addOptions(userRoles)
-      );
+  const limitedRoles = userRoles.slice(0, 25);
 
-      return interaction.update({
-        content: `🎯 Remover cargos de ${recMember}`,
-        embeds: [],
-        components: [row]
-      });
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`rec_remove_${recMember.id}_${recExecutor?.id || interaction.user.id}`)
+      .setPlaceholder("Selecione cargos para remover")
+      .setMinValues(1)
+      .setMaxValues(limitedRoles.length)
+      .addOptions(limitedRoles)
+  );
+
+  return interaction.update({
+    content: `🎯 Remover cargos de ${recMember}`,
+    embeds: [],
+    components: [row]
+  });
     }
-
+  
     // ===== CONCLUIDO =====
     if (choice === "concluido") {
       return interaction.update({
@@ -463,16 +465,15 @@ if (action === "rec") {
       });
     }
   }
-
-  // ================= ADD =================
-  if (subAction === "add") {
-
-    for (const roleId of interaction.values) {
-      if (!recMember.roles.cache.has(roleId)) {
-        await recMember.roles.add(roleId).catch(() => {});
-      }
-    }
-
+  
+  // ===== CONCLUÍDO =====
+if (choice === "concluido") {
+  return interaction.update({
+    content: `✅ Recrutamento finalizado para ${recMember}`,
+    embeds: [],
+    components: []
+  });
+}
     if (recExecutor) {
       const embed = new EmbedBuilder()
         .setColor("Blue")
@@ -484,7 +485,7 @@ if (action === "rec") {
     }
 
     return menuPrincipal();
-  }
+}
 
   // ================= REMOVE =================
   if (subAction === "remove") {
@@ -507,14 +508,17 @@ if (action === "rec") {
 
     return menuPrincipal();
   }
-        }
+
+} // fecha if(action === "rec")
+
+}); // ← FECHA interactionCreate
 
 client.once("ready", () => {
   console.log(`✅ Bot online! ${client.user.tag}`);
 
   client.user.setActivity(
     "byks05 | https://Discord.gg/TropaDaHolanda",
-    { type: 3 } // WATCHING
+    { type: 3 }
   );
 });
 
