@@ -28,7 +28,6 @@ const IDS = {
     "1468017578747105390",
     "1468069638935150635"
   ],
-  CARGO_ESPECIAL: "1468066422490923081",
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
   RECRUITMENT_ROLE: "1468024687031484530"
@@ -168,15 +167,18 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // THL!REC (VERSÃO DEFINITIVA)
+  // THL!REC (CORREÇÃO DEFINITIVA)
   // =============================
   if (command === "rec") {
 
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
 
-    const subCommand = args[0]?.toLowerCase();
-    const secondArg = args[1]?.toLowerCase();
+    // Remove a menção dos argumentos
+    const filteredArgs = args.filter(arg => !arg.includes(user.id));
+
+    const subCommand = filteredArgs[0]?.toLowerCase();
+    const secondArg = filteredArgs[1]?.toLowerCase();
 
     try {
 
