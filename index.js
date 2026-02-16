@@ -73,7 +73,6 @@ async function handleSpam(message) {
   const isEspecial = member.roles.cache.has(IDS.CARGO_ESPECIAL);
   if (isStaff || isEspecial) return;
 
-  // Texto grande
   if (content.length >= 200) {
     const history = bigMessageHistory.get(userId) ?? [];
     history.push(now);
@@ -86,7 +85,6 @@ async function handleSpam(message) {
     }
   }
 
-  // Spam rápido
   const history = messageHistory.get(userId) ?? [];
   const filtered = [...history, now].filter(t => now - t <= 5000);
   messageHistory.set(userId, filtered);
@@ -147,7 +145,10 @@ async function unmuteMember(member, msg = null) {
     .setColor("Green")
     .setTitle("🔊 Usuário Desmutado")
     .setDescription(`${member} foi desmutado`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
+    .addFields(
+      { name: "🆔 ID", value: member.id },
+      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+    )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -190,7 +191,10 @@ async function unmuteCall(member, msg = null) {
     .setColor("Green")
     .setTitle("🎙 Usuário Desmutado na Call")
     .setDescription(`${member} foi desmutado na call`)
-    .addFields({ name: "🆔 ID", value: member.id }, { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" })
+    .addFields(
+      { name: "🆔 ID", value: member.id },
+      { name: "👮 Staff", value: msg ? msg.author.tag : "Sistema" }
+    )
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
     .setFooter({ text: member.guild.name })
     .setTimestamp();
@@ -205,10 +209,8 @@ async function unmuteCall(member, msg = null) {
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  // --- SPAM ---
   handleSpam(message);
 
-  // --- COMANDOS ---
   if (!message.content.startsWith(PREFIX)) return;
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift().toLowerCase();
@@ -216,26 +218,48 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member, command)) return;
 
   // ----------------------------
-  // THL!REC
+  // THL!REC (ATUALIZADO CORRETAMENTE)
   // ----------------------------
   if (command === "rec") {
+
     const user = message.mentions.members.first();
-    const subCommand = args[1]?.toLowerCase();
+    if (!user) {
+      return message.reply("Mencione um usuário válido.");
+    }
 
-    if (!user) return message.reply("Mencione um usuário válido.");
+    const subCommand = args.slice(1).join(" ").toLowerCase().trim();
 
-    if (subCommand === "add") {
-      const rolesToAdd = args.includes("menina")
-        ? ["1468283328510558208", "1468026315285205094", "1470715382489677920"]
-        : ["1468283328510558208", "1468026315285205094"];
-      await user.roles.add(rolesToAdd);
-      return message.reply(`Cargos adicionados em ${user}`);
-    } else if (subCommand === "remove") {
-      const rolesToRemove = ["1468024885354959142"];
-      await user.roles.remove(rolesToRemove);
-      return message.reply(`Cargos removidos de ${user}`);
-    } else {
-      return message.reply("Use: thl!rec <@usuário> add/remove [menina]");
+    try {
+
+      if (subCommand === "add menina") {
+        await user.roles.add([
+          "1472223890821611714",
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+        return message.reply(`Cargos "menina" adicionados em ${user}`);
+      }
+
+      if (subCommand === "add") {
+        await user.roles.add([
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+        return message.reply(`Cargos adicionados em ${user}`);
+      }
+
+      if (subCommand === "remove") {
+        await user.roles.remove([
+          "1468024885354959142"
+        ]);
+        return message.reply(`Cargos removidos de ${user}`);
+      }
+
+      return message.reply("Use: thl!rec <@usuário> add, remove ou add menina");
+
+    } catch (error) {
+      console.error("Erro no comando rec:", error);
+      return message.reply("Erro ao executar comando. Verifique a hierarquia dos cargos.");
     }
   }
 
@@ -284,7 +308,7 @@ client.on("messageCreate", async (message) => {
 // TICKET CREATE AUTOMÁTICO
 // =============================
 client.on("channelCreate", async (channel) => {
-  if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) { // text channel
+  if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) {
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
