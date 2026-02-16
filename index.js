@@ -23,6 +23,8 @@ const client = new Client({
 // =============================
 const PREFIX = "thl!";
 
+const GENERAL_CHAT_ID = "1468026646790541618";
+
 const IDS = {
   STAFF: [
     "1468017578747105390",
@@ -69,6 +71,32 @@ async function getMuteRole(guild) {
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
+
+  // =============================
+  // ANTI-SPAM CHAT GERAL
+  // =============================
+  if (message.channel.id === GENERAL_CHAT_ID) {
+
+    const rawContent = message.content.trim();
+
+    const isLong = rawContent.length > 200;
+
+    const isCapsOnly =
+      rawContent.length > 5 &&
+      rawContent === rawContent.toUpperCase() &&
+      /[A-Z]/.test(rawContent);
+
+    const isRepeatedSpam =
+      /(.)\1{6,}/i.test(rawContent);
+
+    const isBigText =
+      rawContent.startsWith("#");
+
+    if (isLong || isCapsOnly || isRepeatedSpam || isBigText) {
+      await message.delete().catch(() => {});
+      return;
+    }
+  }
 
   const content = message.content.toLowerCase();
 
