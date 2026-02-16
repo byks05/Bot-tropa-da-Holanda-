@@ -160,7 +160,6 @@ async function unmuteCall(member, msg) {
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
-
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
@@ -169,41 +168,49 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // THL!REC
+  // THL!REC (VERSÃO DEFINITIVA)
   // =============================
   if (command === "rec") {
 
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
 
-    const subCommand = args.join(" ").toLowerCase().trim();
+    const subCommand = args[0]?.toLowerCase();
+    const secondArg = args[1]?.toLowerCase();
 
-    if (subCommand === "add menina") {
+    try {
 
-      await user.roles.remove("1468024885354959142");
+      if (subCommand === "add" && secondArg === "menina") {
 
-      await user.roles.add([
-        "1472223890821611714",
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
+        await user.roles.remove("1468024885354959142");
 
-      return message.reply(`Cargos "menina" aplicados em ${user}`);
+        await user.roles.add([
+          "1472223890821611714",
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+
+        return message.reply(`Cargos "menina" aplicados em ${user}`);
+      }
+
+      if (subCommand === "add") {
+
+        await user.roles.remove("1468024885354959142");
+
+        await user.roles.add([
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+
+        return message.reply(`Cargos aplicados em ${user}`);
+      }
+
+      return message.reply("Use: thl!rec <@usuário> add ou add menina");
+
+    } catch (error) {
+      console.error(error);
+      return message.reply("Erro ao executar comando. Verifique a hierarquia dos cargos.");
     }
-
-    if (subCommand === "add") {
-
-      await user.roles.remove("1468024885354959142");
-
-      await user.roles.add([
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
-
-      return message.reply(`Cargos aplicados em ${user}`);
-    }
-
-    return message.reply("Use: thl!rec <@usuário> add ou add menina");
   }
 
   // =============================
@@ -213,7 +220,6 @@ client.on("messageCreate", async (message) => {
     const user = message.mentions.members.first();
     const duration = parseDuration(args[1]) || 120000;
     const motivo = args.slice(2).join(" ") || "Sem motivo";
-
     if (!user) return message.reply("Mencione um usuário válido.");
     await muteMember(user, motivo, duration, message);
   }
@@ -231,7 +237,6 @@ client.on("messageCreate", async (message) => {
     const user = message.mentions.members.first();
     const duration = parseDuration(args[1]) || 120000;
     const motivo = args.slice(2).join(" ") || "Sem motivo";
-
     if (!user) return message.reply("Mencione um usuário válido.");
     await muteCall(user, motivo, duration, message);
   }
