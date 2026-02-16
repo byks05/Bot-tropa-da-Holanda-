@@ -65,100 +65,49 @@ async function getMuteRole(guild) {
 }
 
 // =============================
-// MUTE CHAT
-// =============================
-async function muteMember(member, motivo, duration, msg) {
-  const muteRole = await getMuteRole(member.guild);
-  if (member.roles.cache.has(muteRole.id)) return;
-
-  await member.roles.add(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado (Chat)")
-    .setDescription(`${member} foi mutado`)
-    .addFields(
-      { name: "Motivo", value: motivo },
-      { name: "Tempo", value: `${duration / 60000} minutos` }
-    )
-    .setTimestamp();
-
-  msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  setTimeout(async () => {
-    if (member.roles.cache.has(muteRole.id)) {
-      await member.roles.remove(muteRole);
-    }
-  }, duration);
-}
-
-async function unmuteMember(member, msg) {
-  const muteRole = member.guild.roles.cache.find(r => r.name === "Muted");
-  if (!muteRole) return;
-
-  await member.roles.remove(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🔊 Usuário Desmutado (Chat)")
-    .setDescription(`${member} foi desmutado`)
-    .setTimestamp();
-
-  msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
-// =============================
-// MUTE CALL
-// =============================
-async function muteCall(member, motivo, duration, msg) {
-  if (!member.voice?.channel) {
-    return msg.reply("Usuário não está em call.");
-  }
-
-  await member.voice.setMute(true);
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado (Call)")
-    .setDescription(`${member} foi mutado na call`)
-    .addFields(
-      { name: "Motivo", value: motivo },
-      { name: "Tempo", value: `${duration / 60000} minutos` }
-    )
-    .setTimestamp();
-
-  msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-
-  setTimeout(async () => {
-    await member.voice.setMute(false).catch(() => {});
-  }, duration);
-}
-
-async function unmuteCall(member, msg) {
-  if (!member.voice?.channel) {
-    return msg.reply("Usuário não está em call.");
-  }
-
-  await member.voice.setMute(false);
-
-  const embed = new EmbedBuilder()
-    .setColor("Green")
-    .setTitle("🎙 Usuário Desmutado (Call)")
-    .setDescription(`${member} foi desmutado na call`)
-    .setTimestamp();
-
-  msg.channel.send({ embeds: [embed] });
-  sendLog(member.guild, embed);
-}
-
-// =============================
 // MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
+
+  const content = message.content.toLowerCase();
+
+  // =============================
+  // RESPOSTAS AUTOMÁTICAS
+  // =============================
+
+  if (content.includes("setamento")) {
+    const botMsg = await message.reply(
+      "Todas as informações sobre o Setamento estão aqui <#1468020392005337161>"
+    );
+    setTimeout(() => botMsg.delete().catch(() => {}), 30000);
+    return;
+  }
+
+  if (
+    content.includes("faixa rosa") ||
+    content.includes("faixas rosa") ||
+    content.includes("faixas rosas") ||
+    content.includes("faixa rosas")
+  ) {
+    const botMsg = await message.reply(
+      "Link do servidor das Faixas Rosa 🎀 | Tropa Da Holanda 🇳🇱\nhttps://discord.gg/seaaSXG5yJ"
+    );
+    setTimeout(() => botMsg.delete().catch(() => {}), 30000);
+    return;
+  }
+
+  if (content.includes("regras")) {
+    const botMsg = await message.reply(
+      "Aqui estão todas as regras do servidor <#1468011045166518427>"
+    );
+    setTimeout(() => botMsg.delete().catch(() => {}), 60000);
+    return;
+  }
+
+  // =============================
+  // SISTEMA DE PREFIXO
+  // =============================
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
@@ -167,43 +116,35 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // THL!REC (CORREÇÃO DEFINITIVA)
+  // THL!REC
   // =============================
   if (command === "rec") {
 
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
 
-    // Remove a menção dos argumentos
     const filteredArgs = args.filter(arg => !arg.includes(user.id));
-
     const subCommand = filteredArgs[0]?.toLowerCase();
     const secondArg = filteredArgs[1]?.toLowerCase();
 
     try {
 
       if (subCommand === "add" && secondArg === "menina") {
-
         await user.roles.remove("1468024885354959142");
-
         await user.roles.add([
           "1472223890821611714",
           "1468283328510558208",
           "1468026315285205094"
         ]);
-
         return message.reply(`Cargos "menina" aplicados em ${user}`);
       }
 
       if (subCommand === "add") {
-
         await user.roles.remove("1468024885354959142");
-
         await user.roles.add([
           "1468283328510558208",
           "1468026315285205094"
         ]);
-
         return message.reply(`Cargos aplicados em ${user}`);
       }
 
@@ -211,7 +152,7 @@ client.on("messageCreate", async (message) => {
 
     } catch (error) {
       console.error(error);
-      return message.reply("Erro ao executar comando. Verifique a hierarquia dos cargos.");
+      return message.reply("Erro ao executar comando.");
     }
   }
 
@@ -223,30 +164,63 @@ client.on("messageCreate", async (message) => {
     const duration = parseDuration(args[1]) || 120000;
     const motivo = args.slice(2).join(" ") || "Sem motivo";
     if (!user) return message.reply("Mencione um usuário válido.");
-    await muteMember(user, motivo, duration, message);
+
+    const muteRole = await getMuteRole(message.guild);
+    await user.roles.add(muteRole);
+
+    const embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("🔇 Usuário Mutado (Chat)")
+      .setDescription(`${user} foi mutado`)
+      .addFields(
+        { name: "Motivo", value: motivo },
+        { name: "Tempo", value: `${duration / 60000} minutos` }
+      )
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed] });
+    sendLog(message.guild, embed);
+
+    setTimeout(async () => {
+      if (user.roles.cache.has(muteRole.id)) {
+        await user.roles.remove(muteRole);
+      }
+    }, duration);
   }
 
   if (command === "unmutechat") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
-    await unmuteMember(user, message);
+
+    const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await user.roles.remove(muteRole);
+
+    message.reply(`${user} foi desmutado.`);
   }
 
-  // =============================
-  // MUTECALL
-  // =============================
   if (command === "mutecall") {
     const user = message.mentions.members.first();
     const duration = parseDuration(args[1]) || 120000;
     const motivo = args.slice(2).join(" ") || "Sem motivo";
     if (!user) return message.reply("Mencione um usuário válido.");
-    await muteCall(user, motivo, duration, message);
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+
+    await user.voice.setMute(true);
+
+    setTimeout(() => {
+      user.voice.setMute(false).catch(() => {});
+    }, duration);
+
+    message.reply(`${user} foi mutado na call.`);
   }
 
   if (command === "unmutecall") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
-    await unmuteCall(user, message);
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+
+    await user.voice.setMute(false);
+    message.reply(`${user} foi desmutado na call.`);
   }
 
 });
@@ -260,5 +234,4 @@ client.on("channelCreate", async (channel) => {
   }
 });
 
-// =============================
 client.login(process.env.TOKEN);
