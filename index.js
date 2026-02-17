@@ -4,8 +4,7 @@
 const { 
   Client, 
   GatewayIntentBits, 
-  EmbedBuilder,
-  PermissionsBitField
+  EmbedBuilder
 } = require("discord.js");
 require("dotenv").config();
 
@@ -24,6 +23,8 @@ const client = new Client({
 // =============================
 const PREFIX = "thl!";
 
+const GENERAL_CHAT_ID = "1468026646790541618";
+
 const IDS = {
   STAFF: [
     "1468017578747105390",
@@ -31,8 +32,7 @@ const IDS = {
   ],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
-  RECRUITMENT_ROLE: "1468024687031484530",
-  GENERAL_CHAT: "1468026646790541618"
+  RECRUITMENT_ROLE: "1468024687031484530"
 };
 
 // =============================
@@ -48,17 +48,11 @@ const parseDuration = (time) => {
 
 const sendLog = (guild, embed) => {
   const channel = guild.channels.cache.get(IDS.LOG_CHANNEL);
-  if (channel) channel.send({ embeds: [embed] }).catch(() => {});
+  if (channel) channel.send({ embeds: [embed] });
 };
 
 const canUseCommand = (member) => {
-  if (!member) return false;
-
-  if (IDS.STAFF.some(id => member.roles.cache.has(id))) return true;
-
-  if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
-
-  return false;
+  return IDS.STAFF.some(id => member.roles.cache.has(id));
 };
 
 // =============================
@@ -66,14 +60,9 @@ const canUseCommand = (member) => {
 // =============================
 async function getMuteRole(guild) {
   let role = guild.roles.cache.find(r => r.name === "Muted");
-
   if (!role) {
-    role = await guild.roles.create({
-      name: "Muted",
-      permissions: []
-    });
+    role = await guild.roles.create({ name: "Muted", permissions: [] });
   }
-
   return role;
 }
 
@@ -83,14 +72,10 @@ async function getMuteRole(guild) {
 client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
-  const content = message.content.toLowerCase();
-
   // =============================
-  // ANTI-SPAM (CHAT GERAL)
+  // ANTI-SPAM CHAT GERAL
   // =============================
-  if (message.channel.id === IDS.GENERAL_CHAT) {
-
-    if (canUseCommand(message.member)) return;
+  if (message.channel.id === GENERAL_CHAT_ID) {
 
     const rawContent = message.content.trim();
 
@@ -102,7 +87,7 @@ client.on("messageCreate", async (message) => {
       /[A-Z]/.test(rawContent);
 
     const isRepeatedSpam =
-      /(.)\1{14,}/i.test(rawContent);
+      /(.)\1{6,}/i.test(rawContent);
 
     const isBigText =
       rawContent.startsWith("#");
@@ -113,9 +98,12 @@ client.on("messageCreate", async (message) => {
     }
   }
 
+  const content = message.content.toLowerCase();
+
   // =============================
   // RESPOSTAS AUTOMÁTICAS
   // =============================
+
   if (content.includes("setamento")) {
     const botMsg = await message.reply(
       "Todas as informações sobre o Setamento estão aqui <#1468020392005337161>"
@@ -156,7 +144,7 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // REC
+  // THL!REC
   // =============================
   if (command === "rec") {
 
@@ -197,14 +185,13 @@ client.on("messageCreate", async (message) => {
   }
 
   // =============================
-  // MUTE CHAT
+  // MUTECHAT
   // =============================
   if (command === "mutechat") {
     const user = message.mentions.members.first();
-    if (!user) return message.reply("Mencione um usuário válido.");
-
     const duration = parseDuration(args[1]) || 120000;
     const motivo = args.slice(2).join(" ") || "Sem motivo";
+    if (!user) return message.reply("Mencione um usuário válido.");
 
     const muteRole = await getMuteRole(message.guild);
     await user.roles.add(muteRole);
@@ -224,35 +211,29 @@ client.on("messageCreate", async (message) => {
 
     setTimeout(async () => {
       if (user.roles.cache.has(muteRole.id)) {
-        await user.roles.remove(muteRole).catch(() => {});
+        await user.roles.remove(muteRole);
       }
     }, duration);
   }
 
-  // =============================
-  // UNMUTE CHAT
-  // =============================
   if (command === "unmutechat") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
 
     const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-    if (muteRole) await user.roles.remove(muteRole).catch(() => {});
+    if (muteRole) await user.roles.remove(muteRole);
 
     message.reply(`${user} foi desmutado.`);
   }
 
-  // =============================
-  // MUTE CALL
-  // =============================
   if (command === "mutecall") {
     const user = message.mentions.members.first();
+    const duration = parseDuration(args[1]) || 120000;
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
     if (!user) return message.reply("Mencione um usuário válido.");
     if (!user.voice?.channel) return message.reply("Usuário não está em call.");
 
-    const duration = parseDuration(args[1]) || 120000;
-
-    await user.voice.setMute(true).catch(() => {});
+    await user.voice.setMute(true);
 
     setTimeout(() => {
       user.voice.setMute(false).catch(() => {});
@@ -261,24 +242,23 @@ client.on("messageCreate", async (message) => {
     message.reply(`${user} foi mutado na call.`);
   }
 
-  // =============================
-  // UNMUTE CALL
-  // =============================
   if (command === "unmutecall") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
     if (!user.voice?.channel) return message.reply("Usuário não está em call.");
 
-    await user.voice.setMute(false).catch(() => {});
+    await user.voice.setMute(false);
     message.reply(`${user} foi desmutado na call.`);
   }
 
 });
 
 // =============================
+// TICKET CREATE
+// =============================
 client.on("channelCreate", async (channel) => {
   if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) {
-    channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`).catch(() => {});
+    channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
 
