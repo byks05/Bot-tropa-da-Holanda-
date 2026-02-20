@@ -156,7 +156,7 @@ client.on("messageCreate", async (message) => {
 // =============================
 if (command === "ponto") {
 
-  const categoriaId = "1474366472326222013"; // categoria dos canais de ponto
+  const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
   const CANAL_ENTRAR = "1474383177689731254"; // canal onde entrar pode ser usado
   const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
   const userId = message.author.id;
@@ -182,7 +182,7 @@ if (sub === "entrar") {
 
   data[userId].ativo = true;
   data[userId].entrada = Date.now();
-  data[userId].notificado = false; // reset notificação
+  data[userId].notificado = false; // reseta notificação
   saveData(data);
 
   // cria canal privado
@@ -205,35 +205,9 @@ if (sub === "entrar") {
   // mensagem no canal privado mencionando o usuário
   await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-  // lista de cargos e metas
-  const cargos = [
-    { id: "1468026315285205094", nome: "Cargo 0", meta: 24 * 3600000 },
-    { id: "1474364646629838970", nome: "Cargo 1", meta: 24 * 3600000 },
-    { id: "1474354265240899727", nome: "Cargo 2", meta: 24 * 3600000 },
-    { id: "1474354212350726225", nome: "Cargo 3", meta: 24 * 3600000 },
-    { id: "1474354176816451710", nome: "Cargo 4", meta: 24 * 3600000 },
-    { id: "1474354117362188350", nome: "Cargo 5", meta: 24 * 3600000 },
-    { id: "1474364617756250132", nome: "Cargo 6", meta: 24 * 3600000 },
-    { id: "1474364575297175694", nome: "Cargo 7", meta: 24 * 3600000 },
-    { id: "1474353946205098097", nome: "Cargo 8", meta: 24 * 3600000 },
-    { id: "1474353834485612687", nome: "Cargo 9", meta: 24 * 3600000 },
-    { id: "1474353689723535572", nome: "Cargo 10", meta: 24 * 3600000 },
-    { id: "1468652058973569078", nome: "Cargo 11", meta: 48 * 3600000 },
-    { id: "1468021924943888455", nome: "Cargo 12", meta: 48 * 3600000 },
-    { id: "1468021724598501376", nome: "Cargo 13", meta: 48 * 3600000 },
-    { id: "1468021554993561661", nome: "Cargo 14", meta: 48 * 3600000 },
-    { id: "1468021411720335432", nome: "Cargo 15", meta: 48 * 3600000 },
-    { id: "1468021327129743483", nome: "Cargo 16", meta: 48 * 3600000 },
-    { id: "1468716461773164739", nome: "Cargo 17", meta: 72 * 3600000 },
-    { id: "1468019717938614456", nome: "Cargo 18", meta: 72 * 3600000 },
-    { id: "1468019282633035857", nome: "Cargo 19", meta: 72 * 3600000 },
-    { id: "1468019077984293111", nome: "Cargo 20", meta: 72 * 3600000 },
-    { id: "1468018098354393098", nome: "Cargo 21", meta: 72 * 3600000 },
-    { id: "1473797846862921836", nome: "Cargo 22", meta: 72 * 3600000 },
-    { id: "1468018959797452881", nome: "Cargo 23", meta: 72 * 3600000 }
-  ];
-
+  // =============================
   // CONTADOR EM TEMPO REAL
+  // =============================
   const intervaloTempo = setInterval(() => {
     if (!data[userId]?.ativo) {
       clearInterval(intervaloTempo);
@@ -251,13 +225,43 @@ if (sub === "entrar") {
     // =============================
     // NOTIFICAÇÃO DE APTOS POR CARGO
     // =============================
-    const tempoTotal = data[userId].total + tempoAtual;
+    const cargos = [
+      // 24h
+      { id: "1468021327129743483", meta: 24 * 3600000 },
+      { id: "1468021411720335432", meta: 24 * 3600000 },
+      { id: "1468021554993561661", meta: 24 * 3600000 },
+      { id: "1468021724598501376", meta: 24 * 3600000 },
+      { id: "1468021924943888455", meta: 24 * 3600000 },
+      { id: "1468652058973569078", meta: 24 * 3600000 },
+      { id: "1474353689723535572", meta: 24 * 3600000 },
+      { id: "1474353834485612687", meta: 24 * 3600000 },
+      { id: "1474353946205098097", meta: 24 * 3600000 },
+      { id: "1474364575297175694", meta: 24 * 3600000 },
+      { id: "1474364617756250132", meta: 24 * 3600000 },
+      { id: "1474354117362188350", meta: 24 * 3600000 },
+      { id: "1474354176816451710", meta: 24 * 3600000 },
+      { id: "1474354212350726225", meta: 24 * 3600000 },
+      { id: "1474354265240899727", meta: 24 * 3600000 },
+      { id: "1474364646629838970", meta: 24 * 3600000 },
+      { id: "1468026315285205094", meta: 24 * 3600000 },
+      // 48h
+      { id: "1468018959797452881", meta: 48 * 3600000 },
+      { id: "1473797846862921836", meta: 48 * 3600000 },
+      { id: "1468018098354393098", meta: 48 * 3600000 },
+      { id: "1468019077984293111", meta: 48 * 3600000 },
+      { id: "1468019282633035857", meta: 48 * 3600000 },
+      { id: "1468019717938614456", meta: 48 * 3600000 },
+      { id: "1468716461773164739", meta: 48 * 3600000 }
+    ];
+
     if (!data[userId].notificado) {
+      const tempoTotal = data[userId].total + tempoAtual;
       const proximoCargo = cargos.find(c => tempoTotal >= c.meta && !message.member.roles.cache.has(c.id));
+
       if (proximoCargo) {
         const upChannel = guild.channels.cache.get(UP_CHANNEL);
         if (upChannel) {
-          upChannel.send(`@everyone <@${userId}> bateu a meta de ${proximoCargo.meta / 3600000}h e já pode receber o cargo **${proximoCargo.nome}**!`);
+          upChannel.send(`@everyone <@${userId}> bateu a meta de ${proximoCargo.meta / 3600000}h e já pode receber o cargo <@&${proximoCargo.id}>!`);
           data[userId].notificado = true;
           saveData(data);
         }
@@ -266,7 +270,9 @@ if (sub === "entrar") {
 
   }, 1000);
 
+  // =============================
   // LEMBRETE 20 EM 20 MIN
+  // =============================
   const intervaloLembrete = setInterval(() => {
     if (!data[userId]?.ativo) {
       clearInterval(intervaloLembrete);
