@@ -127,79 +127,150 @@ client.on("messageCreate", async (message) => {
 
   if (!canUseCommand(message.member)) return;
 
-  // =============================
-  // PONTO
-  // =============================
-  if (command === "ponto") {
+ // =============================
+// BATE PONTO COMPLETO
+// =============================
+if (command === "ponto") {
 
-    const data = getData();
-    const userId = message.author.id;
+  const data = getData();
+  const userId = message.author.id;
+  const guild = message.guild;
+  const categoriaId = "1468715109722357782";
 
-    if (!data[userId]) {
-      data[userId] = {
-        ativo: false,
-        entrada: null,
-        total: 0
-      };
-    }
-
-    const sub = args[0]?.toLowerCase();
-
-    if (sub === "entrar") {
-
-      if (data[userId].ativo)
-        return message.reply("Você já bateu ponto.");
-
-      data[userId].ativo = true;
-      data[userId].entrada = Date.now();
-      saveData(data);
-
-      const embed = new EmbedBuilder()
-        .setColor("Green")
-        .setTitle("🟢 Ponto Iniciado")
-        .setDescription(`${message.author} iniciou o expediente.`)
-        .setTimestamp();
-
-      message.channel.send({ embeds: [embed] });
-      sendLog(message.guild, embed);
-    }
-
-    else if (sub === "sair") {
-
-      if (!data[userId].ativo)
-        return message.reply("Você não iniciou ponto.");
-
-      const tempo = Date.now() - data[userId].entrada;
-      data[userId].total += tempo;
-      data[userId].ativo = false;
-      data[userId].entrada = null;
-      saveData(data);
-
-      const horas = (tempo / 3600000).toFixed(2);
-
-      const embed = new EmbedBuilder()
-        .setColor("Red")
-        .setTitle("🔴 Ponto Finalizado")
-        .setDescription(`${message.author} finalizou o expediente.`)
-        .addFields({ name: "Tempo Trabalhado", value: `${horas} horas` })
-        .setTimestamp();
-
-      message.channel.send({ embeds: [embed] });
-      sendLog(message.guild, embed);
-    }
-
-    else if (sub === "status") {
-      const totalHoras = (data[userId].total / 3600000).toFixed(2);
-      message.reply(
-        `📊 Total acumulado: ${totalHoras} horas\nStatus: ${data[userId].ativo ? "🟢 Em expediente" : "🔴 Fora"}`
-      );
-    }
-
-    else {
-      message.reply("Use: thl!ponto entrar | sair | status");
-    }
+  if (!data[userId]) {
+    data[userId] = { ativo: false, entrada: null, total: 0, canal: null };
   }
 
+  const sub = args[0]?.toLowerCase();
+
+  // =============================
+  // ENTRAR
+  // =============================
+  if (sub === "entrar") {
+
+    if (data[userId].ativo)
+      return message.reply("Você já iniciou seu ponto.");
+
+    data[userId].ativo = true;
+    data[userId].entrada = Date.now();
+
+    const canal = await guild.channels.create({
+      name: `ponto-${message.author.username}`,
+      type: 0,
+      parent: categoriaId,
+      permissionOverwrites: [
+        {
+          id: guild.id,
+          deny: ["ViewChannel"]
+        },
+        {
+          id: userId,
+          allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"]
+        }
+      ]
+    });
+
+    data[userId].canal = canal.id;
+    saveData(data);
+
+    await canal.send(`🟢 Ponto iniciado <@${userId}>`);
+
+    const intervalo = setInterval(async () => {
+
+      if (!data[userId] || !data[userId].ativo) {
+        clearInterval(intervalo);
+        return;
+      }
+
+      const tempoAtual = Date.now() - data[userId].entrada;
+
+      const horas = Math.floor(tempoAtual / 3600000);
+      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
+      const segundos = Math.floor((tempoAtual % 60000) / 1000);
+
+      canal.setTopic(
+        `⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`
+      ).catch(() => {});
+
+    }, 1000);
+
+    return;
+  }
+
+  // =============================
+  // SAIR
+  // =============================
+  if (sub === "sair") {
+
+    if (!data[userId].ativo)
+      return message.reply("Você não iniciou ponto.");
+
+    const tempo = Date.now() - data[userId].entrada;
+    data[userId].total += tempo;
+
+    data[userId].ativo = false;
+    data[userId].entrada = null;
+
+    const canalId = data[userId].canal;
+    data[userId].canal = null;
+
+    saveData(data);
+
+    if (canalId) {
+      const canal = guild.channels.cache.get(canalId);
+      if (canal) {
+        await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+        setTimeout(() => canal.delete().catch(() => {}), 3000);
+      }
+    }
+
+    return;
+  }
+
+  // =============================
+  // STATUS
+  // =============================
+  if (sub === "status") {
+
+    const total = data[userId].total;
+
+    const horas = Math.floor(total / 3600000);
+    const minutos = Math.floor((total % 3600000) / 60000);
+    const segundos = Math.floor((total % 60000) / 1000);
+
+    return message.reply(
+      `📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`
+    );
+  }
+
+  // =============================
+  // REGISTRO (RANKING)
+  // =============================
+  if (sub === "registro") {
+
+    const ranking = Object.entries(data)
+      .sort((a, b) => b[1].total - a[1].total);
+
+    if (ranking.length === 0)
+      return message.reply("Nenhum registro encontrado.");
+
+    let texto = "";
+
+    for (const [uid, info] of ranking) {
+
+      const total = info.total;
+
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
+
+      texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s\n`;
+    }
+
+    return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`);
+  }
+
+}
   // =============================
   // MUTECHAT
   // =============================
@@ -328,6 +399,54 @@ if (command === "rec") {
     return message.reply("Erro ao executar comando.");
   }
 }
+
+});
+
+// =============================
+// RECUPERA SESSÕES APÓS RESTART
+// =============================
+client.on("ready", async () => {
+
+  const data = getData();
+  const guild = client.guilds.cache.first();
+  if (!guild) return;
+
+  const categoriaId = "1468715109722357782";
+
+  for (const userId in data) {
+
+    if (data[userId].ativo) {
+
+      try {
+
+        const canal = await guild.channels.create({
+          name: `ponto-recuperado`,
+          type: 0,
+          parent: categoriaId,
+          permissionOverwrites: [
+            {
+              id: guild.id,
+              deny: ["ViewChannel"]
+            },
+            {
+              id: userId,
+              allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"]
+            }
+          ]
+        });
+
+        data[userId].canal = canal.id;
+        saveData(data);
+
+        canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
+      } catch (err) {
+        console.log("Erro ao recriar canal:", err);
+      }
+
+    }
+
+  }
 
 });
 
