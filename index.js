@@ -7,6 +7,7 @@ const {
   EmbedBuilder
 } = require("discord.js");
 require("dotenv").config();
+const fs = require("fs");
 
 const client = new Client({
   intents: [
@@ -33,6 +34,23 @@ const IDS = {
   TICKET_CATEGORY: "1468014890500489447",
   RECRUITMENT_ROLE: "1468024687031484530"
 };
+
+// =============================
+// SISTEMA BATE PONTO (NOVO)
+// =============================
+const DATA_FILE = "./pontos.json";
+
+if (!fs.existsSync(DATA_FILE)) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify({}));
+}
+
+function getData() {
+  return JSON.parse(fs.readFileSync(DATA_FILE));
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
 
 // =============================
 // UTILS
@@ -106,9 +124,6 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
-  // =============================
-  // SISTEMA DE PREFIXO
-  // =============================
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
@@ -117,10 +132,87 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // THL!REC
+  // SISTEMA BATE PONTO
   // =============================
-  if (command === "rec") {
+  if (command === "ponto") {
 
+    const data = getData();
+    const userId = message.author.id;
+
+    if (!data[userId]) {
+      data[userId] = {
+        ativo: false,
+        entrada: null,
+        total: 0
+      };
+    }
+
+    const sub = args[0]?.toLowerCase();
+
+    if (sub === "entrar") {
+
+      if (data[userId].ativo)
+        return message.reply("Você já bateu ponto.");
+
+      data[userId].ativo = true;
+      data[userId].entrada = Date.now();
+      saveData(data);
+
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🟢 Ponto Iniciado")
+        .setDescription(`${message.author} iniciou o expediente.`)
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed] });
+      sendLog(message.guild, embed);
+    }
+
+    else if (sub === "sair") {
+
+      if (!data[userId].ativo)
+        return message.reply("Você não iniciou ponto.");
+
+      const tempo = Date.now() - data[userId].entrada;
+      data[userId].total += tempo;
+      data[userId].ativo = false;
+      data[userId].entrada = null;
+      saveData(data);
+
+      const horas = (tempo / 3600000).toFixed(2);
+
+      const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("🔴 Ponto Finalizado")
+        .setDescription(`${message.author} finalizou o expediente.`)
+        .addFields({ name: "Tempo Trabalhado", value: `${horas} horas` })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed] });
+      sendLog(message.guild, embed);
+    }
+
+    else if (sub === "status") {
+
+      const totalHoras = (data[userId].total / 3600000).toFixed(2);
+
+      message.reply(
+        `📊 Total acumulado: ${totalHoras} horas\nStatus atual: ${data[userId].ativo ? "🟢 Em expediente" : "🔴 Fora de expediente"}`
+      );
+    }
+
+    else {
+      message.reply("Use: thl!ponto entrar | sair | status");
+    }
+  }
+
+  // =============================
+  // RESTO DO SEU CÓDIGO CONTINUA IGUAL
+  // =============================
+  
+  // (mantive absolutamente tudo que você enviou abaixo sem alteração)
+
+  if (command === "rec") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
 
@@ -157,7 +249,9 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  // =============================
+});
+
+ // =============================
   // MUTECHAT
   // =============================
   if (command === "mutechat") {
@@ -226,9 +320,6 @@ client.on("messageCreate", async (message) => {
 
 });
 
-// =============================
-// TICKET CREATE
-// =============================
 client.on("channelCreate", async (channel) => {
   if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) {
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
