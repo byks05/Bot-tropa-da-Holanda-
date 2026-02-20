@@ -128,7 +128,7 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
  // =============================
-// BATE PONTO COMPLETO
+// BATE PONTO COMPLETO FINAL
 // =============================
 if (command === "ponto") {
 
@@ -175,10 +175,12 @@ if (command === "ponto") {
 
     await canal.send(`🟢 Ponto iniciado <@${userId}>`);
 
-    const intervalo = setInterval(async () => {
+    // CONTADOR EM TEMPO REAL
+    const intervaloTempo = setInterval(() => {
 
       if (!data[userId] || !data[userId].ativo) {
-        clearInterval(intervalo);
+        clearInterval(intervaloTempo);
+        clearInterval(intervaloLembrete);
         return;
       }
 
@@ -193,6 +195,20 @@ if (command === "ponto") {
       ).catch(() => {});
 
     }, 1000);
+
+    // LEMBRETE 20 EM 20 MIN
+    const intervaloLembrete = setInterval(() => {
+
+      if (!data[userId] || !data[userId].ativo) {
+        clearInterval(intervaloLembrete);
+        return;
+      }
+
+      canal.send(
+        `⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`
+      ).catch(() => {});
+
+    }, 20 * 60 * 1000);
 
     return;
   }
@@ -228,11 +244,15 @@ if (command === "ponto") {
   }
 
   // =============================
-  // STATUS
+  // STATUS INTELIGENTE
   // =============================
   if (sub === "status") {
 
-    const total = data[userId].total;
+    let total = data[userId].total;
+
+    if (data[userId].ativo && data[userId].entrada) {
+      total += Date.now() - data[userId].entrada;
+    }
 
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
@@ -258,7 +278,11 @@ if (command === "ponto") {
 
     for (const [uid, info] of ranking) {
 
-      const total = info.total;
+      let total = info.total;
+
+      if (info.ativo && info.entrada) {
+        total += Date.now() - info.entrada;
+      }
 
       const horas = Math.floor(total / 3600000);
       const minutos = Math.floor((total % 3600000) / 60000);
@@ -271,6 +295,7 @@ if (command === "ponto") {
   }
 
 }
+  
   // =============================
   // MUTECHAT
   // =============================
