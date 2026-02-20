@@ -128,7 +128,7 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
 // =============================
-// BATE PONTO COMPLETO FINAL
+// BATE PONTO COMPLETO FINAL COM RESET GERAL
 // =============================
 if (command === "ponto") {
 
@@ -276,9 +276,8 @@ if (command === "ponto") {
   // REGISTRO (RANKING) – somente staff
   // =============================
   if (sub === "registro") {
-
     if (!IDS.STAFF.includes(userId)) 
-  return message.reply("❌ Apenas staff pode ver o registro.");
+      return message.reply("❌ Apenas staff pode ver o registro.");
 
     const ranking = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
     if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
@@ -294,6 +293,21 @@ if (command === "ponto") {
     }
 
     return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`);
+  }
+
+  // =============================
+  // RESET GERAL – somente staff
+  // =============================
+  if (sub === "resetartodos") {
+    if (!IDS.STAFF.includes(userId))
+      return message.reply("❌ Apenas staff pode resetar todos os pontos.");
+
+    for (const uid in data) {
+      data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
+    }
+    saveData(data);
+
+    return message.reply("✅ Todos os pontos foram resetados com sucesso.");
   }
 
 }  
