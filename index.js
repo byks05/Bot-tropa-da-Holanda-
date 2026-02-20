@@ -29,7 +29,31 @@ const IDS = {
   STAFF: [
     "1468017578747105390",
     "1468069638935150635",
-    "1468066422490923081"
+    "1468066422490923081",
+    "1468018959797452881",
+    "1473797846862921836",
+    "1468018098354393098",
+    "1468019077984293111",
+    "1468019282633035857",
+    "1468019717938614456",
+    "1468716461773164739",
+    "1468021327129743483",
+    "1468021411720335432",
+    "1468021554993561661",
+    "1468021724598501376",
+    "1468021924943888455",
+    "1468652058973569078",
+    "1474353689723535572",
+    "1474353834485612687",
+    "1474353946205098097",
+    "1474364575297175694",
+    "1474364617756250132",
+    "1474354117362188350",
+    "1474354176816451710",
+    "1474354212350726225",
+    "1474354265240899727",
+    "1474364646629838970",
+    "1468026315285205094"
   ],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
@@ -132,38 +156,12 @@ client.on("messageCreate", async (message) => {
 // =============================
 if (command === "ponto") {
 
-  const AUTORIZED_ROLES = [
-    "1468021327129743483","1468021411720335432","1468021554993561661",
-    "1468021724598501376","1468021924943888455","1468652058973569078",
-    "1474353689723535572","1474353834485612687","1474353946205098097",
-    "1474364575297175694","1474364617756250132","1474354117362188350",
-    "1474354176816451710","1474354212350726225","1474354265240899727",
-    "1474364646629838970","1468026315285205094"
-  ];
-
-  const STAFF_ROLES = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468066422490923081"
-  ];
-
-  const COMMAND_CHANNEL = "1474383177689731254"; // canal onde os comandos podem ser usados
   const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
-  const CATEGORIA_ID = "1474366472326222013"; // categoria dos canais de ponto
+  const CATEGORY_ID = "1474366472326222013"; // categoria dos canais de ponto
+  const COMMAND_CHANNEL = "1474383177689731254"; // canal permitido para thl!ponto entrar
 
   const guild = message.guild;
   const userId = message.author.id;
-
-  if (message.channel.id !== COMMAND_CHANNEL) {
-    return message.reply("❌ Comandos de ponto só podem ser usados neste canal.")
-                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
-  }
-
-  // checagem de permissão para entrar/sair/status
-  if (!message.member.roles.cache.some(r => AUTORIZED_ROLES.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.")
-                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
-  }
 
   const data = getData();
   if (!data[userId]) {
@@ -173,23 +171,26 @@ if (command === "ponto") {
   const sub = args[0]?.toLowerCase();
 
   // =============================
-  // ENTRAR
+  // ENTRAR (somente no canal de comando)
   // =============================
   if (sub === "entrar") {
 
+    if (message.channel.id !== COMMAND_CHANNEL) {
+      return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+    }
+
     if (data[userId].ativo)
-      return message.reply("❌ Você já iniciou seu ponto.")
-                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+      return message.reply("❌ Você já iniciou seu ponto.");
 
     data[userId].ativo = true;
     data[userId].entrada = Date.now();
     saveData(data);
 
-    // cria canal privado
+    // cria canal privado dentro da categoria
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: 0,
-      parent: CATEGORIA_ID,
+      parent: CATEGORY_ID,
       permissionOverwrites: [
         { id: guild.id, deny: ["ViewChannel"] },
         { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
@@ -199,12 +200,9 @@ if (command === "ponto") {
     data[userId].canal = canal.id;
     saveData(data);
 
-    // menciona o canal no chat
-    const aviso = await message.reply(`🟢 Ponto iniciado! Canal privado: <#${canal.id}>`);
-    setTimeout(() => aviso.delete().catch(() => {}), 30000);
-    setTimeout(() => message.delete().catch(() => {}), 30000);
+    await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
 
-    // CONTADOR EM TEMPO REAL + notificação de apto
+    // CONTADOR EM TEMPO REAL E NOTIFICAÇÃO DE APTO
     const intervaloTempo = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloTempo);
@@ -219,13 +217,30 @@ if (command === "ponto") {
 
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
+      // =============================
+      // NOTIFICAÇÃO DE APTO PARA PRÓXIMO CARGO
+      // =============================
       const totalAcumulado = data[userId].total + tempoAtual;
       if (!data[userId].notificado && totalAcumulado >= 1.5 * 3600000) { // 1h30m
         const upChannel = guild.channels.cache.get(UP_CHANNEL);
         if (upChannel) {
-          upChannel.send(`@everyone <@${userId}> bateu 1h30m e já pode receber o próximo cargo!`);
-          data[userId].notificado = true;
-          saveData(data);
+          // Cargos na ordem que você forneceu
+          const cargosOrdem = [
+            "1468026315285205094","1474364646629838970","1474354265240899727","1474354212350726225",
+            "1474354176816451710","1474354117362188350","1474364617756250132","1474364575297175694",
+            "1474353946205098097","1474353834485612687","1474353689723535572","1468652058973569078",
+            "1468021924943888455","1468021724598501376","1468021554993561661","1468021411720335432",
+            "1468021327129743483","1468716461773164739","1468019717938614456","1468019282633035857",
+            "1468019077984293111","1468018098354393098","1473797846862921836","1468018959797452881"
+          ];
+
+          // encontra próximo cargo da lista que o usuário ainda não tem
+          let proximoCargo = cargosOrdem.find(cargoId => !message.member.roles.cache.has(cargoId));
+          if (proximoCargo) {
+            upChannel.send(`@everyone <@${userId}> bateu 1h30m e já pode receber o próximo cargo <@&${proximoCargo}>!`);
+            data[userId].notificado = true;
+            saveData(data);
+          }
         }
       }
 
@@ -237,8 +252,7 @@ if (command === "ponto") {
         clearInterval(intervaloLembrete);
         return;
       }
-      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`)
-           .catch(() => {});
+      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
     }, 20 * 60 * 1000);
 
     return;
@@ -247,10 +261,9 @@ if (command === "ponto") {
   // =============================
   // SAIR
   // =============================
-  if (sub === "fechar") {
+  if (sub === "sair") {
     if (!data[userId].ativo)
-      return message.reply("❌ Você não iniciou ponto.")
-                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+      return message.reply("❌ Você não iniciou ponto.");
 
     const tempo = Date.now() - data[userId].entrada;
     data[userId].total += tempo;
@@ -277,29 +290,19 @@ if (command === "ponto") {
   // =============================
   if (sub === "status") {
     let total = data[userId].total;
-    if (data[userId].ativo && data[userId].entrada) {
-      total += Date.now() - data[userId].entrada;
-    }
+    if (data[userId].ativo && data[userId].entrada) total += Date.now() - data[userId].entrada;
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
-    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`)
-                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`);
   }
 
   // =============================
-  // REGISTRO (RANKING) – somente staff
+  // REGISTRO (RANKING)
   // =============================
   if (sub === "registro") {
-
-    if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id))) {
-      return message.reply("❌ Apenas staff pode ver o registro.")
-                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
-    }
-
     const ranking = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
     if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
-
     let texto = "";
     for (const [uid, info] of ranking) {
       let total = info.total;
@@ -309,37 +312,31 @@ if (command === "ponto") {
       const segundos = Math.floor((total % 60000) / 1000);
       texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s\n`;
     }
-
-    return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`)
-                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+    return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`);
   }
-
-}  
 
   // =============================
-// RESET GERAL – somente staff
-// =============================
-if (sub === "resetartodos") {
+  // RESET GERAL
+  // =============================
+  if (sub === "resetartodos") {
 
-  // checagem de permissão por cargo
-  const STAFF_ROLES = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468066422490923081"
-  ];
+    const STAFF_ROLES = [
+      "1468017578747105390",
+      "1468069638935150635",
+      "1468066422490923081"
+    ];
 
-  if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id))) {
-    return message.reply("❌ Apenas staff pode resetar todos os pontos.")
-                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+    if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id)))
+      return message.reply("❌ Apenas staff pode resetar todos os pontos.");
+
+    for (const uid in data) {
+      data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
+    }
+    saveData(data);
+
+    return message.reply("✅ Todos os pontos foram resetados com sucesso.");
   }
 
-  for (const uid in data) {
-    data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
-  }
-  saveData(data);
-
-  return message.reply("✅ Todos os pontos foram resetados com sucesso.")
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
 }
   
   
