@@ -128,14 +128,12 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
 // =============================
-// BATE PONTO COMPLETO FINAL COM RESET GERAL
+// BATE PONTO COMPLETO FINAL
 // =============================
 if (command === "ponto") {
 
   const AUTORIZED_ROLES = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468066422490923081","1468021327129743483","1468021411720335432","1468021554993561661",
+    "1468021327129743483","1468021411720335432","1468021554993561661",
     "1468021724598501376","1468021924943888455","1468652058973569078",
     "1474353689723535572","1474353834485612687","1474353946205098097",
     "1474364575297175694","1474364617756250132","1474354117362188350",
@@ -143,15 +141,28 @@ if (command === "ponto") {
     "1474364646629838970","1468026315285205094"
   ];
 
+  const STAFF_ROLES = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468066422490923081"
+  ];
+
+  const COMMAND_CHANNEL = "1474383177689731254"; // canal onde os comandos podem ser usados
   const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
-  const categoriaId = "1474366472326222013"; // categoria dos canais de ponto
+  const CATEGORIA_ID = "1474366472326222013"; // categoria dos canais de ponto
 
   const guild = message.guild;
   const userId = message.author.id;
 
-  // checagem de permissão
+  if (message.channel.id !== COMMAND_CHANNEL) {
+    return message.reply("❌ Comandos de ponto só podem ser usados neste canal.")
+                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+  }
+
+  // checagem de permissão para entrar/sair/status
   if (!message.member.roles.cache.some(r => AUTORIZED_ROLES.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
+    return message.reply("❌ Você não tem permissão para usar este comando.")
+                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
   }
 
   const data = getData();
@@ -167,7 +178,8 @@ if (command === "ponto") {
   if (sub === "entrar") {
 
     if (data[userId].ativo)
-      return message.reply("❌ Você já iniciou seu ponto.");
+      return message.reply("❌ Você já iniciou seu ponto.")
+                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
 
     data[userId].ativo = true;
     data[userId].entrada = Date.now();
@@ -177,7 +189,7 @@ if (command === "ponto") {
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: 0,
-      parent: categoriaId,
+      parent: CATEGORIA_ID,
       permissionOverwrites: [
         { id: guild.id, deny: ["ViewChannel"] },
         { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
@@ -187,9 +199,12 @@ if (command === "ponto") {
     data[userId].canal = canal.id;
     saveData(data);
 
-    await canal.send(`🟢 Ponto iniciado <@${userId}>`);
+    // menciona o canal no chat
+    const aviso = await message.reply(`🟢 Ponto iniciado! Canal privado: <#${canal.id}>`);
+    setTimeout(() => aviso.delete().catch(() => {}), 30000);
+    setTimeout(() => message.delete().catch(() => {}), 30000);
 
-    // CONTADOR EM TEMPO REAL
+    // CONTADOR EM TEMPO REAL + notificação de apto
     const intervaloTempo = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloTempo);
@@ -204,9 +219,6 @@ if (command === "ponto") {
 
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
-      // =============================
-      // NOTIFICAÇÃO DE APTO PARA PRÓXIMO CARGO
-      // =============================
       const totalAcumulado = data[userId].total + tempoAtual;
       if (!data[userId].notificado && totalAcumulado >= 1.5 * 3600000) { // 1h30m
         const upChannel = guild.channels.cache.get(UP_CHANNEL);
@@ -225,7 +237,8 @@ if (command === "ponto") {
         clearInterval(intervaloLembrete);
         return;
       }
-      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
+      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`)
+           .catch(() => {});
     }, 20 * 60 * 1000);
 
     return;
@@ -234,15 +247,16 @@ if (command === "ponto") {
   // =============================
   // SAIR
   // =============================
-  if (sub === "sair") {
+  if (sub === "fechar") {
     if (!data[userId].ativo)
-      return message.reply("❌ Você não iniciou ponto.");
+      return message.reply("❌ Você não iniciou ponto.")
+                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
 
     const tempo = Date.now() - data[userId].entrada;
     data[userId].total += tempo;
     data[userId].ativo = false;
     data[userId].entrada = null;
-    data[userId].notificado = false; // reseta notificação
+    data[userId].notificado = false;
     const canalId = data[userId].canal;
     data[userId].canal = null;
     saveData(data);
@@ -269,15 +283,19 @@ if (command === "ponto") {
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
-    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`);
+    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`)
+                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
   }
 
   // =============================
   // REGISTRO (RANKING) – somente staff
   // =============================
   if (sub === "registro") {
-    if (!IDS.STAFF.includes(userId)) 
-      return message.reply("❌ Apenas staff pode ver o registro.");
+
+    if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id))) {
+      return message.reply("❌ Apenas staff pode ver o registro.")
+                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+    }
 
     const ranking = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
     if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
@@ -292,25 +310,38 @@ if (command === "ponto") {
       texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s\n`;
     }
 
-    return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`);
-  }
-
-  // =============================
-  // RESET GERAL – somente staff
-  // =============================
-  if (sub === "resetartodos") {
-    if (!IDS.STAFF.includes(userId))
-      return message.reply("❌ Apenas staff pode resetar todos os pontos.");
-
-    for (const uid in data) {
-      data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
-    }
-    saveData(data);
-
-    return message.reply("✅ Todos os pontos foram resetados com sucesso.");
+    return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`)
+                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
   }
 
 }  
+
+  // =============================
+// RESET GERAL – somente staff
+// =============================
+if (sub === "resetartodos") {
+
+  // checagem de permissão por cargo
+  const STAFF_ROLES = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468066422490923081"
+  ];
+
+  if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id))) {
+    return message.reply("❌ Apenas staff pode resetar todos os pontos.")
+                  .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+  }
+
+  for (const uid in data) {
+    data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
+  }
+  saveData(data);
+
+  return message.reply("✅ Todos os pontos foram resetados com sucesso.")
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 30000));
+}
+  
   
   // =============================
   // MUTECHAT
