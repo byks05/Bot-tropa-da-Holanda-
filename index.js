@@ -127,18 +127,34 @@ client.on("messageCreate", async (message) => {
 
   if (!canUseCommand(message.member)) return;
 
- // =============================
+// =============================
 // BATE PONTO COMPLETO FINAL
 // =============================
 if (command === "ponto") {
 
-  const data = getData();
-  const userId = message.author.id;
-  const guild = message.guild;
-  const categoriaId = "1468715109722357782";
+  const AUTORIZED_ROLES = [
+    "1468021327129743483","1468021411720335432","1468021554993561661",
+    "1468021724598501376","1468021924943888455","1468652058973569078",
+    "1474353689723535572","1474353834485612687","1474353946205098097",
+    "1474364575297175694","1474364617756250132","1474354117362188350",
+    "1474354176816451710","1474354212350726225","1474354265240899727",
+    "1474364646629838970","1468026315285205094"
+  ];
 
+  const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
+  const categoriaId = "1474366472326222013"; // categoria dos canais de ponto
+
+  const guild = message.guild;
+  const userId = message.author.id;
+
+  // checagem de permissão
+  if (!message.member.roles.cache.some(r => AUTORIZED_ROLES.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
+
+  const data = getData();
   if (!data[userId]) {
-    data[userId] = { ativo: false, entrada: null, total: 0, canal: null };
+    data[userId] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
   }
 
   const sub = args[0]?.toLowerCase();
@@ -149,24 +165,20 @@ if (command === "ponto") {
   if (sub === "entrar") {
 
     if (data[userId].ativo)
-      return message.reply("Você já iniciou seu ponto.");
+      return message.reply("❌ Você já iniciou seu ponto.");
 
     data[userId].ativo = true;
     data[userId].entrada = Date.now();
+    saveData(data);
 
+    // cria canal privado
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: 0,
       parent: categoriaId,
       permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: ["ViewChannel"]
-        },
-        {
-          id: userId,
-          allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"]
-        }
+        { id: guild.id, deny: ["ViewChannel"] },
+        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
       ]
     });
 
@@ -177,37 +189,41 @@ if (command === "ponto") {
 
     // CONTADOR EM TEMPO REAL
     const intervaloTempo = setInterval(() => {
-
-      if (!data[userId] || !data[userId].ativo) {
+      if (!data[userId]?.ativo) {
         clearInterval(intervaloTempo);
         clearInterval(intervaloLembrete);
         return;
       }
 
       const tempoAtual = Date.now() - data[userId].entrada;
-
       const horas = Math.floor(tempoAtual / 3600000);
       const minutos = Math.floor((tempoAtual % 3600000) / 60000);
       const segundos = Math.floor((tempoAtual % 60000) / 1000);
 
-      canal.setTopic(
-        `⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`
-      ).catch(() => {});
+      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+
+      // =============================
+      // NOTIFICAÇÃO DE APTO PARA PRÓXIMO CARGO
+      // =============================
+      const totalAcumulado = data[userId].total + tempoAtual;
+      if (!data[userId].notificado && totalAcumulado >= 1.5 * 3600000) { // 1h30m
+        const upChannel = guild.channels.cache.get(UP_CHANNEL);
+        if (upChannel) {
+          upChannel.send(`@everyone <@${userId}> bateu 1h30m e já pode receber o próximo cargo!`);
+          data[userId].notificado = true;
+          saveData(data);
+        }
+      }
 
     }, 1000);
 
     // LEMBRETE 20 EM 20 MIN
     const intervaloLembrete = setInterval(() => {
-
-      if (!data[userId] || !data[userId].ativo) {
+      if (!data[userId]?.ativo) {
         clearInterval(intervaloLembrete);
         return;
       }
-
-      canal.send(
-        `⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`
-      ).catch(() => {});
-
+      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
     }, 20 * 60 * 1000);
 
     return;
@@ -217,19 +233,16 @@ if (command === "ponto") {
   // SAIR
   // =============================
   if (sub === "sair") {
-
     if (!data[userId].ativo)
-      return message.reply("Você não iniciou ponto.");
+      return message.reply("❌ Você não iniciou ponto.");
 
     const tempo = Date.now() - data[userId].entrada;
     data[userId].total += tempo;
-
     data[userId].ativo = false;
     data[userId].entrada = null;
-
+    data[userId].notificado = false; // reseta notificação
     const canalId = data[userId].canal;
     data[userId].canal = null;
-
     saveData(data);
 
     if (canalId) {
@@ -244,57 +257,43 @@ if (command === "ponto") {
   }
 
   // =============================
-  // STATUS INTELIGENTE
+  // STATUS
   // =============================
   if (sub === "status") {
-
     let total = data[userId].total;
-
     if (data[userId].ativo && data[userId].entrada) {
       total += Date.now() - data[userId].entrada;
     }
-
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
-
-    return message.reply(
-      `📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`
-    );
+    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`);
   }
 
   // =============================
-  // REGISTRO (RANKING)
+  // REGISTRO (RANKING) – somente staff
   // =============================
   if (sub === "registro") {
 
-    const ranking = Object.entries(data)
-      .sort((a, b) => b[1].total - a[1].total);
+    if (!IDS.STAFF.includes(userId)) return message.reply("❌ Apenas staff pode ver o registro.");
 
-    if (ranking.length === 0)
-      return message.reply("Nenhum registro encontrado.");
+    const ranking = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
+    if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
 
     let texto = "";
-
     for (const [uid, info] of ranking) {
-
       let total = info.total;
-
-      if (info.ativo && info.entrada) {
-        total += Date.now() - info.entrada;
-      }
-
+      if (info.ativo && info.entrada) total += Date.now() - info.entrada;
       const horas = Math.floor(total / 3600000);
       const minutos = Math.floor((total % 3600000) / 60000);
       const segundos = Math.floor((total % 60000) / 1000);
-
       texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s\n`;
     }
 
     return message.reply(`📊 **Ranking de Atividade**\n\n${texto}`);
   }
 
-}
+}  
   
   // =============================
   // MUTECHAT
