@@ -277,7 +277,8 @@ if (command === "ponto") {
   // =============================
   if (sub === "registro") {
 
-    if (!IDS.STAFF.includes(userId)) return message.reply("❌ Apenas staff pode ver o registro.");
+    if (!IDS.STAFF.includes(userId)) 
+  return message.reply("❌ Apenas staff pode ver o registro.");
 
     const ranking = Object.entries(data).sort((a, b) => b[1].total - a[1].total);
     if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
