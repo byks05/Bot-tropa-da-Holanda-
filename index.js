@@ -4,8 +4,9 @@
 const { 
   Client, 
   GatewayIntentBits, 
-  EmbedBuilder
+  EmbedBuilder 
 } = require("discord.js");
+
 require("dotenv").config();
 const fs = require("fs");
 
@@ -72,13 +73,13 @@ const canUseCommand = (member) => {
   return IDS.STAFF.some(id => member.roles.cache.has(id));
 };
 
-// =============================
-// MUTE ROLE
-// =============================
 async function getMuteRole(guild) {
   let role = guild.roles.cache.find(r => r.name === "Muted");
   if (!role) {
-    role = await guild.roles.create({ name: "Muted", permissions: [] });
+    role = await guild.roles.create({
+      name: "Muted",
+      permissions: []
+    });
   }
   return role;
 }
@@ -87,14 +88,25 @@ async function getMuteRole(guild) {
 // MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
+
   if (!message.guild || message.author.bot) return;
 
   const content = message.content.toLowerCase();
 
+  // =============================
   // RESPOSTAS AUTOMÁTICAS
+  // =============================
   if (content.includes("setamento")) {
     const botMsg = await message.reply(
       "Todas as informações sobre o Setamento estão aqui <#1468020392005337161>"
+    );
+    setTimeout(() => botMsg.delete().catch(() => {}), 30000);
+    return;
+  }
+
+  if (content.includes("faixa rosa") || content.includes("faixas rosa")) {
+    const botMsg = await message.reply(
+      "Link do servidor das Faixas Rosa 🎀 | Tropa Da Holanda 🇳🇱\nhttps://discord.gg/seaaSXG5yJ"
     );
     setTimeout(() => botMsg.delete().catch(() => {}), 30000);
     return;
@@ -116,7 +128,7 @@ client.on("messageCreate", async (message) => {
   if (!canUseCommand(message.member)) return;
 
   // =============================
-  // BATE PONTO
+  // PONTO
   // =============================
   if (command === "ponto") {
 
@@ -124,12 +136,17 @@ client.on("messageCreate", async (message) => {
     const userId = message.author.id;
 
     if (!data[userId]) {
-      data[userId] = { ativo: false, entrada: null, total: 0 };
+      data[userId] = {
+        ativo: false,
+        entrada: null,
+        total: 0
+      };
     }
 
     const sub = args[0]?.toLowerCase();
 
     if (sub === "entrar") {
+
       if (data[userId].ativo)
         return message.reply("Você já bateu ponto.");
 
@@ -137,10 +154,18 @@ client.on("messageCreate", async (message) => {
       data[userId].entrada = Date.now();
       saveData(data);
 
-      message.reply("🟢 Ponto iniciado.");
+      const embed = new EmbedBuilder()
+        .setColor("Green")
+        .setTitle("🟢 Ponto Iniciado")
+        .setDescription(`${message.author} iniciou o expediente.`)
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed] });
+      sendLog(message.guild, embed);
     }
 
     else if (sub === "sair") {
+
       if (!data[userId].ativo)
         return message.reply("Você não iniciou ponto.");
 
@@ -150,72 +175,57 @@ client.on("messageCreate", async (message) => {
       data[userId].entrada = null;
       saveData(data);
 
-      message.reply("🔴 Ponto finalizado.");
+      const horas = (tempo / 3600000).toFixed(2);
+
+      const embed = new EmbedBuilder()
+        .setColor("Red")
+        .setTitle("🔴 Ponto Finalizado")
+        .setDescription(`${message.author} finalizou o expediente.`)
+        .addFields({ name: "Tempo Trabalhado", value: `${horas} horas` })
+        .setTimestamp();
+
+      message.channel.send({ embeds: [embed] });
+      sendLog(message.guild, embed);
     }
 
     else if (sub === "status") {
       const totalHoras = (data[userId].total / 3600000).toFixed(2);
-      message.reply(`📊 Total acumulado: ${totalHoras} horas`);
+      message.reply(
+        `📊 Total acumulado: ${totalHoras} horas\nStatus: ${data[userId].ativo ? "🟢 Em expediente" : "🔴 Fora"}`
+      );
     }
 
-    return;
+    else {
+      message.reply("Use: thl!ponto entrar | sair | status");
+    }
   }
-
-  // =============================
-  // REC
-  // =============================
-  if (command === "rec") {
-const user = message.mentions.members.first();
-if (!user) return message.reply("Mencione um usuário válido.");
-
-const filteredArgs = args.filter(arg => !arg.includes(user.id));  
-const subCommand = filteredArgs[0]?.toLowerCase();  
-const secondArg = filteredArgs[1]?.toLowerCase();  
-
-try {  
-
-  if (subCommand === "add" && secondArg === "menina") {  
-    await user.roles.remove("1468024885354959142");  
-    await user.roles.add([  
-      "1472223890821611714",  
-      "1468283328510558208",  
-      "1468026315285205094"  
-    ]);  
-    return message.reply(`Cargos "menina" aplicados em ${user}`);  
-  }  
-
-  if (subCommand === "add") {  
-    await user.roles.remove("1468024885354959142");  
-    await user.roles.add([  
-      "1468283328510558208",  
-      "1468026315285205094"  
-    ]);  
-    return message.reply(`Cargos aplicados em ${user}`);  
-  }  
-
-  return message.reply("Use: thl!rec <@usuário> add ou add menina");  
-
-} catch (error) {  
-  console.error(error);  
-  return message.reply("Erro ao executar comando.");  
-}
-
-}
-
-});
 
   // =============================
   // MUTECHAT
   // =============================
   if (command === "mutechat") {
+
     const user = message.mentions.members.first();
+    const duration = parseDuration(args[1]) || 120000;
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
+
     if (!user) return message.reply("Mencione um usuário válido.");
 
-    const duration = parseDuration(args[1]) || 120000;
     const muteRole = await getMuteRole(message.guild);
-
     await user.roles.add(muteRole);
-    message.reply(`${user} mutado por ${duration/60000} minutos.`);
+
+    const embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("🔇 Usuário Mutado (Chat)")
+      .setDescription(`${user} foi mutado`)
+      .addFields(
+        { name: "Motivo", value: motivo },
+        { name: "Tempo", value: `${duration / 60000} minutos` }
+      )
+      .setTimestamp();
+
+    message.channel.send({ embeds: [embed] });
+    sendLog(message.guild, embed);
 
     setTimeout(async () => {
       if (user.roles.cache.has(muteRole.id)) {
@@ -224,6 +234,9 @@ try {
     }, duration);
   }
 
+  // =============================
+  // UNMUTECHAT
+  // =============================
   if (command === "unmutechat") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("Mencione um usuário válido.");
@@ -234,13 +247,95 @@ try {
     message.reply(`${user} foi desmutado.`);
   }
 
+  // =============================
+  // MUTECALL
+  // =============================
+  if (command === "mutecall") {
+
+    const user = message.mentions.members.first();
+    const duration = parseDuration(args[1]) || 120000;
+
+    if (!user) return message.reply("Mencione um usuário válido.");
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+
+    await user.voice.setMute(true);
+
+    setTimeout(() => {
+      user.voice.setMute(false).catch(() => {});
+    }, duration);
+
+    message.reply(`${user} foi mutado na call.`);
+  }
+
+  // =============================
+  // UNMUTECALL
+  // =============================
+  if (command === "unmutecall") {
+
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+
+    await user.voice.setMute(false);
+    message.reply(`${user} foi desmutado na call.`);
+  }
+
+  // =============================
+// REC
+// =============================
+if (command === "rec") {
+
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("Mencione um usuário válido.");
+
+  const filteredArgs = args.filter(arg => !arg.includes(user.id));
+  const subCommand = filteredArgs[0]?.toLowerCase();
+  const secondArg = filteredArgs[1]?.toLowerCase();
+
+  try {
+
+    // REC ADD MENINA
+    if (subCommand === "add" && secondArg === "menina") {
+
+      await user.roles.remove("1468024885354959142");
+
+      await user.roles.add([
+        "1472223890821611714",
+        "1468283328510558208",
+        "1468026315285205094"
+      ]);
+
+      return message.reply(`Cargos "menina" aplicados em ${user}`);
+    }
+
+    // REC ADD NORMAL
+    if (subCommand === "add") {
+
+      await user.roles.remove("1468024885354959142");
+
+      await user.roles.add([
+        "1468283328510558208",
+        "1468026315285205094"
+      ]);
+
+      return message.reply(`Cargos aplicados em ${user}`);
+    }
+
+    return message.reply("Use: thl!rec <@usuário> add ou add menina");
+
+  } catch (error) {
+    console.error(error);
+    return message.reply("Erro ao executar comando.");
+  }
+}
+
 });
 
 // =============================
-// TICKET
+// TICKET MENTION
 // =============================
 client.on("channelCreate", async (channel) => {
-  if (channel.type === 0 && channel.parentId === IDS.TICKET_CATEGORY) {
+  if (channel.parentId === IDS.TICKET_CATEGORY) {
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
 });
