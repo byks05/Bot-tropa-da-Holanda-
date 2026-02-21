@@ -259,27 +259,34 @@ client.on("messageCreate", async (message) => {
       return;
     }
 
-    // SAIR
-    if (sub === "sair") {
-      if (!data[userId].ativo) return message.reply("❌ Você não iniciou ponto.");
-      const tempo = Date.now() - data[userId].entrada;
-      data[userId].total += tempo;
-      data[userId].ativo = false;
-      data[userId].entrada = null;
-      data[userId].notificado = false;
-      const canalId = data[userId].canal;
-      data[userId].canal = null;
-      saveData(data);
+    // =============================
+// SAIR
+// =============================
+if (sub === "sair") {
 
-      if (canalId) {
-        const canal = guild.channels.cache.get(canalId);
-        if (canal) {
-          await canal.send("🔴 Ponto finalizado. Canal será fechado.");
-          setTimeout(() => canal.delete().catch(() => {}), 3000);
-        }
-      }
-      return;
+  if (!data[userId].ativo)
+    return message.reply("❌ Você não iniciou ponto.");
+
+  const tempo = Date.now() - data[userId].entrada;
+  data[userId].total += tempo;
+  data[userId].ativo = false;
+  data[userId].entrada = null;
+  data[userId].notificado = false;
+  const canalId = data[userId].canal;
+  data[userId].canal = null;
+  saveData(data);
+
+  if (canalId) {
+    const canal = guild.channels.cache.get(canalId);
+    if (canal) {
+      await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+      setTimeout(() => canal.delete().catch(() => {}), 3000);
     }
+  }
+
+  // ✅ Resposta no canal onde o comando foi usado
+  return message.reply(`🔴 Ponto encerrado com sucesso! Tempo total deste ponto: ${Math.floor(tempo / 3600000)}h ${Math.floor((tempo % 3600000) / 60000)}m ${Math.floor((tempo % 60000) / 1000)}s`);
+}
 
     // STATUS
     if (sub === "status") {
@@ -316,6 +323,26 @@ client.on("messageCreate", async (message) => {
       return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
     }
   }
+  // =============================
+// RESETAR HORAS DE TODOS
+// =============================
+if (sub === "reset") {
+
+  // Apenas staff pode usar
+  if (!canUseCommand(message.member))
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+
+  const data = getData();
+
+  for (const userId in data) {
+    data[userId].total = 0;       // reseta total
+    data[userId].entrada = data[userId].ativo ? Date.now() : null; // se estiver ativo, começa novo ponto
+  }
+
+  saveData(data);
+
+  return message.reply("✅ Todas as horas de todos os usuários foram resetadas com sucesso!");
+              }
 
   // =============================
   // MUTE / UNMUTE
