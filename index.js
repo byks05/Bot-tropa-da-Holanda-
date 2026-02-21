@@ -149,7 +149,8 @@ const getCargoAtual = (member) => {
 
 // =============================
 // MESSAGE CREATE
-// =============================client.on("messageCreate", async (message) => {
+// =============================
+client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
   const content = message.content.toLowerCase();
