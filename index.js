@@ -1,31 +1,30 @@
 // =============================
 // IMPORTS
 // =============================
-const { 
-  Client, 
-  GatewayIntentBits, 
-  EmbedBuilder 
-} = require("discord.js");
-
+const { Client, GatewayIntentBits, EmbedBuilder } = require("discord.js");
 require("dotenv").config();
 const fs = require("fs");
+const path = require("path");
 
-// 🔥 NOVO - PostgreSQL
+// 🔥 PostgreSQL
 const { Pool } = require("pg");
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
 });
 
+// =============================
+// CLIENT
+// =============================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildVoiceStates
-  ]
+    GatewayIntentBits.GuildVoiceStates,
+  ],
 });
 
 // =============================
@@ -34,63 +33,82 @@ const client = new Client({
 const PREFIX = "thl!";
 
 const IDS = {
-  STAFF: [
-    "1468069638935150635","1468017578747105390"
-  ],
+  STAFF: ["1468069638935150635", "1468017578747105390"],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
-  RECRUITMENT_ROLE: "1468024687031484530"
+  RECRUITMENT_ROLE: "1468024687031484530",
 };
 
 // =============================
 // SISTEMA BATE PONTO
 // =============================
-const DATA_FILE = "./pontos.json";
+const DATA_FILE = path.join(__dirname, "pontos.json");
 
+// Garante que o arquivo exista
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, JSON.stringify({}));
 }
 
+// Função para ler dados de forma segura
 function getData() {
-  return JSON.parse(fs.readFileSync(DATA_FILE));
+  try {
+    const raw = fs.readFileSync(DATA_FILE, "utf-8");
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Erro ao ler pontos.json:", err);
+    return {};
+  }
 }
 
+// Função para salvar dados
 function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error("Erro ao salvar pontos.json:", err);
+  }
 }
 
 // =============================
 // UTILS
 // =============================
+
+// Converte tempo em ms (ex: "10m" ou "2h")
 const parseDuration = (time) => {
-  const match = time?.match(/^(\d+)([mh])$/);
+  if (!time) return null;
+  const match = time.match(/^(\d+)([mh])$/);
   if (!match) return null;
   const value = Number(match[1]);
   const unit = match[2];
   return unit === "m" ? value * 60000 : value * 3600000;
 };
 
+// Envia embed de log para o canal configurado
 const sendLog = (guild, embed) => {
   const channel = guild.channels.cache.get(IDS.LOG_CHANNEL);
-  if (channel) channel.send({ embeds: [embed] });
+  if (channel) channel.send({ embeds: [embed] }).catch(console.error);
 };
 
-const canUseCommand = (member) => {
-  return IDS.STAFF.some(id => member.roles.cache.has(id));
-};
+// Verifica se o membro pode usar comando de staff
+const canUseCommand = (member) => IDS.STAFF.some((id) => member.roles.cache.has(id));
 
+// Pega ou cria cargo de mute
 async function getMuteRole(guild) {
-  let role = guild.roles.cache.find(r => r.name === "Muted");
+  let role = guild.roles.cache.find((r) => r.name === "Muted");
   if (!role) {
-    role = await guild.roles.create({
-      name: "Muted",
-      permissions: []
-    });
+    try {
+      role = await guild.roles.create({
+        name: "Muted",
+        permissions: [],
+      });
+    } catch (err) {
+      console.error("Erro ao criar cargo Muted:", err);
+    }
   }
   return role;
-};
+}
 
-// Lista de cargos e metas
+// Lista de cargos e metas (em ms)
 const CARGOS = [
   // 24h
   { id: "1468021327129743483", meta: 24 * 3600000 },
@@ -117,14 +135,14 @@ const CARGOS = [
   { id: "1468019077984293111", meta: 48 * 3600000 },
   { id: "1468019282633035857", meta: 48 * 3600000 },
   { id: "1468019717938614456", meta: 48 * 3600000 },
-  { id: "1468716461773164739", meta: 48 * 3600000 }
+  { id: "1468716461773164739", meta: 48 * 3600000 },
 ];
 
-// Função para pegar cargo atual com base no tempo
-const getCargoAtual = (member, tempoTotal) => {
-  const cargosPossiveis = CARGOS.filter(c => member.roles.cache.has(c.id));
+// Pega cargo atual do membro baseado nos cargos que ele possui
+const getCargoAtual = (member) => {
+  const cargosPossiveis = CARGOS.filter((c) => member.roles.cache.has(c.id));
   if (!cargosPossiveis.length) return "Nenhum cargo";
-  // Pega o cargo com maior meta que o usuário tenha
+  // Pega o cargo com maior meta
   cargosPossiveis.sort((a, b) => b.meta - a.meta);
   return `<@&${cargosPossiveis[0].id}>`;
 };
@@ -133,7 +151,6 @@ const getCargoAtual = (member, tempoTotal) => {
 // MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
-
   if (!message.guild || message.author.bot) return;
 
   const content = message.content.toLowerCase();
@@ -165,12 +182,16 @@ client.on("messageCreate", async (message) => {
     return;
   }
 
+  // =============================
+  // COMANDOS
+  // =============================
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift().toLowerCase();
 
-  if (!canUseCommand(message.member)) return;
+  // Garante que message.member exista antes de verificar permissões
+  if (!message.member || !canUseCommand(message.member)) return;
 
   const data = getData();
   const userId = message.author.id;
@@ -180,14 +201,12 @@ client.on("messageCreate", async (message) => {
 // BATE PONTO COMPLETO
 // =============================
 if (command === "ponto") {
-
   const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
   const CANAL_ENTRAR = "1474383177689731254"; // canal onde entrar pode ser usado
   const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
   const userId = message.author.id;
   const guild = message.guild;
 
-  // 🔹 Apenas esses cargos podem usar o comando PONTO
   const ALLOWED_PONTO = [
     "1468017578747105390",
     "1468069638935150635",
@@ -209,7 +228,6 @@ if (command === "ponto") {
   // ENTRAR (somente no canal definido)
   // =============================
   if (sub === "entrar") {
-
     if (message.channel.id !== CANAL_ENTRAR)
       return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
 
@@ -218,7 +236,7 @@ if (command === "ponto") {
 
     data[userId].ativo = true;
     data[userId].entrada = Date.now();
-    data[userId].notificado = false; // reseta notificação
+    data[userId].notificado = false;
     saveData(data);
 
     // cria canal privado
@@ -235,15 +253,10 @@ if (command === "ponto") {
     data[userId].canal = canal.id;
     saveData(data);
 
-    // mensagem no canal de comando mencionando o canal criado
     await message.channel.send(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-
-    // mensagem no canal privado mencionando o usuário
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-    // =============================
-    // CONTADOR EM TEMPO REAL
-    // =============================
+    // contador em tempo real
     const intervaloTempo = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloTempo);
@@ -257,12 +270,9 @@ if (command === "ponto") {
       const segundos = Math.floor((tempoAtual % 60000) / 1000);
 
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-
     }, 1000);
 
-    // =============================
-    // LEMBRETE 20 EM 20 MIN
-    // =============================
+    // lembrete a cada 20 min
     const intervaloLembrete = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloLembrete);
@@ -278,7 +288,6 @@ if (command === "ponto") {
   // SAIR
   // =============================
   if (sub === "sair") {
-
     if (!data[userId].ativo)
       return message.reply("❌ Você não iniciou ponto.");
 
@@ -287,6 +296,7 @@ if (command === "ponto") {
     data[userId].ativo = false;
     data[userId].entrada = null;
     data[userId].notificado = false;
+
     const canalId = data[userId].canal;
     data[userId].canal = null;
     saveData(data);
@@ -298,118 +308,69 @@ if (command === "ponto") {
         setTimeout(() => canal.delete().catch(() => {}), 3000);
       }
     }
-
     return;
   }
 
- // =============================
-// STATUS
-// =============================
-if (sub === "status") {
-
-  const info = data[userId];
-  if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
-
-  let total = info.total;
-  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
-
-  const horas = Math.floor(total / 3600000);
-  const minutos = Math.floor((total % 3600000) / 60000);
-  const segundos = Math.floor((total % 60000) / 1000);
-
-  const member = message.member;
-
-  // lista de cargos de meta
-  const cargosMeta = [
-    { id: "1468021327129743483", nome: "Cargo 24h #1" },
-    { id: "1468021411720335432", nome: "Cargo 24h #2" },
-    { id: "1468021554993561661", nome: "Cargo 24h #3" },
-    { id: "1468021724598501376", nome: "Cargo 24h #4" },
-    { id: "1468021924943888455", nome: "Cargo 24h #5" },
-    { id: "1468652058973569078", nome: "Cargo 24h #6" },
-    { id: "1474353689723535572", nome: "Cargo 24h #7" },
-    { id: "1474353834485612687", nome: "Cargo 24h #8" },
-    { id: "1474353946205098097", nome: "Cargo 24h #9" },
-    { id: "1474364575297175694", nome: "Cargo 24h #10" },
-    { id: "1474364617756250132", nome: "Cargo 24h #11" },
-    { id: "1474354117362188350", nome: "Cargo 24h #12" },
-    { id: "1474354176816451710", nome: "Cargo 24h #13" },
-    { id: "1474354212350726225", nome: "Cargo 24h #14" },
-    { id: "1474354265240899727", nome: "Cargo 24h #15" },
-    { id: "1474364646629838970", nome: "Cargo 24h #16" },
-    { id: "1468026315285205094", nome: "Cargo 24h #17" }
-  ];
-
-  let cargoAtual = "Nenhum";
-  const encontrado = cargosMeta.find(c => member.roles.cache.has(c.id));
-  if (encontrado) cargoAtual = `<@&${encontrado.id}>`;
-
-  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-  return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
-}
-  
   // =============================
-// REGISTRO (RANKING) – top 10
-// =============================
-if (sub === "registro") {
+  // STATUS
+  // =============================
+  if (sub === "status") {
+    const info = data[userId];
+    if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
 
-  const data = getData();
-  const ranking = Object.entries(data)
-    .sort((a, b) => b[1].total - a[1].total)
-    .slice(0, 10); // top 10
-
-  if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
-
-  // lista de cargos de meta
-  const cargosMeta = [
-    { id: "1468021327129743483", nome: "Cargo 24h #1" },
-    { id: "1468021411720335432", nome: "Cargo 24h #2" },
-    { id: "1468021554993561661", nome: "Cargo 24h #3" },
-    { id: "1468021724598501376", nome: "Cargo 24h #4" },
-    { id: "1468021924943888455", nome: "Cargo 24h #5" },
-    { id: "1468652058973569078", nome: "Cargo 24h #6" },
-    { id: "1474353689723535572", nome: "Cargo 24h #7" },
-    { id: "1474353834485612687", nome: "Cargo 24h #8" },
-    { id: "1474353946205098097", nome: "Cargo 24h #9" },
-    { id: "1474364575297175694", nome: "Cargo 24h #10" },
-    { id: "1474364617756250132", nome: "Cargo 24h #11" },
-    { id: "1474354117362188350", nome: "Cargo 24h #12" },
-    { id: "1474354176816451710", nome: "Cargo 24h #13" },
-    { id: "1474354212350726225", nome: "Cargo 24h #14" },
-    { id: "1474354265240899727", nome: "Cargo 24h #15" },
-    { id: "1474364646629838970", nome: "Cargo 24h #16" },
-    { id: "1468026315285205094", nome: "Cargo 24h #17" }
-  ];
-
-  let texto = "";
-
-  for (const [uid, info] of ranking) {
     let total = info.total;
     if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
 
-    const member = await message.guild.members.fetch(uid).catch(() => null);
-    let cargoAtual = "Nenhum";
-    if (member) {
-      const encontrado = cargosMeta.find(c => member.roles.cache.has(c.id));
-      if (encontrado) cargoAtual = `<@&${encontrado.id}>`;
-    }
+    const member = message.member;
+
+    const cargosMeta = CARGOS; // usa array já definido no utils
+    let cargoAtual = getCargoAtual(member, total);
 
     const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-    texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    return message.reply(
+      `📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`
+    );
   }
 
-  return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
-}
-  
-// =============================
-// MUTE / UNMUTE
-// =============================
-if (command === "mutechat") {
+  // =============================
+  // REGISTRO (TOP 10)
+  // =============================
+  if (sub === "registro") {
+    const ranking = Object.entries(data)
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 10);
+
+    if (!ranking.length) return message.reply("Nenhum registro encontrado.");
+
+    let texto = "";
+
+    for (const [uid, info] of ranking) {
+      let total = info.total;
+      if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
+
+      const member = await message.guild.members.fetch(uid).catch(() => null);
+      let cargoAtual = "Nenhum";
+      if (member) cargoAtual = getCargoAtual(member, total);
+
+      const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+      texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    }
+
+    return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+  }
+
+  // =============================
+  // MUTE / UNMUTE
+  // =============================
+  if (command === "mutechat") {
   const user = message.mentions.members.first();
   const duration = parseDuration(args[1]) || 120000;
   const motivo = args.slice(2).join(" ") || "Sem motivo";
@@ -458,62 +419,60 @@ if (command === "unmutecall") {
   message.reply(`${user} foi desmutado na call.`);
 }
 
-// =============================
-// REC
-// =============================
-if (command === "rec") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("Mencione um usuário válido.");
 
-  const ALLOWED_REC = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468026315285205094",
-    "1468066422490923081" // cargo que só pode usar rec
-  ];
+  // =============================
+  // REC
+  // =============================
+  if (command === "rec") {
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
 
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
-  }
+    const ALLOWED_REC = [
+      "1468017578747105390",
+      "1468069638935150635",
+      "1468026315285205094",
+      "1468066422490923081"
+    ];
 
-  const filteredArgs = args.filter(arg => !arg.includes(user.id));
-  const subCommand = filteredArgs[0]?.toLowerCase();
-  const secondArg = filteredArgs[1]?.toLowerCase();
-
-  try {
-    // REC ADD MENINA
-    if (subCommand === "add" && secondArg === "menina") {
-      await user.roles.remove("1468024885354959142");
-
-      await user.roles.add([
-        "1472223890821611714",
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
-
-      return message.reply(`Cargos "menina" aplicados em ${user}`);
+    if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
+      return message.reply("❌ Você não tem permissão para usar este comando.");
     }
 
-    // REC ADD NORMAL
-    if (subCommand === "add") {
-      await user.roles.remove("1468024885354959142");
+    const filteredArgs = args.filter(arg => !arg.includes(user.id));
+    const subCommand = filteredArgs[0]?.toLowerCase();
+    const secondArg = filteredArgs[1]?.toLowerCase();
 
-      await user.roles.add([
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
+    try {
+      // REC ADD MENINA
+      if (subCommand === "add" && secondArg === "menina") {
+        await user.roles.remove("1468024885354959142");
+        await user.roles.add([
+          "1472223890821611714",
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+        return message.reply(`Cargos "menina" aplicados em ${user}`);
+      }
 
-      return message.reply(`Cargos aplicados em ${user}`);
-    }
+      // REC ADD NORMAL
+      if (subCommand === "add") {
+        await user.roles.remove("1468024885354959142");
+        await user.roles.add([
+          "1468283328510558208",
+          "1468026315285205094"
+        ]);
+        return message.reply(`Cargos aplicados em ${user}`);
+      }
 
-    return message.reply("Use: thl!rec <@usuário> add ou add menina");
-
-  } catch (error) {
-    console.error(error);
+      return message.reply("Use: thl!rec <@usuário> add ou add menina");
+    } catch (error) {
+      console.error(error);
     return message.reply("Erro ao executar comando.");
+    }
   }
 }
-  
+});  
+
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
