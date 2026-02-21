@@ -149,8 +149,7 @@ const getCargoAtual = (member) => {
 
 // =============================
 // MESSAGE CREATE
-// =============================
-client.on("messageCreate", async (message) => {
+// =============================client.on("messageCreate", async (message) => {
   if (!message.guild || message.author.bot) return;
 
   const content = message.content.toLowerCase();
@@ -183,267 +182,220 @@ client.on("messageCreate", async (message) => {
   }
 
   // =============================
-  // COMANDOS
+  // COMANDOS COM PREFIXO
   // =============================
   if (!message.content.startsWith(PREFIX)) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift().toLowerCase();
-
-  // Garante que message.member exista antes de verificar permissões
-  if (!message.member || !canUseCommand(message.member)) return;
-
-  const data = getData();
   const userId = message.author.id;
   const guild = message.guild;
-
-// =============================
-// BATE PONTO COMPLETO
-// =============================
-if (command === "ponto") {
-  const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
-  const CANAL_ENTRAR = "1474383177689731254"; // canal onde entrar pode ser usado
-  const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
-  const userId = message.author.id;
-  const guild = message.guild;
-
-  const ALLOWED_PONTO = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468026315285205094"
-  ];
-
-  if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
-  }
-
   const data = getData();
-  if (!data[userId]) {
-    data[userId] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
-  }
-
-  const sub = args[0]?.toLowerCase();
 
   // =============================
-  // ENTRAR (somente no canal definido)
+  // BATE PONTO
   // =============================
-  if (sub === "entrar") {
-    if (message.channel.id !== CANAL_ENTRAR)
-      return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+  if (command === "ponto") {
+    const ALLOWED_PONTO = [
+      "1468017578747105390",
+      "1468069638935150635",
+      "1468026315285205094"
+    ];
 
-    if (data[userId].ativo)
-      return message.reply("❌ Você já iniciou seu ponto.");
+    if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id)))
+      return message.reply("❌ Você não tem permissão para usar este comando.");
 
-    data[userId].ativo = true;
-    data[userId].entrada = Date.now();
-    data[userId].notificado = false;
-    saveData(data);
+    const categoriaId = "1474413150441963615";
+    const CANAL_ENTRAR = "1474383177689731254";
 
-    // cria canal privado
-    const canal = await guild.channels.create({
-      name: `ponto-${message.author.username}`,
-      type: 0,
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-      ]
-    });
+    if (!data[userId]) data[userId] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
 
-    data[userId].canal = canal.id;
-    saveData(data);
+    const sub = args[0]?.toLowerCase();
 
-    await message.channel.send(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-    await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+    // ENTRAR
+    if (sub === "entrar") {
+      if (message.channel.id !== CANAL_ENTRAR)
+        return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+      if (data[userId].ativo) return message.reply("❌ Você já iniciou seu ponto.");
 
-    // contador em tempo real
-    const intervaloTempo = setInterval(() => {
-      if (!data[userId]?.ativo) {
-        clearInterval(intervaloTempo);
-        clearInterval(intervaloLembrete);
-        return;
-      }
+      data[userId].ativo = true;
+      data[userId].entrada = Date.now();
+      data[userId].notificado = false;
+      saveData(data);
 
-      const tempoAtual = Date.now() - data[userId].entrada;
-      const horas = Math.floor(tempoAtual / 3600000);
-      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
-      const segundos = Math.floor((tempoAtual % 60000) / 1000);
+      const canal = await guild.channels.create({
+        name: `ponto-${message.author.username}`,
+        type: 0,
+        parent: categoriaId,
+        permissionOverwrites: [
+          { id: guild.id, deny: ["ViewChannel"] },
+          { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+        ]
+      });
 
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    }, 1000);
+      data[userId].canal = canal.id;
+      saveData(data);
 
-    // lembrete a cada 20 min
-    const intervaloLembrete = setInterval(() => {
-      if (!data[userId]?.ativo) {
-        clearInterval(intervaloLembrete);
-        return;
-      }
-      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
-    }, 20 * 60 * 1000);
+      await message.channel.send(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
+      await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-    return;
-  }
+      // CONTADOR EM TEMPO REAL
+      const intervaloTempo = setInterval(() => {
+        if (!data[userId]?.ativo) return clearInterval(intervaloTempo);
+        const tempoAtual = Date.now() - data[userId].entrada;
+        const horas = Math.floor(tempoAtual / 3600000);
+        const minutos = Math.floor((tempoAtual % 3600000) / 60000);
+        const segundos = Math.floor((tempoAtual % 60000) / 1000);
+        canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+      }, 1000);
 
-  // =============================
-  // SAIR
-  // =============================
-  if (sub === "sair") {
-    if (!data[userId].ativo)
-      return message.reply("❌ Você não iniciou ponto.");
+      // LEMBRETE 20 MIN
+      const intervaloLembrete = setInterval(() => {
+        if (!data[userId]?.ativo) return clearInterval(intervaloLembrete);
+        canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
+      }, 20 * 60 * 1000);
 
-    const tempo = Date.now() - data[userId].entrada;
-    data[userId].total += tempo;
-    data[userId].ativo = false;
-    data[userId].entrada = null;
-    data[userId].notificado = false;
-
-    const canalId = data[userId].canal;
-    data[userId].canal = null;
-    saveData(data);
-
-    if (canalId) {
-      const canal = guild.channels.cache.get(canalId);
-      if (canal) {
-        await canal.send("🔴 Ponto finalizado. Canal será fechado.");
-        setTimeout(() => canal.delete().catch(() => {}), 3000);
-      }
+      return;
     }
-    return;
-  }
 
-  // =============================
-  // STATUS
-  // =============================
-  if (sub === "status") {
-    const info = data[userId];
-    if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
+    // SAIR
+    if (sub === "sair") {
+      if (!data[userId].ativo) return message.reply("❌ Você não iniciou ponto.");
+      const tempo = Date.now() - data[userId].entrada;
+      data[userId].total += tempo;
+      data[userId].ativo = false;
+      data[userId].entrada = null;
+      data[userId].notificado = false;
+      const canalId = data[userId].canal;
+      data[userId].canal = null;
+      saveData(data);
 
-    let total = info.total;
-    if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+      if (canalId) {
+        const canal = guild.channels.cache.get(canalId);
+        if (canal) {
+          await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+          setTimeout(() => canal.delete().catch(() => {}), 3000);
+        }
+      }
+      return;
+    }
 
-    const horas = Math.floor(total / 3600000);
-    const minutos = Math.floor((total % 3600000) / 60000);
-    const segundos = Math.floor((total % 60000) / 1000);
-
-    const member = message.member;
-
-    const cargosMeta = CARGOS; // usa array já definido no utils
-    let cargoAtual = getCargoAtual(member, total);
-
-    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-    return message.reply(
-      `📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`
-    );
-  }
-
-  // =============================
-  // REGISTRO (TOP 10)
-  // =============================
-  if (sub === "registro") {
-    const ranking = Object.entries(data)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 10);
-
-    if (!ranking.length) return message.reply("Nenhum registro encontrado.");
-
-    let texto = "";
-
-    for (const [uid, info] of ranking) {
+    // STATUS
+    if (sub === "status") {
+      const info = data[userId];
+      if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
       let total = info.total;
       if (info.ativo && info.entrada) total += Date.now() - info.entrada;
       const horas = Math.floor(total / 3600000);
       const minutos = Math.floor((total % 3600000) / 60000);
       const segundos = Math.floor((total % 60000) / 1000);
-
-      const member = await message.guild.members.fetch(uid).catch(() => null);
-      let cargoAtual = "Nenhum";
-      if (member) cargoAtual = getCargoAtual(member, total);
-
+      let cargoAtual = getCargoAtual(message.member, total);
       const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-      texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+      return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
     }
 
-    return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+    // REGISTRO
+    if (sub === "registro") {
+      const ranking = Object.entries(data)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 10);
+      if (!ranking.length) return message.reply("Nenhum registro encontrado.");
+      let texto = "";
+      for (const [uid, info] of ranking) {
+        let total = info.total;
+        if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+        const horas = Math.floor(total / 3600000);
+        const minutos = Math.floor((total % 3600000) / 60000);
+        const segundos = Math.floor((total % 60000) / 1000);
+        const member = await message.guild.members.fetch(uid).catch(() => null);
+        const cargoAtual = member ? getCargoAtual(member, total) : "Nenhum";
+        const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+        texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+      }
+      return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+    }
   }
 
   // =============================
   // MUTE / UNMUTE
   // =============================
   if (command === "mutechat") {
-  const user = message.mentions.members.first();
-  const duration = parseDuration(args[1]) || 120000;
-  const motivo = args.slice(2).join(" ") || "Sem motivo";
-  if (!user) return message.reply("Mencione um usuário válido.");
-  const muteRole = await getMuteRole(message.guild);
-  await user.roles.add(muteRole);
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado (Chat)")
-    .setDescription(`${user} foi mutado`)
-    .addFields(
-      { name: "Motivo", value: motivo },
-      { name: "Tempo", value: `${duration / 60000} minutos` }
-    )
-    .setTimestamp();
-  message.channel.send({ embeds: [embed] });
-  sendLog(message.guild, embed);
-  setTimeout(async () => {
-    if (user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-  }, duration);
-}
+    const ALLOWED_MUTE = IDS.STAFF; // cargos permitidos
+    if (!message.member.roles.cache.some(r => ALLOWED_MUTE.includes(r.id))) return message.reply("❌ Sem permissão.");
+    const user = message.mentions.members.first();
+    const duration = parseDuration(args[1]) || 120000;
+    const motivo = args.slice(2).join(" ") || "Sem motivo";
+    if (!user) return message.reply("Mencione um usuário válido.");
+    const muteRole = await getMuteRole(message.guild);
+    await user.roles.add(muteRole);
+    const embed = new EmbedBuilder()
+      .setColor("Red")
+      .setTitle("🔇 Usuário Mutado (Chat)")
+      .setDescription(`${user} foi mutado`)
+      .addFields(
+        { name: "Motivo", value: motivo },
+        { name: "Tempo", value: `${duration / 60000} minutos` }
+      )
+      .setTimestamp();
+    message.channel.send({ embeds: [embed] });
+    sendLog(message.guild, embed);
+    setTimeout(async () => {
+      if (user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
+    }, duration);
+  }
 
-if (command === "unmutechat") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("Mencione um usuário válido.");
-  const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-  if (muteRole) await user.roles.remove(muteRole);
-  message.reply(`${user} foi desmutado.`);
-}
+  if (command === "unmutechat") {
+    const ALLOWED_MUTE = IDS.STAFF;
+    if (!message.member.roles.cache.some(r => ALLOWED_MUTE.includes(r.id))) return message.reply("❌ Sem permissão.");
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
+    const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+    if (muteRole) await user.roles.remove(muteRole);
+    message.reply(`${user} foi desmutado.`);
+  }
 
-if (command === "mutecall") {
-  const user = message.mentions.members.first();
-  const duration = parseDuration(args[1]) || 120000;
-  if (!user) return message.reply("Mencione um usuário válido.");
-  if (!user.voice?.channel) return message.reply("Usuário não está em call.");
-  await user.voice.setMute(true);
-  setTimeout(() => user.voice.setMute(false).catch(() => {}), duration);
-  message.reply(`${user} foi mutado na call.`);
-}
+  if (command === "mutecall") {
+    const ALLOWED_MUTE = IDS.STAFF;
+    if (!message.member.roles.cache.some(r => ALLOWED_MUTE.includes(r.id))) return message.reply("❌ Sem permissão.");
+    const user = message.mentions.members.first();
+    const duration = parseDuration(args[1]) || 120000;
+    if (!user) return message.reply("Mencione um usuário válido.");
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+    await user.voice.setMute(true);
+    setTimeout(() => user.voice.setMute(false).catch(() => {}), duration);
+    message.reply(`${user} foi mutado na call.`);
+  }
 
-if (command === "unmutecall") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("Mencione um usuário válido.");
-  if (!user.voice?.channel) return message.reply("Usuário não está em call.");
-  await user.voice.setMute(false);
-  message.reply(`${user} foi desmutado na call.`);
-}
-
+  if (command === "unmutecall") {
+    const ALLOWED_MUTE = IDS.STAFF;
+    if (!message.member.roles.cache.some(r => ALLOWED_MUTE.includes(r.id))) return message.reply("❌ Sem permissão.");
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
+    if (!user.voice?.channel) return message.reply("Usuário não está em call.");
+    await user.voice.setMute(false);
+    message.reply(`${user} foi desmutado na call.`);
+  }
 
   // =============================
   // REC
   // =============================
   if (command === "rec") {
-    const user = message.mentions.members.first();
-    if (!user) return message.reply("Mencione um usuário válido.");
-
     const ALLOWED_REC = [
       "1468017578747105390",
       "1468069638935150635",
       "1468026315285205094",
       "1468066422490923081"
     ];
-
-    if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
-      return message.reply("❌ Você não tem permissão para usar este comando.");
-    }
+    if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
+      return message.reply("❌ Sem permissão.");
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("Mencione um usuário válido.");
 
     const filteredArgs = args.filter(arg => !arg.includes(user.id));
     const subCommand = filteredArgs[0]?.toLowerCase();
     const secondArg = filteredArgs[1]?.toLowerCase();
 
     try {
-      // REC ADD MENINA
       if (subCommand === "add" && secondArg === "menina") {
         await user.roles.remove("1468024885354959142");
         await user.roles.add([
@@ -453,8 +405,6 @@ if (command === "unmutecall") {
         ]);
         return message.reply(`Cargos "menina" aplicados em ${user}`);
       }
-
-      // REC ADD NORMAL
       if (subCommand === "add") {
         await user.roles.remove("1468024885354959142");
         await user.roles.add([
@@ -463,14 +413,12 @@ if (command === "unmutecall") {
         ]);
         return message.reply(`Cargos aplicados em ${user}`);
       }
-
       return message.reply("Use: thl!rec <@usuário> add ou add menina");
-    } catch (error) {
-      console.error(error);
-    return message.reply("Erro ao executar comando.");
+    } catch (err) {
+      console.error(err);
+      return message.reply("Erro ao executar comando.");
     }
   }
-}
 });  
 
 // =============================
