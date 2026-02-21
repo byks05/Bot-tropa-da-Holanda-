@@ -383,136 +383,81 @@ if (command === "ponto") {
 
 }
   
- // =============================
-// MUTE / UNMUTE CHAT
 // =============================
-if (command === "mutechat") {
+// CONFIGURAÇÕES DE PERMISSÕES
+// =============================
+const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem usar addcoins/addtempo
+const ALLOWED_REC = [
+  "1468017578747105390",
+  "1468069638935150635",
+  "1468026315285205094",
+  "1468066422490923081"
+];
+
+// =============================
+// COMANDO ADDCOINS / ADDTEMPO
+// =============================
+if (command === "addcoins") {
+  if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
+    return message.reply("❌ Você não tem permissão.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
+  const coins = parseInt(args[1]);
+  if (!user || isNaN(coins)) return message.reply("❌ Use: addcoins <@usuário> <quantidade>");
 
-  const duration = parseDuration(args[1]) || 120000; // tempo em ms, padrão 2 minutos
-  const motivo = args.slice(2).join(" ") || "Sem motivo";
+  // Supondo que você tenha função saveData / getData
+  const data = getData();
+  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
+  data[user.id].coins += coins;
+  saveData(data);
 
-  const muteRole = await getMuteRole(message.guild); // função que retorna a role "Muted"
-  await user.roles.add(muteRole);
-
-  const embed = new EmbedBuilder()
-    .setColor("Red")
-    .setTitle("🔇 Usuário Mutado (Chat)")
-    .setDescription(`${user} foi mutado`)
-    .addFields(
-      { name: "Motivo", value: motivo },
-      { name: "Tempo", value: `${duration / 60000} minutos` }
-    )
-    .setTimestamp();
-
-  await message.channel.send({ embeds: [embed] });
-  sendLog(message.guild, embed); // função que envia logs, se tiver
-
-  setTimeout(async () => {
-    if (user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-  }, duration);
+  message.reply(`✅ Adicionados ${coins} coins para ${user}`);
 }
 
-if (command === "unmutechat") {
+if (command === "addtempo") {
+  if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
+    return message.reply("❌ Você não tem permissão.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-
-  const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-  if (muteRole && user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-
-  message.reply(`${user} foi desmutado.`);
-}
-
-// =============================
-// MUTE / UNMUTE CALL
-// =============================
-if (command === "mutecall") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
-
-  const duration = parseDuration(args[1]) || 120000;
-
-  await user.voice.setMute(true);
-  message.reply(`${user} foi mutado na call por ${duration / 60000} minutos.`);
-
-  setTimeout(() => user.voice.setMute(false).catch(() => {}), duration);
-}
-
-if (command === "unmutecall") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
-
-  await user.voice.setMute(false);
-  message.reply(`${user} foi desmutado na call.`);
-    }  
-    
-  // =============================
-// COMANDO REC
-// =============================
-if (command === "rec") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-
-  const ALLOWED_REC = [
-    "1468017578747105390",
-    "1468069638935150635",
-    "1468026315285205094",
-    "1468066422490923081"
-  ];
-
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
-  }
-
-  // Filtra a menção do usuário
-  const filteredArgs = args.filter(arg => !arg.includes(user.id));
-  const subCommand = filteredArgs[0]?.toLowerCase();
-  const secondArg = filteredArgs[1]?.toLowerCase();
-
-  try {
-    // REC ADD MENINA
-    if (subCommand === "add" && secondArg === "menina") {
-      await user.roles.remove("1468024885354959142");
-      await user.roles.add([
-        "1472223890821611714",
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
-      return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
-    }
-
-    // REC ADD NORMAL
-    if (subCommand === "add") {
-      await user.roles.remove("1468024885354959142");
-      await user.roles.add([
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
-      return message.reply(`✅ Cargos aplicados em ${user}`);
-    }
-
-    return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
-
-  } catch (error) {
-    console.error("Erro ao executar rec:", error);
-    return message.reply("❌ Ocorreu um erro ao executar este comando.");
-  }
-}
-
-  // =============================
-// MERCADO / COMPRA DE ITENS
-// =============================
-if (command === "loja") {
-  const user = message.member;
-  if (!user) return message.reply("❌ Usuário inválido.");
+  const time = parseInt(args[1]); // valor em minutos
+  if (!user || isNaN(time)) return message.reply("❌ Use: addtempo <@usuário> <quantidade> (minutos)");
 
   const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0 };
+  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
+  data[user.id].tempo += time;
+  saveData(data);
 
-  // Produtos do mercado (do mais caro para o mais barato)
+  message.reply(`✅ Adicionados ${time} minutos para ${user}`);
+}
+
+// =============================
+// CONVERSÃO DE TEMPO EM COINS
+// =============================
+if (command === "converter") {
+  const user = message.mentions.members.first() || message.member;
+  const time = parseInt(args[0]); // minutos ou horas
+  const unit = args[1]?.toLowerCase(); // "h" ou "m"
+
+  if (!time || !["h","m"].includes(unit)) return message.reply("❌ Use: converter <quantidade> <h/m>");
+
+  const minutos = unit === "h" ? time * 60 : time;
+  const coins = Math.floor(minutos * (100 / 60)); // 1h = 100 coins, 1min = 100/60 ~1.666 coins
+
+  const data = getData();
+  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
+
+  if (data[user.id].tempo < minutos) return message.reply("❌ Você não tem tempo suficiente.");
+  data[user.id].tempo -= minutos;
+  data[user.id].coins += coins;
+  saveData(data);
+
+  message.reply(`✅ Convertido ${minutos} minutos em ${coins} coins para ${user}`);
+}
+
+// =============================
+// COMANDO DE LOJA (ticket manual)
+// =============================
+if (command === "loja") {
   const produtos = [
     { nome: "Vip", preco: 6000 },
     { nome: "Robux", preco: 4000 },
@@ -521,138 +466,91 @@ if (command === "loja") {
     { nome: "Roupa personalizada", preco: 1400 },
   ];
 
-  // Cria embed com os produtos e preços
   const embed = new EmbedBuilder()
-    .setTitle("🛒 Loja - Escolha seu produto")
-    .setDescription(
-      produtos.map(p => `**${p.nome}** - ${p.preco} coins`).join("\n")
-    )
-    .setColor("Blue")
-    .setFooter({ text: "Clique no emoji correspondente para comprar" });
+    .setTitle("🛒 Loja")
+    .setDescription(produtos.map(p => `${p.nome} - ${p.preco} coins`).join("\n"))
+    .setColor("Green");
 
-  const msg = await message.channel.send({ embeds: [embed] });
+  await message.reply({ embeds: [embed] });
 
-  // Reações para cada produto
-  const emojis = ["💎", "🎁", "⚡", "🪓", "👕"]; // corresponde a ordem dos produtos
-  for (const e of emojis) await msg.react(e);
-
-  const filter = (reaction, u) =>
-    emojis.includes(reaction.emoji.name) && u.id === user.id;
-
-  const collector = msg.createReactionCollector({ filter, max: 1, time: 60000 });
-
-  collector.on("collect", async (reaction) => {
-    const index = emojis.indexOf(reaction.emoji.name);
-    const produto = produtos[index];
-
-    if (data[user.id].coins < produto.preco) {
-      return message.reply(`❌ Você não tem coins suficientes para comprar **${produto.nome}**.`);
-    }
-
-    // Deduz coins
-    data[user.id].coins -= produto.preco;
-    saveData(data);
-
-    // Cria ticket (canal privado) para entrega manual
-    const guild = message.guild;
-    const categoriaId = "ID_DA_CATEGORIA_DE_TICKETS"; // ajuste para sua categoria
-    const canal = await guild.channels.create({
-      name: `ticket-${user.user.username}`,
-      type: 0, // canal de texto
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: user.id, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-      ]
-    });
-
-    canal.send(
-      `✅ Você comprou **${produto.nome}** por ${produto.preco} coins!\nUm ADM irá entregar manualmente.`
-    );
-
-    message.reply(`✅ Compra realizada! Confira seu ticket: ${canal}`);
-  });
-
-  collector.on("end", (_, reason) => {
-    if (reason === "time") message.reply("⏰ Tempo para escolher o produto expirou.");
-  });
+  // Reação ou botão pode ser usado para selecionar produto, aqui abre canal manualmente
+  message.reply("❗ Para comprar, mencione o produto e será aberto um canal para entrega manual.");
 }
 
-  // =============================
-// CONVERSÃO DE HORAS/MINUTOS EM COINS
 // =============================
-if (command === "converter") {
-  const user = message.member;
-  if (!user) return message.reply("❌ Usuário inválido.");
+// MUTE / UNMUTE CHAT
+// =============================
+if (command === "mutechat") {
+  const user = message.mentions.members.first();
+  const duration = parseDuration(args[1]) || 120000;
+  const motivo = args.slice(2).join(" ") || "Sem motivo";
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  const quantidade = parseFloat(args[0]); // número de horas ou minutos
-  const tipo = args[1]?.toLowerCase(); // 'h' para horas, 'm' para minutos
+  const muteRole = await getMuteRole(message.guild);
+  await user.roles.add(muteRole);
+  message.reply(`${user} foi mutado no chat por ${duration/60000} minutos.`);
 
-  if (!quantidade || !tipo || !["h", "m"].includes(tipo)) {
-    return message.reply("❌ Use: thl!converter <quantidade> <h/m>");
-  }
-
-  let coins = 0;
-
-  if (tipo === "h") coins = Math.round(quantidade * 100); // 1h = 100 coins
-  if (tipo === "m") coins = Math.round(quantidade * (100 / 60)); // 1min ≈ 1,666 coins
-
-  // Atualiza banco de dados
-  const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0 };
-  data[user.id].coins = (data[user.id].coins || 0) + coins;
-  saveData(data);
-
-  message.reply(`✅ Você converteu ${quantidade}${tipo.toUpperCase()} em ${coins} coins!`);
+  setTimeout(async () => { if(user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole); }, duration);
 }
-  // =============================
-// COMANDOS ADMINISTRATIVOS
-// =============================
-if (command === "addcoins" || command === "addtempo") {
+
+if (command === "unmutechat") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  // IDs de admins que podem usar esses comandos
-  const allowedIds = ["1468017578747105390","1468069638935150635"]; // coloque seu ID ou IDs de admins
-  if (!allowedIds.includes(message.author.id)) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
-  }
-
-  const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
-
-  // =============================
-  // ADDCOINS
-  // =============================
-  if (command === "addcoins") {
-    const quantidade = parseInt(args[1]);
-    if (!quantidade || quantidade <= 0) return message.reply("❌ Digite uma quantidade válida de coins.");
-
-    data[user.id].coins = (data[user.id].coins || 0) + quantidade;
-    saveData(data);
-    return message.reply(`✅ ${quantidade} coins adicionadas para ${user}!`);
-  }
-
-  // =============================
-  // ADDTEMPO
-  // =============================
-  if (command === "addtempo") {
-    const valor = parseInt(args[1]);
-    const unidade = args[2]?.toLowerCase(); // 'h' ou 'm'
-
-    if (!valor || valor <= 0 || !["h","m"].includes(unidade)) {
-      return message.reply("❌ Digite o valor e a unidade corretamente. Ex: thl!addtempo @usuário 2 h ou 30 m");
-    }
-
-    // Converter tudo para minutos
-    let minutosParaAdicionar = unidade === "h" ? valor * 60 : valor;
-    data[user.id].tempo = (data[user.id].tempo || 0) + minutosParaAdicionar;
-    saveData(data);
-
-    return message.reply(`✅ Adicionado ${valor}${unidade} para ${user}! Total de minutos agora: ${data[user.id].tempo}`);
-  }
+  const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+  if(muteRole && user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
+  message.reply(`${user} foi desmutado no chat.`);
 }
-  
+
+// =============================
+// MUTE / UNMUTE CALL
+// =============================
+if (command === "mutecall") {
+  const user = message.mentions.members.first();
+  const duration = parseDuration(args[1]) || 120000;
+  if(!user) return message.reply("❌ Mencione um usuário válido.");
+  if(!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+
+  await user.voice.setMute(true);
+  message.reply(`${user} foi mutado na call por ${duration/60000} minutos.`);
+
+  setTimeout(() => user.voice.setMute(false).catch(()=>{}), duration);
+}
+
+if (command === "unmutecall") {
+  const user = message.mentions.members.first();
+  if(!user) return message.reply("❌ Mencione um usuário válido.");
+  if(!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+
+  await user.voice.setMute(false);
+  message.reply(`${user} foi desmutado na call.`);
+}
+
+// =============================
+// COMANDO REC
+// =============================
+if (command === "rec") {
+  const user = message.mentions.members.first();
+  if(!user) return message.reply("❌ Mencione um usuário válido.");
+  if(!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) return message.reply("❌ Sem permissão.");
+
+  const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
+  const secondArg = args.find((a,i) => !a.includes(user.id) && i>0)?.toLowerCase();
+
+  try {
+    if(subCommand === "add" && secondArg === "menina") {
+      await user.roles.remove("1468024885354959142");
+      await user.roles.add(["1472223890821611714","1468283328510558208","1468026315285205094"]);
+      return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
+    }
+    if(subCommand === "add") {
+      await user.roles.remove("1468024885354959142");
+      await user.roles.add(["1468283328510558208","1468026315285205094"]);
+      return message.reply(`✅ Cargos aplicados em ${user}`);
+    }
+    return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
+  } catch (err) { console.error(err); return message.reply("❌ Erro ao executar comando."); }
+}
 });  
 
 // =============================
