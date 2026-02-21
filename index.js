@@ -505,7 +505,7 @@ Novo saldo de coins: ${info.coins} 💰`);
 }
 
 // =============================
-// COMANDO LOJA
+// COMANDO PONTO LOJA
 // =============================
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
 
@@ -534,66 +534,70 @@ if (command === "ponto" && args[0]?.toLowerCase() === "loja") {
 }
 
 // =============================
-// INTERAÇÃO DOS BOTÕES
+// INTERAÇÃO DOS BOTÕES DA LOJA
 // =============================
 client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
-  const info = data[userId];
-  if (!info) info = { coins: 0 }; // Caso o usuário não tenha registro
+  let info = data[userId] || { coins: 0 }; // inicializa caso não exista
 
   const produtos = {
     buy_robux: { nome: "Robux", preco: 4000 },
     buy_nitro: { nome: "Nitro", preco: 2500 },
     buy_ripa: { nome: "Ripa", preco: 1700 },
     buy_vip: { nome: "Vip", preco: 6000 },
-    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 }
+    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 },
+    fechar_ticket: { nome: "Fechar Ticket" }
   };
 
   const produto = produtos[interaction.customId];
   if (!produto) return;
 
-  // Apaga a mensagem do painel de compras
+  const guild = interaction.guild;
+  const categoriaId = "1474885663425036470"; // categoria de tickets
+
+  // BOTÃO FECHAR TICKET
+  if (interaction.customId === "fechar_ticket") {
+    if (!interaction.channel.name.startsWith("ticket-"))
+      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+    await interaction.channel.delete().catch(() => {});
+    return;
+  }
+
+  // APAGA O PAINEL DE COMPRAS
   await interaction.message.delete().catch(() => {});
 
-  // Checa saldo
+  // CHECA SALDO
   if ((info.coins || 0) < produto.preco) {
     return interaction.reply({ content: `❌ Saldo insuficiente para comprar **${produto.nome}**.`, ephemeral: true });
   }
 
-  // Subtrai coins
+  // SUBTRAI COINS
   info.coins -= produto.preco;
+  data[userId] = info;
   saveData(data);
 
-  // Evita ticket duplicado
-  const guild = interaction.guild;
-  const categoriaId = "1474885663425036470"; // Categoria de tickets
-  const existingChannel = guild.channels.cache.find(c => 
+  // VERIFICA TICKET EXISTENTE
+  const existingChannel = guild.channels.cache.find(c =>
     c.name === `ticket-${interaction.user.username}` && c.parentId === categoriaId
   );
   if (existingChannel) {
     return interaction.reply({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
   }
 
-  // Cria canal de ticket
+  // CRIA CANAL DE TICKET
   const channel = await guild.channels.create({
     name: `ticket-${interaction.user.username}`,
     type: ChannelType.GuildText,
     parent: categoriaId,
     permissionOverwrites: [
-      {
-        id: guild.id,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: interaction.user.id,
-        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
-      }
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
     ]
   });
 
-  // Embed do ticket
+  // EMBED DO TICKET
   const ticketEmbed = new EmbedBuilder()
     .setTitle(`🛒 Ticket de Compra - ${produto.nome}`)
     .setDescription(
@@ -603,7 +607,7 @@ client.on("interactionCreate", async interaction => {
     .setColor("Green")
     .setTimestamp();
 
-  // Botão de fechar ticket
+  // BOTÃO FECHAR TICKET
   const fecharButton = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("fechar_ticket")
@@ -614,21 +618,7 @@ client.on("interactionCreate", async interaction => {
   await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
 
   interaction.reply({ content: `✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`, ephemeral: true });
-});
-
-// =============================
-// FECHAR TICKET
-// =============================
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== "fechar_ticket") return;
-
-  if (!interaction.channel.name.startsWith("ticket-"))
-    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
-
-  await interaction.channel.delete().catch(() => {});
 });  
-  
 // =============================
 // MUTE / UNMUTE CHAT
 // =============================
