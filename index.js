@@ -460,16 +460,17 @@ if (command === "rec") {
     "1468017578747105390",
     "1468069638935150635",
     "1468026315285205094",
-    "1468066422490923081" // cargo que só pode usar rec
+    "1468066422490923081"
   ];
 
   if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
     return message.reply("❌ Você não tem permissão para usar este comando.");
   }
 
-  // Pega subcomando ignorando a menção
-  const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
-  const secondArg = args.find((a, i) => !a.includes(user.id) && i > 0)?.toLowerCase();
+  // Filtra a menção do usuário
+  const filteredArgs = args.filter(arg => !arg.includes(user.id));
+  const subCommand = filteredArgs[0]?.toLowerCase();
+  const secondArg = filteredArgs[1]?.toLowerCase();
 
   try {
     // REC ADD MENINA
