@@ -10,6 +10,14 @@ const {
 require("dotenv").config();
 const fs = require("fs");
 
+// 🔥 NOVO - PostgreSQL
+const { Pool } = require("pg");
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -561,6 +569,22 @@ client.on("channelCreate", async (channel) => {
   if (channel.parentId === IDS.TICKET_CATEGORY) {
     channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
   }
+});
+
+client.once("ready", async () => {
+
+  console.log(`Bot online como ${client.user.tag}`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pontos (
+      user_id TEXT PRIMARY KEY,
+      total BIGINT DEFAULT 0,
+      ativo BOOLEAN DEFAULT false,
+      entrada BIGINT,
+      canal TEXT
+    );
+  `);
+
 });
 
 client.login(process.env.TOKEN);
