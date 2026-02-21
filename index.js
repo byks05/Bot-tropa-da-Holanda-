@@ -541,7 +541,7 @@ client.on("interactionCreate", async interaction => {
 
   const userId = interaction.user.id;
   const info = data[userId];
-  if (!info || !info.coins) return interaction.reply({ content: "❌ Você não possui coins.", ephemeral: true });
+  if (!info) return interaction.reply({ content: "❌ Nenhum registro encontrado.", ephemeral: true });
 
   const produtos = {
     buy_robux: { nome: "Robux", preco: 4000 },
@@ -554,20 +554,26 @@ client.on("interactionCreate", async interaction => {
   const produto = produtos[interaction.customId];
   if (!produto) return;
 
-  if (info.coins < produto.preco)
+  // Checa saldo antes de criar ticket
+  if ((info.coins || 0) < produto.preco)
     return interaction.reply({ content: `❌ Você não tem coins suficientes para comprar **${produto.nome}**.`, ephemeral: true });
 
   // Subtrai coins
   info.coins -= produto.preco;
   saveData(data);
 
-  // Cria canal de ticket
+  // Evita criar canal duplicado
   const guild = interaction.guild;
   const categoriaId = "1474366472326222013"; // Categoria de tickets
-  const ticketName = `ticket-${interaction.user.username}`;
+  const existingChannel = guild.channels.cache.find(c => 
+    c.name === `ticket-${interaction.user.username}` && c.parentId === categoriaId
+  );
+  if (existingChannel)
+    return interaction.reply({ content: `❌ Você já tem um ticket aberto: ${existingChannel}`, ephemeral: true });
 
+  // Cria canal de ticket
   const channel = await guild.channels.create({
-    name: ticketName,
+    name: `ticket-${interaction.user.username}`,
     type: ChannelType.GuildText,
     parent: categoriaId,
     permissionOverwrites: [
@@ -644,7 +650,95 @@ if (command === "unmutecall") {
   await user.voice.setMute(false);
   message.reply(`${user} foi desmutado na call.`);
 }
+  
+// =============================
+// LOJA DE VENDAS MANUAIS
+// =============================
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
 
+if (command === "comprar") { // <-- comando atualizado
+  const embed = new EmbedBuilder()
+    .setTitle("🛒 Loja Oficial de Vendas")
+    .setDescription(
+      "**# Valores** <a:br_crown:1467657556259504344>\n" +
+      "- Compre apenas com vendedor oficial <@1209478510847197216> ou atendentes.\n\n" +
+      "<a:moneycn:1467937856965185710> **Nitro 1 mês** = 3 R$\n" +
+      "<a:moneycn:1467937856965185710> **Nitro 3 meses** = 6 R$\n" +
+      "<a:moneycn:1467937856965185710> **Contas virgem +30 dias** = 5 R$\n" +
+      "<a:moneycn:1467937856965185710> **Ativação Nitro** = 1,50 R$\n" +
+      "<a:moneycn:1467937856965185710> **Spotify Premium** = 5 R$\n" +
+      "<a:moneycn:1467937856965185710> **Molduras com ícone personalizado** = 3 R$\n" +
+      "<a:moneycn:1467937856965185710> **YouTube Premium** = 6 R$"
+    )
+    .setColor("Gold");
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("buy_nitro1").setLabel("Nitro 1 mês").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_nitro3").setLabel("Nitro 3 meses").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_conta30").setLabel("Contas virgem +30d").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_ativacao").setLabel("Ativação Nitro").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_spotify").setLabel("Spotify Premium").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_moldura").setLabel("Molduras Personalizadas").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_youtube").setLabel("YouTube Premium").setStyle(ButtonStyle.Primary)
+  );
+
+  message.reply({ embeds: [embed], components: [row] });
+}
+
+// =============================
+// INTERAÇÃO DOS BOTÕES - TICKETS
+// =============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isButton()) return;
+
+  const produtos = {
+    buy_nitro1: "Nitro 1 mês",
+    buy_nitro3: "Nitro 3 meses",
+    buy_conta30: "Contas virgem +30 dias",
+    buy_ativacao: "Ativação Nitro",
+    buy_spotify: "Spotify Premium",
+    buy_moldura: "Molduras com ícone personalizado",
+    buy_youtube: "YouTube Premium"
+  };
+
+  const produto = produtos[interaction.customId];
+  if (!produto) return;
+
+  // Cria canal de ticket
+  const guild = interaction.guild;
+  const categoriaId = "1474885663425036470"; // Categoria onde serão criados os tickets
+  const ticketName = `ticket-${interaction.user.username}-${produto.replace(/\s+/g, "-")}`;
+
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      {
+        id: guild.id,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      }
+    ]
+  });
+
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${produto}`)
+    .setDescription(
+      `${interaction.user} abriu um ticket para comprar **${produto}**.\n\n` +
+      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
+    )
+    .setColor("Green")
+    .setTimestamp();
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed] });
+
+  interaction.reply({ content: `✅ Ticket criado com sucesso para **${produto}**! Verifique o canal ${channel} para finalizar sua compra.`, ephemeral: true });
+});
+  
 // =============================
 // COMANDO REC
 // =============================
