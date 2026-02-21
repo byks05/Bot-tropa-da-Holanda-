@@ -548,11 +548,21 @@ client.on("interactionCreate", async interaction => {
     buy_nitro: { nome: "Nitro", preco: 2500 },
     buy_ripa: { nome: "Ripa", preco: 1700 },
     buy_vip: { nome: "Vip", preco: 6000 },
-    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 }
+    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 },
+    fechar_ticket: { nome: "Fechar Ticket" }
   };
 
   const produto = produtos[interaction.customId];
   if (!produto) return;
+
+  // Botão de fechar ticket
+  if (interaction.customId === "fechar_ticket") {
+    if (!interaction.channel.name.startsWith("ticket-"))
+      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+    await interaction.channel.delete().catch(() => {});
+    return;
+  }
 
   // Checa saldo antes de criar ticket
   if ((info.coins || 0) < produto.preco)
@@ -597,7 +607,14 @@ client.on("interactionCreate", async interaction => {
     .setColor("Green")
     .setTimestamp();
 
-  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed] });
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
 
   interaction.reply({ content: `✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`, ephemeral: true });
 });
