@@ -309,59 +309,63 @@ if (command === "ponto") {
   }
 
   // =============================
-  // STATUS
-  // =============================
-  if (sub === "status") {
+// STATUS
+// =============================
+if (sub === "status") {
+  const info = data[userId];
+  if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
 
-    const info = data[userId];
-    if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
+  // calcula total atualizado considerando tempo ativo
+  let total = info.total || 0;
+  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
 
-    let total = info.total;
-    if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+  const horas = Math.floor(total / 3600000);
+  const minutos = Math.floor((total % 3600000) / 60000);
+  const segundos = Math.floor((total % 60000) / 1000);
+
+  const member = message.member;
+
+  // pega cargo atual baseado em roles
+  const encontrado = CARGOS.find(c => member.roles.cache.has(c.id));
+  const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+  return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
+}
+
+// =============================
+// REGISTRO (Ranking Top 10)
+// =============================
+if (sub === "registro") {
+  const ranking = Object.entries(data)
+    .map(([uid, info]) => {
+      let total = info.total || 0;
+      if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+      return { uid, total, ativo: info.ativo };
+    })
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 10);
+
+  if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
+
+  let texto = "";
+  for (const item of ranking) {
+    const { uid, total, ativo } = item;
 
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
 
-    const member = message.member;
-
-    // pega cargo atual baseado em roles
-    const encontrado = CARGOS.find(c => member.roles.cache.has(c.id));
+    const member = await guild.members.fetch(uid).catch(() => null);
+    const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
     const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+    const status = ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-    return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
+    texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
   }
 
-  // =============================
-  // REGISTRO (Ranking Top 10)
-  // =============================
-  if (sub === "registro") {
-
-    const ranking = Object.entries(data)
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 10);
-
-    if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
-
-    let texto = "";
-    for (const [uid, info] of ranking) {
-      let total = info.total;
-      if (info.ativo && info.entrada) total += Date.now() - info.entrada;
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
-
-      const member = await guild.members.fetch(uid).catch(() => null);
-      const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
-      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-      const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-      texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
-    }
-
-    return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
-  }
+  return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+}
 
   // =============================
   // RESETAR HORAS DE TODOS
@@ -414,28 +418,32 @@ if (command === "addcoins") {
 }
 
 if (command === "addtempo") {
-  if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
-    return message.reply("❌ Você não tem permissão.");
-
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
+  if (!args[1]) return message.reply("❌ Informe o tempo (ex: 3h ou 45m).");
 
-  const amountArg = args[1]; // ex: "3h" ou "120m"
-  const match = amountArg.match(/(\d+)(h|m)?/i);
-  if (!match) return message.reply("❌ Use: addtempo <@usuário> <quantidade>[h/m]");
+  // Inicializa se não existir
+  if (!pontos[user.id]) {
+    pontos[user.id] = { tempo: 0, coins: 0, entrada: null };
+  }
 
-  let amount = parseInt(match[1]);
-  const unit = match[2]?.toLowerCase() || "m"; // padrão minutos
+  const tempoArg = args[1].toLowerCase();
+  let minutos = 0;
 
-  if (unit === "h") amount *= 60; // converter para minutos
+  if (tempoArg.endsWith("h")) {
+    minutos = parseInt(tempoArg.replace("h","")) * 60;
+  } else if (tempoArg.endsWith("m")) {
+    minutos = parseInt(tempoArg.replace("m",""));
+  } else {
+    return message.reply("❌ Formato inválido. Use 1h ou 30m.");
+  }
 
-  const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
-  data[user.id].tempo += amount;
-  saveData(data);
+  if (isNaN(minutos)) return message.reply("❌ Tempo inválido.");
 
-  message.reply(`✅ Adicionados ${amount} minutos para ${user}`);
-}
+  pontos[user.id].tempo += minutos;
+
+  return message.reply(`✅ Adicionados ${minutos} minutos a ${user}. Total acumulado: ${Math.floor(pontos[user.id].tempo/60)}h ${pontos[user.id].tempo%60}m`);
+}  
   
 // =============================
 // CONVERSÃO DE TEMPO EM COINS
