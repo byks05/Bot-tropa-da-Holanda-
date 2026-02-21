@@ -390,7 +390,6 @@ const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem
 const ALLOWED_REC = [
   "1468017578747105390",
   "1468069638935150635",
-  "1468026315285205094",
   "1468066422490923081"
 ];
 
@@ -419,51 +418,61 @@ if (command === "addtempo") {
     return message.reply("❌ Você não tem permissão.");
 
   const user = message.mentions.members.first();
-  const time = parseInt(args[1]); // valor em minutos
-  if (!user || isNaN(time)) return message.reply("❌ Use: addtempo <@usuário> <quantidade> (minutos)");
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  const amountArg = args[1]; // ex: "3h" ou "120m"
+  const match = amountArg.match(/(\d+)(h|m)?/i);
+  if (!match) return message.reply("❌ Use: addtempo <@usuário> <quantidade>[h/m]");
+
+  let amount = parseInt(match[1]);
+  const unit = match[2]?.toLowerCase() || "m"; // padrão minutos
+
+  if (unit === "h") amount *= 60; // converter para minutos
 
   const data = getData();
   if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
-  data[user.id].tempo += time;
+  data[user.id].tempo += amount;
   saveData(data);
 
-  message.reply(`✅ Adicionados ${time} minutos para ${user}`);
+  message.reply(`✅ Adicionados ${amount} minutos para ${user}`);
 }
-
+  
 // =============================
 // CONVERSÃO DE TEMPO EM COINS
 // =============================
 if (command === "converter") {
-  const user = message.mentions.members.first() || message.member;
-  const time = parseInt(args[0]); // minutos ou horas
-  const unit = args[1]?.toLowerCase(); // "h" ou "m"
+  const userId = message.author.id;
+  if (!pontos[userId] || pontos[userId].tempo === 0) return message.reply("❌ Você não tem tempo acumulado.");
 
-  if (!time || !["h","m"].includes(unit)) return message.reply("❌ Use: converter <quantidade> <h/m>");
+  const arg = args[0]; // ex: "1h", "30m"
+  const match = arg.match(/(\d+)(h|m)?/i);
+  if (!match) return message.reply("❌ Use: converter <quantidade>[h/m]");
 
-  const minutos = unit === "h" ? time * 60 : time;
-  const coins = Math.floor(minutos * (100 / 60)); // 1h = 100 coins, 1min = 100/60 ~1.666 coins
+  let amount = parseInt(match[1]);
+  const unit = match[2]?.toLowerCase() || "m";
+  if (unit === "h") amount *= 60;
 
-  const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
+  if (amount > pontos[userId].tempo) return message.reply("❌ Você não tem esse tanto de tempo.");
 
-  if (data[user.id].tempo < minutos) return message.reply("❌ Você não tem tempo suficiente.");
-  data[user.id].tempo -= minutos;
-  data[user.id].coins += coins;
-  saveData(data);
+  const coins = amount * 100 / 60; // 1h = 100 coins => 1min ≈ 1.6667 coins
+  pontos[userId].tempo -= amount;
+  pontos[userId].coins += Math.floor(coins);
 
-  message.reply(`✅ Convertido ${minutos} minutos em ${coins} coins para ${user}`);
+  message.reply(`✅ Convertido ${amount} minutos em ${Math.floor(coins)} coins!`);
 }
-
+  
 // =============================
 // COMANDO DE LOJA (ticket manual)
 // =============================
 if (command === "loja") {
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+
   const produtos = [
-    { nome: "Vip", preco: 6000 },
-    { nome: "Robux", preco: 4000 },
-    { nome: "Nitro", preco: 2500 },
-    { nome: "Ripa", preco: 1700 },
-    { nome: "Roupa personalizada", preco: 1400 },
+    { nome: "Vip", preco: 6000, id: "vip" },
+    { nome: "Robux", preco: 4000, id: "robux" },
+    { nome: "Nitro", preco: 2500, id: "nitro" },
+    { nome: "Ripa", preco: 1700, id: "ripa" },
+    { nome: "Roupa personalizada", preco: 1400, id: "roupa" }
   ];
 
   const embed = new EmbedBuilder()
@@ -471,12 +480,50 @@ if (command === "loja") {
     .setDescription(produtos.map(p => `${p.nome} - ${p.preco} coins`).join("\n"))
     .setColor("Green");
 
-  await message.reply({ embeds: [embed] });
+  const row = new ActionRowBuilder();
+  produtos.forEach(p => {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`buy_${p.id}`)
+        .setLabel(`${p.nome}`)
+        .setStyle(ButtonStyle.Primary)
+    );
+  });
 
-  // Reação ou botão pode ser usado para selecionar produto, aqui abre canal manualmente
-  message.reply("❗ Para comprar, mencione o produto e será aberto um canal para entrega manual.");
+  const msg = await message.reply({ embeds: [embed], components: [row] });
+
+  const filter = i => i.user.id === message.author.id;
+  const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
+
+  collector.on("collect", async i => {
+    const productId = i.customId.replace("buy_", "");
+    const produto = produtos.find(p => p.id === productId);
+
+    const data = getData();
+    if (!data[message.author.id]) data[message.author.id] = { coins: 0, tempo: 0 };
+
+    if (data[message.author.id].coins < produto.preco)
+      return i.reply({ content: "❌ Você não tem coins suficientes!", ephemeral: true });
+
+    data[message.author.id].coins -= produto.preco;
+    saveData(data);
+
+    // Criar canal/ticket
+    const ticketChannel = await message.guild.channels.create({
+      name: `ticket-${message.author.username}`,
+      type: 0, // GUILD_TEXT
+      permissionOverwrites: [
+        { id: message.guild.id, deny: ["ViewChannel"] },
+        { id: message.author.id, allow: ["ViewChannel", "SendMessages"] },
+        // adicione IDs de admins que vão responder
+      ]
+    });
+
+    ticketChannel.send(`🛒 ${message.author} comprou **${produto.nome}**. Admins, finalize a entrega manual.`);
+    i.reply({ content: `✅ Compra registrada! Canal criado: ${ticketChannel}`, ephemeral: true });
+  });
 }
-
+  
 // =============================
 // MUTE / UNMUTE CHAT
 // =============================
