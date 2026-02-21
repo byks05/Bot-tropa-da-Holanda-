@@ -383,15 +383,7 @@ if (command === "ponto") {
 
 }
   
-  client.on("messageCreate", async (message) => {
-  if (!message.guild || message.author.bot) return;
-
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const command = args.shift()?.toLowerCase();
-
-  // Função auxiliar para pegar membro mencionado
-  const getUser = () => message.mentions.members.first();
-
+ 
   // =============================
   // MUTE / UNMUTE CHAT
   // =============================
