@@ -308,14 +308,20 @@ if (command === "ponto") {
     return message.reply(`🔴 Ponto finalizado! Tempo registrado com sucesso.`);
   }
 
-  // =============================
-// STATUS
+ // =============================
+// STATUS ATUALIZADO
 // =============================
 if (sub === "status") {
-  const info = data[userId];
-  if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
+  const userId = message.member.id;
 
-  let total = info.total || 0;
+  if (!data[userId]) {
+    data[userId] = { total: 0, coins: 0, ativo: false, entrada: null };
+  }
+
+  const info = data[userId];
+
+  // Se estiver ativo, adiciona o tempo desde a entrada
+  let total = info.total;
   if (info.ativo && info.entrada) total += Date.now() - info.entrada;
 
   const horas = Math.floor(total / 3600000);
@@ -323,13 +329,14 @@ if (sub === "status") {
   const segundos = Math.floor((total % 60000) / 1000);
 
   const member = message.member;
-  const coins = info.coins || 0; // novo
 
+  // Pega cargo atual baseado em roles
   const encontrado = CARGOS.find(c => member.roles.cache.has(c.id));
   const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+
   const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-  return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nCoins: ${coins} 💰\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
+  return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nCoins: ${info.coins} 💰\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
 }
   
 
