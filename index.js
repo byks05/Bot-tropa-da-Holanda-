@@ -503,7 +503,7 @@ Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
 Coins recebidos: ${coins} 💰
 Novo saldo de coins: ${info.coins} 💰`);
 }
-  
+
 // =============================
 // COMANDO LOJA
 // =============================
@@ -540,6 +540,20 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
+  const guild = interaction.guild;
+  const categoriaId = "1474366472326222013"; // Categoria de tickets
+
+  // =============================
+  // FECHAR TICKET
+  // =============================
+  if (interaction.customId === "fechar_ticket") {
+    if (!interaction.channel.name.startsWith("ticket-"))
+      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+    await interaction.channel.delete().catch(() => {});
+    return;
+  }
+
   const info = data[userId];
   if (!info) return interaction.reply({ content: "❌ Nenhum registro encontrado.", ephemeral: true });
 
@@ -548,21 +562,11 @@ client.on("interactionCreate", async interaction => {
     buy_nitro: { nome: "Nitro", preco: 2500 },
     buy_ripa: { nome: "Ripa", preco: 1700 },
     buy_vip: { nome: "Vip", preco: 6000 },
-    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 },
-    fechar_ticket: { nome: "Fechar Ticket" }
+    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 }
   };
 
   const produto = produtos[interaction.customId];
   if (!produto) return;
-
-  // Botão de fechar ticket
-  if (interaction.customId === "fechar_ticket") {
-    if (!interaction.channel.name.startsWith("ticket-"))
-      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
-
-    await interaction.channel.delete().catch(() => {});
-    return;
-  }
 
   // Checa saldo antes de criar ticket
   if ((info.coins || 0) < produto.preco)
@@ -572,9 +576,7 @@ client.on("interactionCreate", async interaction => {
   info.coins -= produto.preco;
   saveData(data);
 
-  // Evita criar canal duplicado
-  const guild = interaction.guild;
-  const categoriaId = "1474366472326222013"; // Categoria de tickets
+  // Evita criar canal duplicado (busca por nome e categoria)
   const existingChannel = guild.channels.cache.find(c => 
     c.name === `ticket-${interaction.user.username}` && c.parentId === categoriaId
   );
@@ -587,31 +589,23 @@ client.on("interactionCreate", async interaction => {
     type: ChannelType.GuildText,
     parent: categoriaId,
     permissionOverwrites: [
-      {
-        id: guild.id,
-        deny: [PermissionsBitField.Flags.ViewChannel]
-      },
-      {
-        id: interaction.user.id,
-        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
-      }
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: "1472589662144040960", allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }, // Admin 1
+      { id: "1468017578747105390", allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }  // Admin 2
     ]
   });
 
+  // Embed do ticket
   const ticketEmbed = new EmbedBuilder()
     .setTitle(`🛒 Ticket de Compra - ${produto.nome}`)
-    .setDescription(
-      `${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\n` +
-      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
-    )
+    .setDescription(`${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\nAdmins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`)
     .setColor("Green")
     .setTimestamp();
 
+  // Botão de fechar ticket
   const fecharButton = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("fechar_ticket")
-      .setLabel("🔒 Fechar Ticket")
-      .setStyle(ButtonStyle.Danger)
+    new ButtonBuilder().setCustomId("fechar_ticket").setLabel("🔒 Fechar Ticket").setStyle(ButtonStyle.Danger)
   );
 
   await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
