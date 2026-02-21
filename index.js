@@ -35,9 +35,7 @@ const PREFIX = "thl!";
 
 const IDS = {
   STAFF: [
-    "1468069638935150635",
-    "1468026315285205094",
-    "1468017578747105390"
+    "1468069638935150635","1468017578747105390"
   ],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
@@ -179,32 +177,51 @@ client.on("messageCreate", async (message) => {
   const guild = message.guild;
 
 // =============================
-// BATE PONTO
+// BATE PONTO COMPLETO
 // =============================
 if (command === "ponto") {
 
-  const categoriaId = "1474413150441963615";
-  const CANAL_ENTRAR = "1474383177689731254";
-  const UP_CHANNEL = "1474366517096218758";
+  const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
+  const CANAL_ENTRAR = "1474383177689731254"; // canal onde entrar pode ser usado
+  const UP_CHANNEL = "1474366517096218758"; // canal de notificação de apto
+  const userId = message.author.id;
+  const guild = message.guild;
 
+  // 🔹 Apenas esses cargos podem usar o comando PONTO
+  const ALLOWED_PONTO = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468026315285205094"
+  ];
+
+  if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
+
+  const data = getData();
   if (!data[userId]) {
     data[userId] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
   }
 
   const sub = args[0]?.toLowerCase();
 
-  // --------- ENTRAR ---------
+  // =============================
+  // ENTRAR (somente no canal definido)
+  // =============================
   if (sub === "entrar") {
+
     if (message.channel.id !== CANAL_ENTRAR)
       return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+
     if (data[userId].ativo)
       return message.reply("❌ Você já iniciou seu ponto.");
 
     data[userId].ativo = true;
     data[userId].entrada = Date.now();
-    data[userId].notificado = false;
+    data[userId].notificado = false; // reseta notificação
     saveData(data);
 
+    // cria canal privado
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: 0,
@@ -218,39 +235,34 @@ if (command === "ponto") {
     data[userId].canal = canal.id;
     saveData(data);
 
+    // mensagem no canal de comando mencionando o canal criado
     await message.channel.send(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
+
+    // mensagem no canal privado mencionando o usuário
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
+    // =============================
     // CONTADOR EM TEMPO REAL
+    // =============================
     const intervaloTempo = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloTempo);
         clearInterval(intervaloLembrete);
         return;
       }
+
       const tempoAtual = Date.now() - data[userId].entrada;
       const horas = Math.floor(tempoAtual / 3600000);
       const minutos = Math.floor((tempoAtual % 3600000) / 60000);
       const segundos = Math.floor((tempoAtual % 60000) / 1000);
+
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
-      // NOTIFICAÇÃO DE APTOS
-      const cargosMeta = CARGOS;
-      if (!data[userId].notificado) {
-        const tempoTotal = data[userId].total + tempoAtual;
-        const proximoCargo = cargosMeta.find(c => tempoTotal >= c.meta && !message.member.roles.cache.has(c.id));
-        if (proximoCargo) {
-          const upChannel = guild.channels.cache.get(UP_CHANNEL);
-          if (upChannel) {
-            upChannel.send(`@everyone <@${userId}> bateu a meta de ${proximoCargo.meta / 3600000}h e já pode receber o cargo <@&${proximoCargo.id}>!`);
-            data[userId].notificado = true;
-            saveData(data);
-          }
-        }
-      }
     }, 1000);
 
-    // LEMBRETE 20 MIN
+    // =============================
+    // LEMBRETE 20 EM 20 MIN
+    // =============================
     const intervaloLembrete = setInterval(() => {
       if (!data[userId]?.ativo) {
         clearInterval(intervaloLembrete);
@@ -262,8 +274,11 @@ if (command === "ponto") {
     return;
   }
 
-  // --------- SAIR ---------
+  // =============================
+  // SAIR
+  // =============================
   if (sub === "sair") {
+
     if (!data[userId].ativo)
       return message.reply("❌ Você não iniciou ponto.");
 
@@ -287,60 +302,110 @@ if (command === "ponto") {
     return;
   }
 
-  // --------- STATUS ---------
-  if (sub === "status") {
-    let total = data[userId].total;
-    if (data[userId].ativo && data[userId].entrada) total += Date.now() - data[userId].entrada;
+ // =============================
+// STATUS
+// =============================
+if (sub === "status") {
+
+  const info = data[userId];
+  if (!info) return message.reply("❌ Nenhum ponto registrado para você.");
+
+  let total = info.total;
+  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+
+  const horas = Math.floor(total / 3600000);
+  const minutos = Math.floor((total % 3600000) / 60000);
+  const segundos = Math.floor((total % 60000) / 1000);
+
+  const member = message.member;
+
+  // lista de cargos de meta
+  const cargosMeta = [
+    { id: "1468021327129743483", nome: "Cargo 24h #1" },
+    { id: "1468021411720335432", nome: "Cargo 24h #2" },
+    { id: "1468021554993561661", nome: "Cargo 24h #3" },
+    { id: "1468021724598501376", nome: "Cargo 24h #4" },
+    { id: "1468021924943888455", nome: "Cargo 24h #5" },
+    { id: "1468652058973569078", nome: "Cargo 24h #6" },
+    { id: "1474353689723535572", nome: "Cargo 24h #7" },
+    { id: "1474353834485612687", nome: "Cargo 24h #8" },
+    { id: "1474353946205098097", nome: "Cargo 24h #9" },
+    { id: "1474364575297175694", nome: "Cargo 24h #10" },
+    { id: "1474364617756250132", nome: "Cargo 24h #11" },
+    { id: "1474354117362188350", nome: "Cargo 24h #12" },
+    { id: "1474354176816451710", nome: "Cargo 24h #13" },
+    { id: "1474354212350726225", nome: "Cargo 24h #14" },
+    { id: "1474354265240899727", nome: "Cargo 24h #15" },
+    { id: "1474364646629838970", nome: "Cargo 24h #16" },
+    { id: "1468026315285205094", nome: "Cargo 24h #17" }
+  ];
+
+  let cargoAtual = "Nenhum";
+  const encontrado = cargosMeta.find(c => member.roles.cache.has(c.id));
+  if (encontrado) cargoAtual = `<@&${encontrado.id}>`;
+
+  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+  return message.reply(`📊 **Seu Status**\nTempo acumulado: ${horas}h ${minutos}m ${segundos}s\nStatus: ${status}\nCargo atual: ${cargoAtual}`);
+}
+  
+  // =============================
+// REGISTRO (RANKING) – top 10
+// =============================
+if (sub === "registro") {
+
+  const data = getData();
+  const ranking = Object.entries(data)
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 10); // top 10
+
+  if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
+
+  // lista de cargos de meta
+  const cargosMeta = [
+    { id: "1468021327129743483", nome: "Cargo 24h #1" },
+    { id: "1468021411720335432", nome: "Cargo 24h #2" },
+    { id: "1468021554993561661", nome: "Cargo 24h #3" },
+    { id: "1468021724598501376", nome: "Cargo 24h #4" },
+    { id: "1468021924943888455", nome: "Cargo 24h #5" },
+    { id: "1468652058973569078", nome: "Cargo 24h #6" },
+    { id: "1474353689723535572", nome: "Cargo 24h #7" },
+    { id: "1474353834485612687", nome: "Cargo 24h #8" },
+    { id: "1474353946205098097", nome: "Cargo 24h #9" },
+    { id: "1474364575297175694", nome: "Cargo 24h #10" },
+    { id: "1474364617756250132", nome: "Cargo 24h #11" },
+    { id: "1474354117362188350", nome: "Cargo 24h #12" },
+    { id: "1474354176816451710", nome: "Cargo 24h #13" },
+    { id: "1474354212350726225", nome: "Cargo 24h #14" },
+    { id: "1474354265240899727", nome: "Cargo 24h #15" },
+    { id: "1474364646629838970", nome: "Cargo 24h #16" },
+    { id: "1468026315285205094", nome: "Cargo 24h #17" }
+  ];
+
+  let texto = "";
+
+  for (const [uid, info] of ranking) {
+    let total = info.total;
+    if (info.ativo && info.entrada) total += Date.now() - info.entrada;
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
-    const cargoAtual = getCargoAtual(message.member, total);
-    const ativoAgora = data[userId].ativo ? "Sim" : "Não";
 
-    return message.reply(`📊 Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n🟢 Ponto ativo agora: ${ativoAgora}\n🎖 Cargo atual: ${cargoAtual}`);
-  }
-
-  // --------- REGISTRO / RANKING ---------
-  if (sub === "registro") {
-    const ranking = Object.entries(data)
-      .map(([uid, info]) => {
-        let total = info.total;
-        if (info.ativo && info.entrada) total += Date.now() - info.entrada;
-        const member = guild.members.cache.get(uid);
-        const cargoAtual = member ? getCargoAtual(member, total) : "Nenhum cargo";
-        const ativoAgora = info.ativo ? "Sim" : "Não";
-        return { uid, total, cargoAtual, ativoAgora };
-      })
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10); // top 10
-
-    if (!ranking.length) return message.reply("Nenhum registro encontrado.");
-
-    let texto = "";
-    for (const r of ranking) {
-      const horas = Math.floor(r.total / 3600000);
-      const minutos = Math.floor((r.total % 3600000) / 60000);
-      const segundos = Math.floor((r.total % 60000) / 1000);
-      texto += `<@${r.uid}> → ${horas}h ${minutos}m ${segundos}s | 🟢 Ativo agora: ${r.ativoAgora} | 🎖 ${r.cargoAtual}\n`;
+    const member = await message.guild.members.fetch(uid).catch(() => null);
+    let cargoAtual = "Nenhum";
+    if (member) {
+      const encontrado = cargosMeta.find(c => member.roles.cache.has(c.id));
+      if (encontrado) cargoAtual = `<@&${encontrado.id}>`;
     }
 
-    return message.reply(`📊 **Ranking Top 10**\n\n${texto}`);
+    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+    texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
   }
 
-  // --------- RESET GERAL ---------
-  if (sub === "resetartodos") {
-    const STAFF_ROLES = IDS.STAFF;
-    if (!message.member.roles.cache.some(r => STAFF_ROLES.includes(r.id))) {
-      return message.reply("❌ Apenas staff pode resetar todos os pontos.");
-    }
-    for (const uid in data) {
-      data[uid] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
-    }
-    saveData(data);
-    return message.reply("✅ Todos os pontos foram resetados com sucesso.");
-  }
+  return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
 }
-
+  
 // =============================
 // MUTE / UNMUTE
 // =============================
@@ -399,6 +464,18 @@ if (command === "unmutecall") {
 if (command === "rec") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("Mencione um usuário válido.");
+
+  const ALLOWED_REC = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468026315285205094",
+    "1468066422490923081" // cargo que só pode usar rec
+  ];
+
+  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
+
   const filteredArgs = args.filter(arg => !arg.includes(user.id));
   const subCommand = filteredArgs[0]?.toLowerCase();
   const secondArg = filteredArgs[1]?.toLowerCase();
@@ -407,21 +484,25 @@ if (command === "rec") {
     // REC ADD MENINA
     if (subCommand === "add" && secondArg === "menina") {
       await user.roles.remove("1468024885354959142");
+
       await user.roles.add([
         "1472223890821611714",
         "1468283328510558208",
         "1468026315285205094"
       ]);
+
       return message.reply(`Cargos "menina" aplicados em ${user}`);
     }
 
     // REC ADD NORMAL
     if (subCommand === "add") {
       await user.roles.remove("1468024885354959142");
+
       await user.roles.add([
         "1468283328510558208",
         "1468026315285205094"
       ]);
+
       return message.reply(`Cargos aplicados em ${user}`);
     }
 
@@ -432,7 +513,7 @@ if (command === "rec") {
     return message.reply("Erro ao executar comando.");
   }
 }
-
+  
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
