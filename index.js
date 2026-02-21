@@ -509,9 +509,9 @@ Novo saldo de coins: ${info.coins} 💰`);
 // =============================
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
 
-if (command === "loja") {
+if (command === "ponto" && args[0]?.toLowerCase() === "loja") {
   const embed = new EmbedBuilder()
-    .setTitle("🛒 Loja de Coins")
+    .setTitle("🛒 Loja de Produtos")
     .setDescription(
       "**Selecione o produto que deseja comprar:**\n\n" +
       "💎 Robux → 4000 coins\n" +
@@ -540,22 +540,8 @@ client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
 
   const userId = interaction.user.id;
-  const guild = interaction.guild;
-  const categoriaId = "1474366472326222013"; // Categoria de tickets
-
-  // =============================
-  // FECHAR TICKET
-  // =============================
-  if (interaction.customId === "fechar_ticket") {
-    if (!interaction.channel.name.startsWith("ticket-"))
-      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
-
-    await interaction.channel.delete().catch(() => {});
-    return;
-  }
-
   const info = data[userId];
-  if (!info) return interaction.reply({ content: "❌ Nenhum registro encontrado.", ephemeral: true });
+  if (!info) info = { coins: 0 }; // Caso o usuário não tenha registro
 
   const produtos = {
     buy_robux: { nome: "Robux", preco: 4000 },
@@ -568,20 +554,27 @@ client.on("interactionCreate", async interaction => {
   const produto = produtos[interaction.customId];
   if (!produto) return;
 
-  // Checa saldo antes de criar ticket
-  if ((info.coins || 0) < produto.preco)
-    return interaction.reply({ content: `❌ Você não tem coins suficientes para comprar **${produto.nome}**.`, ephemeral: true });
+  // Apaga a mensagem do painel de compras
+  await interaction.message.delete().catch(() => {});
+
+  // Checa saldo
+  if ((info.coins || 0) < produto.preco) {
+    return interaction.reply({ content: `❌ Saldo insuficiente para comprar **${produto.nome}**.`, ephemeral: true });
+  }
 
   // Subtrai coins
   info.coins -= produto.preco;
   saveData(data);
 
-  // Evita criar canal duplicado (busca por nome e categoria)
+  // Evita ticket duplicado
+  const guild = interaction.guild;
+  const categoriaId = "1474885663425036470"; // Categoria de tickets
   const existingChannel = guild.channels.cache.find(c => 
     c.name === `ticket-${interaction.user.username}` && c.parentId === categoriaId
   );
-  if (existingChannel)
-    return interaction.reply({ content: `❌ Você já tem um ticket aberto: ${existingChannel}`, ephemeral: true });
+  if (existingChannel) {
+    return interaction.reply({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+  }
 
   // Cria canal de ticket
   const channel = await guild.channels.create({
@@ -589,29 +582,52 @@ client.on("interactionCreate", async interaction => {
     type: ChannelType.GuildText,
     parent: categoriaId,
     permissionOverwrites: [
-      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      { id: "1472589662144040960", allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }, // Admin 1
-      { id: "1468017578747105390", allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }  // Admin 2
+      {
+        id: guild.id,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      }
     ]
   });
 
   // Embed do ticket
   const ticketEmbed = new EmbedBuilder()
     .setTitle(`🛒 Ticket de Compra - ${produto.nome}`)
-    .setDescription(`${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\nAdmins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`)
+    .setDescription(
+      `${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\n` +
+      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
+    )
     .setColor("Green")
     .setTimestamp();
 
   // Botão de fechar ticket
   const fecharButton = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("fechar_ticket").setLabel("🔒 Fechar Ticket").setStyle(ButtonStyle.Danger)
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
   );
 
   await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
 
   interaction.reply({ content: `✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`, ephemeral: true });
 });
+
+// =============================
+// FECHAR TICKET
+// =============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== "fechar_ticket") return;
+
+  if (!interaction.channel.name.startsWith("ticket-"))
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+  await interaction.channel.delete().catch(() => {});
+});  
   
 // =============================
 // MUTE / UNMUTE CHAT
