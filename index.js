@@ -320,11 +320,12 @@ if (sub === "status") {
   let total = info.total || 0;
   if (info.ativo && info.entrada) total += Date.now() - info.entrada;
 
+  // Calcula horas, minutos e segundos
   const horas = Math.floor(total / 3600000);
   const minutos = Math.floor((total % 3600000) / 60000);
   const segundos = Math.floor((total % 60000) / 1000);
 
-  // Coins do usuário (addcoins + conversão de tempo, se houver)
+  // Coins do usuário (addcoins + conversão de tempo)
   const coins = info.coins || 0;
 
   // Cargo atual baseado em roles
@@ -332,8 +333,10 @@ if (sub === "status") {
   const encontrado = CARGOS.find(c => member.roles.cache.has(c.id));
   const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
 
+  // Status ativo ou inativo
   const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
+  // Mensagem final
   return message.reply(
     `📊 **Seu Status**\n` +
     `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
@@ -342,7 +345,7 @@ if (sub === "status") {
     `Cargo atual: ${cargoAtual}`
   );
 }
-
+  
 // =============================
 // REGISTRO (Ranking Top 10)
 // =============================
@@ -404,7 +407,7 @@ const ALLOWED_REC = [
 ];
 
 // =============================
-// COMANDO ADDCOINS / ADDTEMPO
+// COMANDO ADDCOINS
 // =============================
 if (command === "addcoins") {
   if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
@@ -412,11 +415,9 @@ if (command === "addcoins") {
 
   const user = message.mentions.members.first();
   const coins = parseInt(args[1]);
-  if (!user || isNaN(coins)) return message.reply("❌ Use: addcoins <@usuário> <quantidade>");
+  if (!user || isNaN(coins)) return message.reply("❌ Use: thl!addcoins <@usuário> <quantidade>");
 
-  // Supondo que você tenha função saveData / getData
-  const data = getData();
-  if (!data[user.id]) data[user.id] = { coins: 0, tempo: 0 };
+  if (!data[user.id]) data[user.id] = { total: 0, coins: 0, ativo: false, entrada: null };
   data[user.id].coins += coins;
   saveData(data);
 
@@ -424,13 +425,12 @@ if (command === "addcoins") {
 }
 
 // =============================
-// ADD TEMPO
+// COMANDO ADDTEMPO
 // =============================
 if (command === "addtempo") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  const userId = user.id;
   const valor = args[1]; // Ex: 3h ou 45m
   if (!valor) return message.reply("❌ Informe o tempo para adicionar (ex: 3h ou 45m).");
 
@@ -443,15 +443,17 @@ if (command === "addtempo") {
     return message.reply("❌ Formato inválido. Use h para horas ou m para minutos.");
   }
 
+  const userId = user.id;
   if (!data[userId]) data[userId] = { total: 0, coins: 0, ativo: false, entrada: null };
 
   data[userId].total += milissegundos;
+  saveData(data);
 
   message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
 }
-  
+
 // =============================
-// CONVERTER TEMPO EM COINS
+// COMANDO CONVERTER TEMPO EM COINS
 // =============================
 if (command === "converter") {
   const userId = message.author.id;
@@ -463,7 +465,6 @@ if (command === "converter") {
   // Parse de horas ou minutos
   const input = args[0].toLowerCase();
   let minutos = 0;
-
   if (input.endsWith("h")) {
     const h = parseFloat(input.replace("h", ""));
     if (isNaN(h) || h <= 0) return message.reply("❌ Quantidade inválida.");
@@ -476,9 +477,9 @@ if (command === "converter") {
     return message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
   }
 
-  // Calcula total de tempo disponível
-  let total = info.total;
-  if (info.ativo && info.entrada) total += Date.now() - info.entrada; // tempo atual do ponto
+  // Calcula tempo total disponível (ponto + addtempo)
+  let total = info.total || 0;
+  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
   const totalMinutos = Math.floor(total / 60000);
 
   if (minutos > totalMinutos) return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
@@ -491,8 +492,7 @@ if (command === "converter") {
   const coins = Math.floor(minutos * (100 / 60));
   info.coins = (info.coins || 0) + coins;
 
-  // Salva no data
-  data[userId] = info;
+  saveData(data);
 
   // Formata horas e minutos convertidos
   const horasConvertidas = Math.floor(minutos / 60);
