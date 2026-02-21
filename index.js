@@ -445,55 +445,6 @@ if (command === "ponto") {
     await user.voice.setMute(false);
     message.reply(`${user} foi desmutado na call.`);
   }
-
-  // =============================
-  // COMANDO REC
-  // =============================
-  if (command === "rec") {
-    const user = getUser();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
-
-    const ALLOWED_REC = [
-      "1468017578747105390",
-      "1468069638935150635",
-      "1468026315285205094",
-      "1468066422490923081"
-    ];
-
-    if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) {
-      return message.reply("❌ Você não tem permissão para usar este comando.");
-    }
-
-    const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
-    const secondArg = args.find((a, i) => !a.includes(user.id) && i > 0)?.toLowerCase();
-
-    try {
-      if (subCommand === "add" && secondArg === "menina") {
-        await user.roles.remove("1468024885354959142");
-        await user.roles.add([
-          "1472223890821611714",
-          "1468283328510558208",
-          "1468026315285205094"
-        ]);
-        return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
-      }
-
-      if (subCommand === "add") {
-        await user.roles.remove("1468024885354959142");
-        await user.roles.add([
-          "1468283328510558208",
-          "1468026315285205094"
-        ]);
-        return message.reply(`✅ Cargos aplicados em ${user}`);
-      }
-
-      return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
-
-    } catch (error) {
-      console.error("Erro ao executar rec:", error);
-      return message.reply("❌ Ocorreu um erro ao executar este comando.");
-    }
-  }
     
   // =============================
 // COMANDO REC
