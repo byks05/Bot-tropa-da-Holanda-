@@ -383,68 +383,71 @@ if (command === "ponto") {
 
 }
   
- 
-  // =============================
-  // MUTE / UNMUTE CHAT
-  // =============================
-  if (command === "mutechat") {
-    const user = getUser();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
-    const duration = parseDuration(args[1]) || 120000;
-    const motivo = args.slice(2).join(" ") || "Sem motivo";
+ // =============================
+// MUTE / UNMUTE CHAT
+// =============================
+if (command === "mutechat") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-    const muteRole = await getMuteRole(message.guild);
-    await user.roles.add(muteRole);
+  const duration = parseDuration(args[1]) || 120000; // tempo em ms, padrão 2 minutos
+  const motivo = args.slice(2).join(" ") || "Sem motivo";
 
-    const embed = new EmbedBuilder()
-      .setColor("Red")
-      .setTitle("🔇 Usuário Mutado (Chat)")
-      .setDescription(`${user} foi mutado`)
-      .addFields(
-        { name: "Motivo", value: motivo },
-        { name: "Tempo", value: `${duration / 60000} minutos` }
-      )
-      .setTimestamp();
+  const muteRole = await getMuteRole(message.guild); // função que retorna a role "Muted"
+  await user.roles.add(muteRole);
 
-    await message.channel.send({ embeds: [embed] });
-    sendLog(message.guild, embed);
+  const embed = new EmbedBuilder()
+    .setColor("Red")
+    .setTitle("🔇 Usuário Mutado (Chat)")
+    .setDescription(`${user} foi mutado`)
+    .addFields(
+      { name: "Motivo", value: motivo },
+      { name: "Tempo", value: `${duration / 60000} minutos` }
+    )
+    .setTimestamp();
 
-    setTimeout(async () => {
-      if (user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-    }, duration);
-  }
+  await message.channel.send({ embeds: [embed] });
+  sendLog(message.guild, embed); // função que envia logs, se tiver
 
-  if (command === "unmutechat") {
-    const user = getUser();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
-    const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-    if (muteRole && user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-    message.reply(`${user} foi desmutado.`);
-  }
+  setTimeout(async () => {
+    if (user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
+  }, duration);
+}
 
-  // =============================
-  // MUTE / UNMUTE CALL
-  // =============================
-  if (command === "mutecall") {
-    const user = getUser();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
-    if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
-    const duration = parseDuration(args[1]) || 120000;
+if (command === "unmutechat") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-    await user.voice.setMute(true);
-    message.reply(`${user} foi mutado na call por ${duration / 60000} minutos.`);
+  const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
+  if (muteRole && user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
 
-    setTimeout(() => user.voice.setMute(false).catch(() => {}), duration);
-  }
+  message.reply(`${user} foi desmutado.`);
+}
 
-  if (command === "unmutecall") {
-    const user = getUser();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
-    if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+// =============================
+// MUTE / UNMUTE CALL
+// =============================
+if (command === "mutecall") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+  if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
 
-    await user.voice.setMute(false);
-    message.reply(`${user} foi desmutado na call.`);
-  }
+  const duration = parseDuration(args[1]) || 120000;
+
+  await user.voice.setMute(true);
+  message.reply(`${user} foi mutado na call por ${duration / 60000} minutos.`);
+
+  setTimeout(() => user.voice.setMute(false).catch(() => {}), duration);
+}
+
+if (command === "unmutecall") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+  if (!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+
+  await user.voice.setMute(false);
+  message.reply(`${user} foi desmutado na call.`);
+    }  
     
   // =============================
 // COMANDO REC
