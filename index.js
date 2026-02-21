@@ -502,70 +502,99 @@ if (command === "converter") {
 Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
 Coins recebidos: ${coins} 💰
 Novo saldo de coins: ${info.coins} 💰`);
-}  
+}
   
 // =============================
-// COMANDO DE LOJA (ticket manual)
+// COMANDO LOJA
 // =============================
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
+
 if (command === "loja") {
-  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-
-  const produtos = [
-    { nome: "Vip", preco: 6000, id: "vip" },
-    { nome: "Robux", preco: 4000, id: "robux" },
-    { nome: "Nitro", preco: 2500, id: "nitro" },
-    { nome: "Ripa", preco: 1700, id: "ripa" },
-    { nome: "Roupa personalizada", preco: 1400, id: "roupa" }
-  ];
-
   const embed = new EmbedBuilder()
-    .setTitle("🛒 Loja")
-    .setDescription(produtos.map(p => `${p.nome} - ${p.preco} coins`).join("\n"))
-    .setColor("Green");
+    .setTitle("🛒 Loja de Coins")
+    .setDescription(
+      "**Selecione o produto que deseja comprar:**\n\n" +
+      "💎 Robux → 4000 coins\n" +
+      "⚡ Nitro → 2500 coins\n" +
+      "🔨 Ripa → 1700 coins\n" +
+      "👑 Vip → 6000 coins\n" +
+      "👕 Roupa Personalizada → 1400 coins"
+    )
+    .setColor("Blue");
 
-  const row = new ActionRowBuilder();
-  produtos.forEach(p => {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`buy_${p.id}`)
-        .setLabel(`${p.nome}`)
-        .setStyle(ButtonStyle.Primary)
-    );
-  });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("buy_robux").setLabel("💎 Robux").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_nitro").setLabel("⚡ Nitro").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_ripa").setLabel("🔨 Ripa").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_vip").setLabel("👑 Vip").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("buy_roupa").setLabel("👕 Roupa Personalizada").setStyle(ButtonStyle.Primary)
+  );
 
-  const msg = await message.reply({ embeds: [embed], components: [row] });
-
-  const filter = i => i.user.id === message.author.id;
-  const collector = msg.createMessageComponentCollector({ filter, time: 60000 });
-
-  collector.on("collect", async i => {
-    const productId = i.customId.replace("buy_", "");
-    const produto = produtos.find(p => p.id === productId);
-
-    const data = getData();
-    if (!data[message.author.id]) data[message.author.id] = { coins: 0, tempo: 0 };
-
-    if (data[message.author.id].coins < produto.preco)
-      return i.reply({ content: "❌ Você não tem coins suficientes!", ephemeral: true });
-
-    data[message.author.id].coins -= produto.preco;
-    saveData(data);
-
-    // Criar canal/ticket
-    const ticketChannel = await message.guild.channels.create({
-      name: `ticket-${message.author.username}`,
-      type: 0, // GUILD_TEXT
-      permissionOverwrites: [
-        { id: message.guild.id, deny: ["ViewChannel"] },
-        { id: message.author.id, allow: ["ViewChannel", "SendMessages"] },
-        // adicione IDs de admins que vão responder
-      ]
-    });
-
-    ticketChannel.send(`🛒 ${message.author} comprou **${produto.nome}**. Admins, finalize a entrega manual.`);
-    i.reply({ content: `✅ Compra registrada! Canal criado: ${ticketChannel}`, ephemeral: true });
-  });
+  message.reply({ embeds: [embed], components: [row] });
 }
+
+// =============================
+// INTERAÇÃO DOS BOTÕES
+// =============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isButton()) return;
+
+  const userId = interaction.user.id;
+  const info = data[userId];
+  if (!info || !info.coins) return interaction.reply({ content: "❌ Você não possui coins.", ephemeral: true });
+
+  const produtos = {
+    buy_robux: { nome: "Robux", preco: 4000 },
+    buy_nitro: { nome: "Nitro", preco: 2500 },
+    buy_ripa: { nome: "Ripa", preco: 1700 },
+    buy_vip: { nome: "Vip", preco: 6000 },
+    buy_roupa: { nome: "Roupa Personalizada", preco: 1400 }
+  };
+
+  const produto = produtos[interaction.customId];
+  if (!produto) return;
+
+  if (info.coins < produto.preco)
+    return interaction.reply({ content: `❌ Você não tem coins suficientes para comprar **${produto.nome}**.`, ephemeral: true });
+
+  // Subtrai coins
+  info.coins -= produto.preco;
+  saveData(data);
+
+  // Cria canal de ticket
+  const guild = interaction.guild;
+  const categoriaId = "1474366472326222013"; // Categoria de tickets
+  const ticketName = `ticket-${interaction.user.username}`;
+
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      {
+        id: guild.id,
+        deny: [PermissionsBitField.Flags.ViewChannel]
+      },
+      {
+        id: interaction.user.id,
+        allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages]
+      }
+    ]
+  });
+
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${produto.nome}`)
+    .setDescription(
+      `${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\n` +
+      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
+    )
+    .setColor("Green")
+    .setTimestamp();
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed] });
+
+  interaction.reply({ content: `✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`, ephemeral: true });
+});
   
 // =============================
 // MUTE / UNMUTE CHAT
