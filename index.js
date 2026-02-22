@@ -568,7 +568,6 @@ if (command === "ponto") {
 // REGISTRO COM PAGINAÇÃO
 // =============================
 if (sub === "registro") {
-
   const ranking = await pool.query(
     "SELECT * FROM pontos ORDER BY total DESC"
   );
@@ -576,91 +575,61 @@ if (sub === "registro") {
   if (ranking.rows.length === 0)
     return message.reply("Nenhum registro encontrado.");
 
-  const itensPorPagina = 10;
-  const totalPaginas = Math.ceil(ranking.rows.length / itensPorPagina);
+  let posicao = 1;
+  let descricao = "";
+  const maxLength = 4000; // limite de caracteres por embed
+  const embeds = [];
 
-  let paginaAtual = 0;
+  for (const info of ranking.rows) {
+    let total = Number(info.total);
+    if (info.ativo && info.entrada)
+      total += Date.now() - Number(info.entrada);
 
-  const gerarEmbed = async (pagina) => {
-    const inicio = pagina * itensPorPagina;
-    const fim = inicio + itensPorPagina;
-    const dadosPagina = ranking.rows.slice(inicio, fim);
+    const horas = Math.floor(total / 3600000);
+    const minutos = Math.floor((total % 3600000) / 60000);
+    const segundos = Math.floor((total % 60000) / 1000);
 
-    let descricao = "";
-    let posicao = inicio + 1;
+    const member = await guild.members.fetch(info.user_id).catch(() => null);
+    const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
+    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+    const status = info.ativo ? "🟢" : "🔴";
 
-    for (const info of dadosPagina) {
-      let total = Number(info.total);
+    let medalha = "";
+    if (posicao === 1) medalha = "🥇 ";
+    else if (posicao === 2) medalha = "🥈 ";
+    else if (posicao === 3) medalha = "🥉 ";
 
-      if (info.ativo && info.entrada)
-        total += Date.now() - Number(info.entrada);
+    const linha = `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
 
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
-
-      const member = await guild.members.fetch(info.user_id).catch(() => null);
-      const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
-      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-      const status = info.ativo ? "🟢" : "🔴";
-
-      let medalha = "";
-      if (posicao === 1) medalha = "🥇 ";
-      else if (posicao === 2) medalha = "🥈 ";
-      else if (posicao === 3) medalha = "🥉 ";
-
-      descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
-
-      posicao++;
+    // se passar do limite, cria um embed novo
+    if (descricao.length + linha.length > maxLength) {
+      embeds.push(
+        new EmbedBuilder()
+          .setTitle("📊 Ranking de Atividade")
+          .setDescription(descricao)
+          .setColor("Blue")
+      );
+      descricao = "";
     }
 
-    return new EmbedBuilder()
-      .setTitle("📊 Ranking de Atividade")
-      .setDescription(descricao || "Sem dados.")
-      .setFooter({ text: `Página ${pagina + 1} de ${totalPaginas}` })
-      .setColor("Blue");
-  };
+    descricao += linha;
+    posicao++;
+  }
 
-  // === MOVER ActionRowBuilder PARA DENTRO DO COMANDO ===
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("rank_prev")
-      .setLabel("⬅️")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId("rank_next")
-      .setLabel("➡️")
-      .setStyle(ButtonStyle.Secondary)
-  );
+  // adiciona o restante
+  if (descricao.length > 0) {
+    embeds.push(
+      new EmbedBuilder()
+        .setTitle("📊 Ranking de Atividade")
+        .setDescription(descricao)
+        .setColor("Blue")
+    );
+  }
 
-  const mensagem = await message.reply({
-    embeds: [await gerarEmbed(paginaAtual)],
-    components: totalPaginas > 1 ? [row] : []
-  });
-
-  const collector = mensagem.createMessageComponentCollector({
-    time: 60000
-  });
-
-  collector.on("collect", async interaction => {
-    if (interaction.user.id !== message.author.id)
-      return interaction.reply({ content: "❌ Apenas quem executou o comando pode usar os botões.", ephemeral: true });
-
-    if (interaction.customId === "rank_prev") {
-      if (paginaAtual > 0) paginaAtual--;
-    } else if (interaction.customId === "rank_next") {
-      if (paginaAtual < totalPaginas - 1) paginaAtual++;
-    }
-
-    await interaction.update({
-      embeds: [await gerarEmbed(paginaAtual)],
-      components: totalPaginas > 1 ? [row] : []
-    });
-  });
-
-  collector.on("end", () => {
-    mensagem.edit({ components: [] }).catch(() => {});
-  });
+  // envia todos os embeds
+  for (const embed of embeds) {
+    await message.channel.send({ embeds: [embed] });
+  }
 }
   
   // =============================
