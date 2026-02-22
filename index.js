@@ -664,8 +664,6 @@ if (command === "ponto") {
         const msg = await message.reply(`❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando.`);
         return setTimeout(() => msg.delete().catch(() => {}), 60000);
       }
-    }
-
     const result = await pool.query(
       "SELECT * FROM pontos WHERE user_id = $1",
       [userId]
