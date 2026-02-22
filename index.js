@@ -649,59 +649,61 @@ if (command === "ponto") {
     return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
 
-  // =============================
-  // STATUS
-  // =============================
-  if (sub === "status") {
+ // =============================
+// STATUS
+// =============================
+if (sub === "status") {
 
-    // bloqueio de canal proibido
-    if (message.channel.id === CANAL_PROIBIDO) {
-      const userData = await pool.query(
-        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
-        [userId]
-      );
-      if (userData.rows[0]?.canal) {
-        const msg = await message.reply(`❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando.`);
-        return setTimeout(() => msg.delete().catch(() => {}), 60000);
-      }
-    const result = await pool.query(
-      "SELECT * FROM pontos WHERE user_id = $1",
+  // bloqueio de canal proibido
+  if (message.channel.id === CANAL_PROIBIDO) {
+    const userData = await pool.query(
+      "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
       [userId]
     );
-
-    if (result.rows.length === 0) {
-      const msg = await message.reply("❌ Nenhum ponto registrado.");
+    if (userData.rows[0]?.canal) {
+      const msg = await message.reply(
+        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando. Ou o canal <#1474934788233236671>`
+      );
       return setTimeout(() => msg.delete().catch(() => {}), 60000);
     }
+  }
 
-    const info = result.rows[0];
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1",
+    [userId]
+  );
 
-    let total = Number(info.total);
-    if (info.ativo && info.entrada)
-      total += Date.now() - Number(info.entrada);
-
-    const horas = Math.floor(total / 3600000);
-    const minutos = Math.floor((total % 3600000) / 60000);
-    const segundos = Math.floor((total % 60000) / 1000);
-
-    const coins = info.coins || 0;
-
-    const encontrado = CARGOS.find(c => message.member.roles.cache.has(c.id));
-    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-
-    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-    const msg = await message.reply(
-      `📊 **Seu Status**\n` +
-      `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
-      `Coins: ${coins} 💰\n` +
-      `Status: ${status}\n` +
-      `Cargo atual: ${cargoAtual}`
-    );
+  if (result.rows.length === 0) {
+    const msg = await message.reply("❌ Nenhum ponto registrado.");
     return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
-}
 
+  const info = result.rows[0];
+
+  let total = Number(info.total);
+  if (info.ativo && info.entrada)
+    total += Date.now() - Number(info.entrada);
+
+  const horas = Math.floor(total / 3600000);
+  const minutos = Math.floor((total % 3600000) / 60000);
+  const segundos = Math.floor((total % 60000) / 1000);
+
+  const coins = info.coins || 0;
+
+  const encontrado = CARGOS.find(c => message.member.roles.cache.has(c.id));
+  const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+
+  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+  const msg = await message.reply(
+    `📊 **Seu Status**\n` +
+    `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
+    `Coins: ${coins} 💰\n` +
+    `Status: ${status}\n` +
+    `Cargo atual: ${cargoAtual}`
+  );
+  return setTimeout(() => msg.delete().catch(() => {}), 60000);
+}
 // =============================
 // REGISTRO COM PAGINAÇÃO
 // =============================
