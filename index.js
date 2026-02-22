@@ -605,51 +605,53 @@ if (command === "ponto") {
     loopPonto();
   }
 
-  // =============================
-  // SAIR
-  // =============================
-  if (sub === "sair") {
+ // =============================
+// SAIR
+// =============================
+if (sub === "sair") {
 
-    // bloqueio de canal proibido
-    if (message.channel.id === CANAL_PROIBIDO) {
-      const userData = await pool.query(
-        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
-        [userId]
-      );
-      if (userData.rows[0]?.canal) {
-  const msg = await message.reply(
-    `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
-  );
-  return setTimeout(() => msg.delete().catch(() => {}), 60000);
-}
-
-    if (!data.ativo) {
-      const msg = await message.reply("❌ Você não iniciou ponto.");
-      return setTimeout(() => msg.delete().catch(() => {}), 60000);
-    }
-
-    const tempo = Date.now() - Number(data.entrada);
-    const novoTotal = Number(data.total) + tempo;
-
-    await pool.query(
-      "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-      [novoTotal, userId]
+  // bloqueio de canal proibido
+  if (message.channel.id === CANAL_PROIBIDO) {
+    const userData = await pool.query(
+      "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
+      [userId]
     );
 
-    if (data.canal) {
-      const canal = guild.channels.cache.get(data.canal);
-      if (canal) {
-        const msgCanal = await canal.send("🔴 Ponto finalizado. Canal será fechado.");
-        setTimeout(() => msgCanal.delete().catch(() => {}), 60000);
-        setTimeout(() => canal.delete().catch(() => {}), 3000);
-      }
+    if (userData.rows[0]?.canal) {
+      const msg = await message.reply(
+        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
+      );
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
     }
+  }
 
-    const msg = await message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
+  if (!data.ativo) {
+    const msg = await message.reply("❌ Você não iniciou ponto.");
     return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
 
- // =============================
+  const tempo = Date.now() - Number(data.entrada);
+  const novoTotal = Number(data.total) + tempo;
+
+  await pool.query(
+    "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+    [novoTotal, userId]
+  );
+
+  if (data.canal) {
+    const canal = guild.channels.cache.get(data.canal);
+    if (canal) {
+      const msgCanal = await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+      setTimeout(() => msgCanal.delete().catch(() => {}), 60000);
+      setTimeout(() => canal.delete().catch(() => {}), 3000);
+    }
+  }
+
+  const msg = await message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
+  return setTimeout(() => msg.delete().catch(() => {}), 60000);
+}
+
+// =============================
 // STATUS
 // =============================
 if (sub === "status") {
@@ -660,9 +662,10 @@ if (sub === "status") {
       "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
       [userId]
     );
+
     if (userData.rows[0]?.canal) {
       const msg = await message.reply(
-        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando. Ou o canal <#1474934788233236671>`
+        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
       );
       return setTimeout(() => msg.delete().catch(() => {}), 60000);
     }
@@ -704,6 +707,7 @@ if (sub === "status") {
   );
   return setTimeout(() => msg.delete().catch(() => {}), 60000);
 }
+  
 // =============================
 // REGISTRO COM PAGINAÇÃO
 // =============================
