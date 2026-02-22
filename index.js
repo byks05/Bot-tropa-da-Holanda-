@@ -741,6 +741,32 @@ verificarAtividade();
     await message.channel.send(`<@${user.id}> compras ${novasCompras}`);
   }
   }
+
+  // ======= COMANDO PARA LISTAR CLIENTES =======
+  if (command === "thl!clientes") {
+    const result = await pool.query(
+      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
+    );
+
+    if (result.rows.length === 0) return message.reply("Nenhum cliente registrado.");
+
+    let lista = "";
+    for (const row of result.rows) {
+      lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
+    }
+
+    // Divide em blocos de 2000 caracteres para não quebrar o Discord
+    const blocos = [];
+    while (lista.length > 0) {
+      blocos.push(lista.slice(0, 2000));
+      lista = lista.slice(2000);
+    }
+
+    for (const bloco of blocos) {
+      await message.channel.send(bloco);
+    }
+  }
+});
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
