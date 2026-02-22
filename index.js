@@ -148,6 +148,130 @@ const getCargoAtual = (member) => {
 };
 
 // =============================
+// LOJA FIXA COM SELECT MENU
+// =============================
+const { Client, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
+
+client.on("ready", async () => {
+  const guild = client.guilds.cache.first(); // ou buscar pelo ID se quiser específico
+  const canalPainel = guild.channels.cache.get("1474885764990107790"); // Canal do painel fixo
+
+  if (!canalPainel) return console.log("Canal do painel não encontrado!");
+
+  // Evita enviar várias vezes ao reiniciar
+  const messages = await canalPainel.messages.fetch({ limit: 10 });
+  const jaEnviado = messages.find(m => m.author.id === client.user.id);
+  if (jaEnviado) return;
+
+  // Embed com informações gerais
+  const embed = new EmbedBuilder()
+    .setTitle("# Produtos | Tropa da Holanda 🇳🇱")
+    .setDescription(
+      "-# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.\n\n" +
+      "<:carrinho:1467522339842556132> **Nitro mensal (1 mês/3 mês)**\n" +
+      "<:carrinho:1467522339842556132> **CONTA VIRGEM +30 Dias**\n" +
+      "Nunca tiveram N1tro\nEmail confirmado\nAltere o email!\nÓtimas para ativar nitro\nFull acesso (pode trocar email & senha)\n\n" +
+      "<:carrinho:1467522339842556132> **Ativação do nitro**\n" +
+      "Obs: após a compra do nitro receberá um link que deverá ser ativado, e nós mesmos ativamos.\n\n" +
+      "<:carrinho:1467522339842556132> **Sp0tify Premium**\n" +
+      "<:carrinho:1467522339842556132> **Molduras com icon personalizado**\n" +
+      "<:carrinho:1467522339842556132> **Y0utub3 Premium**\n\n" +
+      "-# Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes <a:Alerta:1467938107759526161>"
+    )
+    .setColor("Blue");
+
+  // Select Menu apenas com produto + valor
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId("loja_select")
+    .setPlaceholder("Selecione o produto que deseja comprar")
+    .addOptions([
+      { label: "Nitro 1 mês", value: "nitro_1", description: "3 R$" },
+      { label: "Nitro 3 meses", value: "nitro_3", description: "6 R$" },
+      { label: "Contas virgem +30 dias", value: "conta_virgem", description: "5 R$" },
+      { label: "Ativação Nitro", value: "ativacao_nitro", description: "1,50 R$" },
+      { label: "Spotify Premium", value: "spotify", description: "5 R$" },
+      { label: "Molduras com icon personalizado", value: "moldura", description: "2 R$" },
+      { label: "Y0utub3 Premium", value: "youtube", description: "6 R$" }
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+
+  canalPainel.send({ embeds: [embed], components: [row] });
+});
+
+// =============================
+// INTERAÇÃO DO SELECT MENU
+// =============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "loja_select") return;
+
+  const produtoSelecionado = interaction.values[0];
+  const produtos = {
+    nitro_1: { nome: "Nitro 1 mês", preco: 3 },
+    nitro_3: { nome: "Nitro 3 meses", preco: 6 },
+    conta_virgem: { nome: "Contas virgem +30 dias", preco: 5 },
+    ativacao_nitro: { nome: "Ativação Nitro", preco: 1.5 },
+    spotify: { nome: "Spotify Premium", preco: 5 },
+    moldura: { nome: "Molduras com icon personalizado", preco: 2 },
+    youtube: { nome: "Y0utub3 Premium", preco: 6 }
+  };
+
+  const produto = produtos[produtoSelecionado];
+  if (!produto) return interaction.reply({ content: "❌ Produto inválido.", ephemeral: true });
+
+  // Categoria do ticket
+  const categoriaId = "1474885663425036470";
+  const guild = interaction.guild;
+
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(c =>
+    c.name === `ticket-${interaction.user.username}` && c.parentId === categoriaId
+  );
+  if (existingChannel) return interaction.reply({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+
+  // Cria ticket
+  const channel = await guild.channels.create({
+    name: `ticket-${interaction.user.username}`,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
+    ]
+  });
+
+  // Embed do ticket
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${produto.nome}`)
+    .setDescription(`${interaction.user} abriu um ticket para comprar **${produto.nome}**.\n\nAdmins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`)
+    .setColor("Green")
+    .setTimestamp();
+
+  // Botão de fechar ticket
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("fechar_ticket").setLabel("🔒 Fechar Ticket").setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+  await interaction.reply({ content: `✅ Ticket criado: ${channel}`, ephemeral: true });
+});
+
+// =============================
+// FECHAR TICKET
+// =============================
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== "fechar_ticket") return;
+
+  if (!interaction.channel.name.startsWith("ticket-"))
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+  await interaction.channel.delete().catch(() => {});
+});
+
+// =============================
 // MESSAGE CREATE
 // =============================
 client.on("messageCreate", async (message) => {
