@@ -644,17 +644,26 @@ client.on("ready", async () => {
 // =============================
 // Criação da tabela PostgreSQL (garantia extra, sem sobrescrever a anterior)
 // =============================
-await pool.query(`
-  CREATE TABLE IF NOT EXISTS pontos (
-    user_id TEXT PRIMARY KEY,
-    total BIGINT DEFAULT 0,
-    ativo BOOLEAN DEFAULT false,
-    entrada BIGINT,
-    canal TEXT,
-    coins BIGINT DEFAULT 0
-  );
-`);
+async function criarTabelaPontos() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pontos (
+        user_id TEXT PRIMARY KEY,
+        total BIGINT DEFAULT 0,
+        ativo BOOLEAN DEFAULT false,
+        entrada BIGINT,
+        canal TEXT,
+        coins BIGINT DEFAULT 0
+      );
+    `);
+    console.log("Tabela 'pontos' garantida!");
+  } catch (err) {
+    console.error("Erro ao criar tabela 'pontos':", err);
+  }
+}
 
+// Chama a função no start do bot
+criarTabelaPontos();
 // =============================
 // TICKET MENTION AUTOMÁTICO
 // =============================
