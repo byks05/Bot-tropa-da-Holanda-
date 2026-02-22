@@ -819,30 +819,52 @@ if (command === "unmutecall") {
 // =============================
 if (command === "rec") {
   const user = message.mentions.members.first();
-  if(!user) return message.reply("❌ Mencione um usuário válido.");
-  if(!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) return message.reply("❌ Sem permissão.");
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  // Verifica se o autor possui um dos cargos permitidos
+  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) 
+    return message.reply("❌ Sem permissão.");
 
   const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
   const secondArg = args.find((a,i) => !a.includes(user.id) && i>0)?.toLowerCase();
 
   try {
-    if(subCommand === "add" && secondArg === "menina") {
+    if (subCommand === "add" && secondArg === "menina") {
+      // Remove cargo antigo e adiciona cargos de "menina"
       await user.roles.remove("1468024885354959142");
-      await user.roles.add(["1472223890821611714","1468283328510558208","1468026315285205094"]);
+      await user.roles.add([
+        "1472223890821611714", // cargo menina principal
+        "1468283328510558208", // cargo secundário
+        "1468026315285205094"  // cargo normal
+      ]);
       return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
     }
-    if(subCommand === "add") {
+
+    if (subCommand === "add") {
+      // Remove cargo antigo e adiciona cargos normais
       await user.roles.remove("1468024885354959142");
-      await user.roles.add(["1468283328510558208","1468026315285205094"]);
-      return message.reply(`✅ Cargos " normais "aplicados em ${user}`);
+      await user.roles.add([
+        "1468283328510558208", 
+        "1468026315285205094"
+      ]);
+      return message.reply(`✅ Cargos "normais" aplicados em ${user}`);
     }
-    if(subCommand === "aliados") {
+
+    if (subCommand === "aliados") {
+      // Remove cargo antigo e adiciona cargos aliados
       await user.roles.remove("1468024885354959142");
-      await user.roles.add(["1468279104624398509","1468283328510558208"]);
-      return message.reply(`✅ Cargos aliados aplicados em ${user}`);
-       }
-    return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
-  } catch (err) { console.error(err); return message.reply("❌ Erro ao executar comando."); }
+      await user.roles.add([
+        "1468279104624398509", 
+        "1468283328510558208"
+      ]);
+      return message.reply(`✅ Cargos "aliados" aplicados em ${user}`);
+    }
+
+    return message.reply("❌ Use: thl!rec <@usuário> add, add menina ou aliados");
+  } catch (err) {
+    console.error(err);
+    return message.reply("❌ Erro ao executar comando.");
+  }
 }
 });  
 
