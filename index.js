@@ -67,7 +67,7 @@ client.on("ready", async () => {
 🛒 ** Nitro mensal (1 mês/3 mês) **
 
 🛒 **CONTA VIRGEM +30 Dias**
-• Nunca tiverão N1tro  
+• Nunca tiverão Nitro  
 • Email confirmado  
 • Altere o email!  
 • Ótimas para ativar nitro  
