@@ -815,41 +815,47 @@ if (command === "unmutecall") {
 }
 
 // =============================
-// COMANDO REC CORRIGIDO
+// COMANDO REC COMPLETO
 // =============================
 if (command === "rec") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
+
+  // Verifica se o autor tem algum dos cargos permitidos
+  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) 
     return message.reply("❌ Sem permissão.");
 
-  const subCommand = args[1]?.toLowerCase(); // primeiro argumento depois da menção
-  const secondArg = args[2]?.toLowerCase(); // segundo argumento, ex: "menina"
+  const subCommand = args[1]?.toLowerCase(); // primeiro argumento após a menção
+  const secondArg = args[2]?.toLowerCase(); // segundo argumento opcional
 
-  const cargosRemover = ["1468024885354959142"];
+  const cargosRemover = ["1468024885354959142"]; // cargo antigo a ser removido
   let resposta = "";
 
   try {
-    await user.roles.fetch(); // garante que os cargos estão atualizados
+    // Atualiza os cargos do usuário antes de mexer
+    await user.roles.fetch();
+
+    // Remove o cargo antigo
     await user.roles.remove(cargosRemover);
 
+    // Adiciona os cargos conforme o subcomando
     if (subCommand === "add" && secondArg === "menina") {
       await user.roles.add([
-        "1472223890821611714",
-        "1468283328510558208",
-        "1468026315285205094"
+        "1472223890821611714", // cargo menina 1
+        "1468283328510558208", // cargo menina 2
+        "1468026315285205094"  // cargo menina 3
       ]);
       resposta = `✅ Cargos "menina" aplicados em ${user}`;
     } else if (subCommand === "add") {
       await user.roles.add([
-        "1468283328510558208",
-        "1468026315285205094"
+        "1468283328510558208", // cargo normal 1
+        "1468026315285205094"  // cargo normal 2
       ]);
       resposta = `✅ Cargos "normais" aplicados em ${user}`;
     } else if (subCommand === "aliados") {
       await user.roles.add([
-        "1468279104624398509",
-        "1468283328510558208"
+        "1468279104624398509", // cargo aliado 1
+        "1468283328510558208"  // cargo aliado 2
       ]);
       resposta = `✅ Cargos "aliados" aplicados em ${user}`;
     } else {
@@ -866,8 +872,7 @@ if (command === "rec") {
 
   return message.reply(resposta);
 }
-}
-);  
+  );  
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
