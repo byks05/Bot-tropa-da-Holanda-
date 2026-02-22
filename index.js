@@ -386,7 +386,7 @@ client.on("messageCreate", async (message) => {
   const userData = result.rows[0];
 
 // ======= COMANDO PARA CONFIRMAR COMPRA =======
-if (command === "thl!compra" && args[0] === "confirmada") {
+if (command === "compra" && args[0]?.toLowerCase() === "confirmada") {
   const user = message.mentions.users.first();
   if (!user) return message.reply("❌ Mencione alguém.");
 
@@ -395,6 +395,7 @@ if (command === "thl!compra" && args[0] === "confirmada") {
 
   const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
 
+  // Adiciona o cargo se o usuário não tiver
   if (!member.roles.cache.has(cargoClienteId)) {
     await member.roles.add(cargoClienteId).catch(() => {
       message.channel.send("❌ Não consegui adicionar o cargo. Verifique permissões.");
@@ -402,18 +403,21 @@ if (command === "thl!compra" && args[0] === "confirmada") {
     message.channel.send(`✅ ${user.tag} agora é cliente!`);
   }
 
+  // Verifica se o usuário já existe no banco
   const result = await pool.query(
     "SELECT * FROM clientes WHERE user_id = $1",
     [user.id]
   );
 
   if (result.rows.length === 0) {
+    // Adiciona novo registro
     await pool.query(
       "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
       [user.id, 1]
     );
     message.channel.send(`<@${user.id}> compra 1`);
   } else {
+    // Atualiza compras existentes
     const comprasAtuais = Number(result.rows[0].compras) + 1;
     await pool.query(
       "UPDATE clientes SET compras = $1 WHERE user_id = $2",
@@ -422,9 +426,9 @@ if (command === "thl!compra" && args[0] === "confirmada") {
     message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
   }
 }
-  
+
 // ======= COMANDO PARA LISTAR CLIENTES =======
-if (command === "thl!clientes") {
+if (command === "clientes") {
   const result = await pool.query(
     "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
   );
@@ -447,8 +451,7 @@ if (command === "thl!clientes") {
     await message.channel.send(bloco);
   }
 }
-  
-  // =============================
+// =============================
 // COMANDO PONTO COMPLETO
 // =============================
 if (command === "ponto") {
