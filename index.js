@@ -1,5 +1,5 @@
 // index.js - Parte 1
-const { Client, GatewayIntentBits, Partials, ChannelType, PermissionsBitField, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { Client, GatewayIntentBits, StringSelectMenuBuilder, ActionRowBuilder } = require('discord.js');
 const { Pool } = require("pg");
 
 const client = new Client({
