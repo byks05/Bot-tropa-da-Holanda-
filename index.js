@@ -820,11 +820,9 @@ if (command === "rec") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  // Permissão do comando
   if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) 
     return message.reply("❌ Sem permissão.");
 
-  // Subcomando e segundo argumento
   const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
   const secondArg = args.find((a,i) => !a.includes(user.id) && i>0)?.toLowerCase();
 
@@ -834,6 +832,7 @@ if (command === "rec") {
 
     // ADD MENINA
     if (subCommand === "add" && secondArg === "menina") {
+      // Adiciona os três cargos separadamente para garantir
       await user.roles.add("1472223890821611714"); // cargo 1
       await user.roles.add("1468283328510558208"); // cargo 2
       await user.roles.add("1468026315285205094"); // cargo 3
@@ -841,7 +840,7 @@ if (command === "rec") {
     }
 
     // ADD NORMAL
-    if (subCommand === "add") {
+    if (subCommand === "add" && secondArg !== "menina") {
       await user.roles.add("1468283328510558208");
       await user.roles.add("1468026315285205094");
       return message.reply(`✅ Cargos normais aplicados em ${user}`);
