@@ -50,8 +50,8 @@ const client = new Client({
 // CONFIGURAÇÕES DE CARGOS E CANAIS
 // =============================
 const PREFIX = 'thl!';
-const CARGO_PONTO = 'ID_DO_CARGO_PONTO';      // substitua pelo ID do cargo que pode usar ponto
-const CARGO_ADMIN = 'ID_DO_CARGO_ADMIN';      // substitua pelo ID do cargo de admin
+const CARGO_PONTO = '1468026315285205094';      // substitua pelo ID do cargo que pode usar ponto
+const CARGO_ADMIN = '1468017578747105390, 1468069638935150635';      // substitua pelo ID do cargo de admin
 const MUTE_ROLE_ID = '1472191430071029841';
 
 const LOG_CHANNEL = '1468722726247338115';
