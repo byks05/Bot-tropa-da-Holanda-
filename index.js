@@ -473,29 +473,60 @@ client.on("messageCreate", async (message) => {
   }
 
   if (command === "converter") {
-    const result = await pool.query("SELECT * FROM pontos WHERE user_id=$1", [userId]);
-    const info = result.rows[0];
-    if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
+  const result = await pool.query("SELECT * FROM pontos WHERE user_id=$1", [userId]);
+  const info = result.rows[0];
+  if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
 
-    const input = args[0]?.toLowerCase();
-    if (!input) return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+  const input = args[0]?.toLowerCase();
+  if (!input) return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
 
-    let minutos = 0;
-    if (input.endsWith("h")) minutos = parseFloat(input.replace("h", "")) * 60;
-    else if (input.endsWith("m")) minutos = parseFloat(input.replace("m", ""));
-    else return message.reply("❌ Formato inválido. Use h ou m.");
+  let minutos = 0;
+  if (input.endsWith("h")) minutos = parseFloat(input.replace("h", "")) * 60;
+  else if (input.endsWith("m")) minutos = parseFloat(input.replace("m", ""));
+  else return message.reply("❌ Formato inválido. Use h ou m.");
 
-    let total = Number(info.total || 0);
-    if (info.ativo && info.entrada) total += Date.now() - Number(info.entrada);
-    const totalMin = Math.floor(total / 60000);
-    if (minutos > totalMin) return message.reply(`❌ Você só tem ${totalMin} minutos disponíveis.`);
+  let total = Number(info.total || 0);
+  if (info.ativo && info.entrada) total += Date.now() - Number(info.entrada);
+  const totalMin = Math.floor(total / 60000);
+  if (minutos > totalMin) return message.reply(`❌ Você só tem ${totalMin} minutos disponíveis.`);
 
-    const ms = minutos * 60000;
-    const coins = Math.floor(minutos * (100 / 60));
-    await pool.query("UPDATE pontos SET total=total-$1, coins=COALESCE(coins,0)+$2 WHERE user_id=$3", [ms, coins, userId]);
+  const ms = minutos * 60000;
+  const coins = Math.floor(minutos * (100 / 60));
 
-    const novoSaldo = (info.coins || 0) + coins;
-    return message.reply(`✅ Conversão realizada!\nTempo convertido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m\nCoins recebidos: ${coins} 💰\nNovo saldo: ${novoSaldo} 💰`);
+  // Atualiza total e coins no banco
+  await pool.query(
+    "UPDATE pontos SET total=total-$1, coins=COALESCE(coins,0)+$2 WHERE user_id=$3",
+    [ms, coins, userId]
+  );
+
+  // Pega o saldo atualizado direto do banco
+  const resultAtualizado = await pool.query("SELECT coins FROM pontos WHERE user_id=$1", [userId]);
+  const novoSaldo = Number(resultAtualizado.rows[0].coins);
+
+  return message.reply(`✅ Conversão realizada!
+Tempo convertido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m
+Coins recebidos: ${coins} 💰
+Novo saldo: ${novoSaldo} 💰`);
+}
+  if (command === "removercoins") {
+  const targetId = args[0]; // ID do usuário alvo
+  const quantidade = parseInt(args[1]); // quantidade a remover
+
+  if (!targetId || isNaN(quantidade)) 
+    return message.reply("❌ Use: thl!removercoins <user_id> <quantidade>");
+
+  // Pega o saldo atual do usuário
+  const result = await pool.query("SELECT coins FROM pontos WHERE user_id=$1", [targetId]);
+  const info = result.rows[0];
+  if (!info) return message.reply("❌ Usuário não encontrado ou sem saldo.");
+
+  const saldoAtual = Number(info.coins || 0);
+  const novoSaldo = Math.max(saldoAtual - quantidade, 0); // nunca fica negativo
+
+  // Atualiza no banco
+  await pool.query("UPDATE pontos SET coins=$1 WHERE user_id=$2", [novoSaldo, targetId]);
+
+  return message.reply(`✅ Foram removidos ${quantidade} 💰 do usuário. Novo saldo: ${novoSaldo} 💰`);
   }
 
   if (command === "comprar") {
