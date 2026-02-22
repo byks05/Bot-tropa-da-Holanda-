@@ -1,5 +1,63 @@
-require('dotenv').config(); const { Client, GatewayIntentBits, Partials, PermissionsBitField, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js'); const { Pool } = require('pg');
+require('dotenv').config();
 
+const { 
+  Client, 
+  GatewayIntentBits, 
+  Partials, 
+  PermissionsBitField, 
+  ChannelType, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  StringSelectMenuBuilder, 
+  EmbedBuilder 
+} = require('discord.js');
+
+const { Pool } = require('pg');
+
+// Configura a conexão com PostgreSQL
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false } // obrigatório no Railway
+});
+
+// Função para executar queries
+async function query(sql, params) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return res;
+  } finally {
+    client.release();
+  }
+}
+
+// Cria a tabela de pontos se não existir
+(async () => {
+  await query(`
+    CREATE TABLE IF NOT EXISTS pontos (
+      user_id TEXT PRIMARY KEY,
+      ativo BOOLEAN DEFAULT FALSE,
+      entrada BIGINT,
+      total BIGINT DEFAULT 0,
+      coins INTEGER DEFAULT 0,
+      canal_id TEXT
+    )
+  `);
+})();
+
+// Inicializa o client do Discord
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers
+  ],
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]
+});
+
+// Aqui você continua com o restante do seu código de comandos
 // ------------------- // Config Discord // ------------------- const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers], partials: [Partials.Channel] });
 
 const PREFIX = 'thl!'; const ADMIN_IDS = ['1468017578747105390']; const ALLOWED_PONTO = ['1468026315285205094']; const MUTE_ROLE_ID = '1472191430071029841'; const LOG_CHANNEL = '1468722726247338115'; const CATEGORIA_PONTO = '1474413150441963615'; const CANAL_ENTRAR = '1474383177689731254'; const CANAL_COMANDOS = '1474934788233236671'; const TICKET_CATEGORIA = '1474366472326222013';
