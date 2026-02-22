@@ -820,42 +820,37 @@ if (command === "rec") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  // Verifica permissão
+  // Permissão do comando
   if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) 
     return message.reply("❌ Sem permissão.");
 
+  // Subcomando e segundo argumento
   const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
-  const secondArg = args.find((a, i) => !a.includes(user.id) && i > 0)?.toLowerCase();
+  const secondArg = args.find((a,i) => !a.includes(user.id) && i>0)?.toLowerCase();
 
   try {
-    // Remove apenas o cargo que você especificou
+    // REMOVE apenas o cargo específico
     await user.roles.remove("1468024885354959142");
 
-    // Comando add menina
+    // ADD MENINA
     if (subCommand === "add" && secondArg === "menina") {
-      await user.roles.add([
-        "1472223890821611714",
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
+      await user.roles.add("1472223890821611714"); // cargo 1
+      await user.roles.add("1468283328510558208"); // cargo 2
+      await user.roles.add("1468026315285205094"); // cargo 3
       return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
     }
 
-    // Comando add normal
+    // ADD NORMAL
     if (subCommand === "add") {
-      await user.roles.add([
-        "1468283328510558208",
-        "1468026315285205094"
-      ]);
-      return message.reply(`✅ Cargos "normais" aplicados em ${user}`);
+      await user.roles.add("1468283328510558208");
+      await user.roles.add("1468026315285205094");
+      return message.reply(`✅ Cargos normais aplicados em ${user}`);
     }
 
-    // Comando aliados
+    // ADD ALIADOS
     if (subCommand === "aliados") {
-      await user.roles.add([
-        "1468279104624398509",
-        "1468283328510558208"
-      ]);
+      await user.roles.add("1468279104624398509");
+      await user.roles.add("1468283328510558208");
       return message.reply(`✅ Cargos aliados aplicados em ${user}`);
     }
 
@@ -863,7 +858,6 @@ if (command === "rec") {
 
   } catch (err) {
     console.error(err);
-    // Sem mensagem de erro para o usuário
   }
 }
 });  
