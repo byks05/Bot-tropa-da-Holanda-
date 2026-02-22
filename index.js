@@ -53,6 +53,68 @@ client.once("ready", () => {
 module.exports = { client, pool }; // exporta para facilitar integração com outros módulos
 
 // =============================
+// PAINEL FIXO DE LOJA
+// =============================
+client.on("ready", async () => {
+  console.log(`${client.user.tag} está online!`);
+
+  const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
+  if (!canalEmbed) return console.error("Canal do painel fixo não encontrado.");
+
+  const produtos = [
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
+  ];
+
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("loja_select")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtos)
+  );
+
+  const textoPainel = `
+# Produtos | Tropa da Holanda 🇳🇱
+-# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
+
+🛒 ** Nitro mensal (1 mês/3 mês) **
+
+🛒 **CONTA VIRGEM +30 Dias**
+• Nunca tiverão Nitro  
+• Email confirmado  
+• Altere o email!  
+• Ótimas para ativar nitro  
+• Full acesso (pode trocar email & senha)
+
+🛒 **Ativação do nitro**  
+Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
+
+🛒 **Sp0tify Premium**
+
+🛒 **Molduras com icon personalizado**
+
+🛒 **Y0utub3 Premium**
+
+-# Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes 🚨
+`;
+
+  // Apaga mensagens antigas do bot (opcional)
+  const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+  mensagens.forEach(msg => {
+    if (msg.author.id === client.user.id) msg.delete().catch(() => {});
+  });
+
+  const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
+  await mensagem.pin().catch(() => {});
+});
+
+//
+// =============================
 // INTERAÇÃO DO SELECT MENU
 // =============================
 client.on("interactionCreate", async (interaction) => {
