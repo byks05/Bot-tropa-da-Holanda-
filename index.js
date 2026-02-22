@@ -390,30 +390,30 @@ if (command === "thl!compra" && args[0] === "confirmada") {
   const user = message.mentions.users.first();
   if (!user) return message.reply("❌ Mencione alguém.");
 
-  const member = message.guild.members.cache.get(user.id);
+  const member = await message.guild.members.fetch(user.id).catch(() => null);
+  if (!member) return message.reply("❌ Membro não encontrado no servidor.");
+
   const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
 
-  // Adiciona o cargo se não tiver
   if (!member.roles.cache.has(cargoClienteId)) {
-    await member.roles.add(cargoClienteId);
+    await member.roles.add(cargoClienteId).catch(() => {
+      message.channel.send("❌ Não consegui adicionar o cargo. Verifique permissões.");
+    });
     message.channel.send(`✅ ${user.tag} agora é cliente!`);
   }
 
-  // Verifica se já existe no banco
   const result = await pool.query(
     "SELECT * FROM clientes WHERE user_id = $1",
     [user.id]
   );
 
   if (result.rows.length === 0) {
-    // Adiciona novo registro
     await pool.query(
       "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
       [user.id, 1]
     );
     message.channel.send(`<@${user.id}> compra 1`);
   } else {
-    // Atualiza compras existentes
     const comprasAtuais = Number(result.rows[0].compras) + 1;
     await pool.query(
       "UPDATE clientes SET compras = $1 WHERE user_id = $2",
@@ -422,7 +422,7 @@ if (command === "thl!compra" && args[0] === "confirmada") {
     message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
   }
 }
-
+  
 // ======= COMANDO PARA LISTAR CLIENTES =======
 if (command === "thl!clientes") {
   const result = await pool.query(
