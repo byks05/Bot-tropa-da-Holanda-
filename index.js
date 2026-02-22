@@ -743,53 +743,44 @@ client.on("ready", async () => {
 // =============================
 // PAINEL FIXO DE LOJA AO INICIAR
 // =============================
-const { ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField } = require("discord.js");
-
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guild = client.guilds.cache.first(); // ou use guild ID se tiver várias
-  if (!guild) return console.error("Guild não encontrada");
+  const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
+  if (!canalEmbed) return console.error("Canal do painel fixo não encontrado.");
 
-  const canalLoja = guild.channels.cache.get("1474885764990107790");
-  if (!canalLoja) return console.error("Canal de loja não encontrado");
+  const produtos = [
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
+  ];
 
-  // Embed fixo com informações gerais
-  const infoEmbed = new EmbedBuilder()
-    .setTitle("Produtos | Tropa da Holanda 🇳🇱")
-    .setDescription(
-      "-# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.\n\n" +
-      "<:carrinho:1467522339842556132> **Nitro mensal (1 mês/3 mês)**\n" +
-      "<:carrinho:1467522339842556132> **CONTA VIRGEM +30 Dias**\n" +
-      "Nunca tiveram N1tro\nEmail confirmado\nAltere o email!\nÓtimas para ativar nitro\nFull acesso (pode trocar email & senha)\n\n" +
-      "<:carrinho:1467522339842556132> **Ativação do Nitro**\nObs: após a compra do nitro receberá um link que terá ser ativado, e nós ativamos.\n\n" +
-      "<:carrinho:1467522339842556132> **Spotify Premium**\n\n" +
-      "<:carrinho:1467522339842556132> **Molduras com icon personalizado**\n\n" +
-      "<:carrinho:1467522339842556132> **Y0utub3 Premium**\n\n" +
-      "-# Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes <a:Alerta:1467938107759526161>"
-    )
-    .setColor("Blue");
-
-  // Select menu de produtos (só produto + valor)
-  const selectMenu = new ActionRowBuilder().addComponents(
+  const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId("loja_select")
-      .setPlaceholder("Selecione o produto que deseja comprar")
-      .addOptions([
-        { label: "Nitro 1 mês", value: "nitro_1mes", description: "3 R$" },
-        { label: "Nitro 3 meses", value: "nitro_3meses", description: "6 R$" },
-        { label: "Conta virgem +30 dias", value: "conta_virgem", description: "5 R$" },
-        { label: "Ativação Nitro", value: "ativacao_nitro", description: "1,50 R$" },
-        { label: "Spotify Premium", value: "spotify", description: "5 R$" },
-        { label: "Molduras com icon personalizado", value: "molduras", description: "2 R$" },
-        { label: "Y0utub3 Premium", value: "youtube", description: "6 R$" },
-      ])
+      .setCustomId("painel_loja")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtos)
   );
 
-  // Envia mensagem fixa
-  const mensagem = await canalLoja.send({ embeds: [infoEmbed], components: [selectMenu] });
+  const textoPainel = `
+# Produtos | Tropa da Holanda 🇳🇱
+- Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
 
-  // Fixa a mensagem
+<:carrinho:1467522339842556132> **Selecione um produto no menu abaixo para abrir o ticket.**
+`;
+
+  // Apaga mensagem antiga se existir (opcional)
+  const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+  mensagens.forEach(msg => {
+    if (msg.author.id === client.user.id) msg.delete().catch(() => {});
+  });
+
+  await canalEmbed.send({ content: textoPainel, components: [row] });
+});
   await mensagem.pin().catch(() => {});
 });
 
