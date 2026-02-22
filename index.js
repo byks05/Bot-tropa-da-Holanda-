@@ -159,55 +159,85 @@ client.once("ready", async () => {
 // INTERAÇÕES
 // -------------------
 client.on("interactionCreate", async interaction => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "loja_select") return;
+
+  const produto = interaction.values[0];
   const guild = interaction.guild;
+  const categoriaId = "1474885663425036470";
+  const ticketName = `ticket-${interaction.user.username}`;
 
-  // SELECT MENU LOJA
-  if (interaction.isStringSelectMenu() && interaction.customId === "loja_select") {
-    const produto = interaction.values[0];
-    const categoriaId = "1474885663425036470";
-    const ticketName = `ticket-${interaction.user.username}`;
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(
+    c => c.name === ticketName && c.parentId === categoriaId
+  );
+  if (existingChannel) {
+    // Apenas reseta o select menu para permitir nova seleção
+    const menuReset = new StringSelectMenuBuilder()
+      .setCustomId("loja_select")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(interaction.component.options)
+      .setDefaultValue([]); // Resetar seleção
 
-    if (guild.channels.cache.find(c => c.name === ticketName && c.parentId === categoriaId)) {
-      return interaction.reply({ content: `❌ Você já possui um ticket aberto`, ephemeral: true });
-    }
+    const rowReset = new ActionRowBuilder().addComponents(menuReset);
+    await interaction.update({ components: [rowReset] });
 
-    const channel = await guild.channels.create({
-      name: ticketName,
-      type: ChannelType.GuildText,
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      ],
-    });
-
-    const produtosInfo = {
-      nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
-      nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
-      conta_virgem: { nome: "Contas virgem +30 dias", valor: "5 R$" },
-      ativacao_nitro: { nome: "Ativação Nitro", valor: "1,50 R$" },
-      spotify: { nome: "Spotify Premium", valor: "5 R$" },
-      moldura: { nome: "Molduras com icon personalizado", valor: "2 R$" },
-      youtube: { nome: "Youtube Premium", valor: "6 R$" },
-    };
-
-    const prodSelecionado = produtosInfo[produto];
-    const ticketEmbed = new EmbedBuilder()
-      .setTitle(`🛒 Ticket de Compra - ${prodSelecionado.nome}`)
-      .setDescription(`${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\nAdmins responsáveis: <@&${IDS.RECRUITMENT_ROLE}>`)
-      .setColor("Green")
-      .setTimestamp();
-
-    const fecharButton = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("fechar_ticket")
-        .setLabel("🔒 Fechar Ticket")
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    await channel.send({ content: `<@&${IDS.RECRUITMENT_ROLE}>`, embeds: [ticketEmbed], components: [fecharButton] });
-    await interaction.reply({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
   }
+
+  // Cria canal de ticket
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+    ],
+  });
+
+  const produtosInfo = {
+    nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
+    nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
+    conta_virgem: { nome: "Contas virgem +30 dias", valor: "5 R$" },
+    ativacao_nitro: { nome: "Ativação Nitro", valor: "1,50 R$" },
+    spotify: { nome: "Spotify Premium", valor: "5 R$" },
+    moldura: { nome: "Molduras com icon personalizado", valor: "2 R$" },
+    youtube: { nome: "Youtube Premium", valor: "6 R$" },
+  };
+
+  const prodSelecionado = produtosInfo[produto];
+
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${prodSelecionado.nome}`)
+    .setDescription(
+      `${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\n\n` +
+      `Admins responsáveis: <@&${IDS.RECRUITMENT_ROLE}>`
+    )
+    .setColor("Green")
+    .setTimestamp();
+
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&${IDS.RECRUITMENT_ROLE}>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+  // Reseta a seleção do menu para permitir que o usuário clique de novo
+  const menuReset = new StringSelectMenuBuilder()
+    .setCustomId("loja_select")
+    .setPlaceholder("Selecione um produto...")
+    .addOptions(interaction.component.options)
+    .setDefaultValue([]); // reset
+
+  const rowReset = new ActionRowBuilder().addComponents(menuReset);
+  await interaction.update({ components: [rowReset] });
+
+  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+});
 
   // BUTTON FECHAR TICKET
   if (interaction.isButton() && interaction.customId === "fechar_ticket") {
