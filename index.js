@@ -425,81 +425,115 @@ if (command === "ponto") {
   let data = result.rows[0];
   const sub = args[0]?.toLowerCase();
 
-  // =============================
-  // ENTRAR
-  // =============================
-  if (sub === "entrar") {
+ // =============================
+// COMANDO THL!PONTO ENTRAR
+// =============================
+if (sub === "entrar") {
 
-    if (message.channel.id !== CANAL_ENTRAR)
-      return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+  if (message.channel.id !== CANAL_ENTRAR)
+    return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
 
-    if (data.ativo)
-      return message.reply("❌ Você já iniciou seu ponto.");
+  if (data.ativo)
+    return message.reply("❌ Você já iniciou seu ponto.");
 
-    await pool.query(
-      "UPDATE pontos SET ativo = true, entrada = $1, notificado = false WHERE user_id = $2",
-      [Date.now(), userId]
-    );
+  // ativa o ponto no banco
+  await pool.query(
+    "UPDATE pontos SET ativo = true, entrada = $1, notificado = false WHERE user_id = $2",
+    [Date.now(), userId]
+  );
 
-    const canal = await guild.channels.create({
-      name: `ponto-${message.author.username}`,
-      type: 0,
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-      ]
-    });
+  // cria o canal do ponto
+  const canal = await guild.channels.create({
+    name: `ponto-${message.author.username}`,
+    type: 0, // texto
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: ["ViewChannel"] },
+      { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+    ]
+  });
 
-    await pool.query(
-      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-      [canal.id, userId]
-    );
+  await pool.query(
+    "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+    [canal.id, userId]
+  );
 
-    await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-    await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+  await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
+  await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-    // contador tempo real
-    const intervaloTempo = setInterval(async () => {
+  // ==============================
+  // LOOP UNIFICADO: TEMPO + INATIVIDADE
+  // ==============================
+  let tentativas = 0;
+  let ultimaEntrada = Date.now(); // controla o lembrete de 20 minutos
 
+  const loopPonto = async () => {
+    while (true) {
+
+      // busca o ponto atual
       const check = await pool.query(
-        "SELECT ativo, entrada FROM pontos WHERE user_id = $1",
+        "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
         [userId]
       );
 
-      if (!check.rows[0]?.ativo) {
-        clearInterval(intervaloTempo);
-        clearInterval(intervaloLembrete);
-        return;
-      }
+      if (!check.rows[0]?.ativo) break; // ponto fechado, sai do loop
 
+      // atualiza o tempo no tópico do canal
       const tempoAtual = Date.now() - Number(check.rows[0].entrada);
       const horas = Math.floor(tempoAtual / 3600000);
       const minutos = Math.floor((tempoAtual % 3600000) / 60000);
       const segundos = Math.floor((tempoAtual % 60000) / 1000);
 
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    }, 1000);
 
-    // lembrete 20min
-    const intervaloLembrete = setInterval(async () => {
+      // verifica se passou 20 minutos desde a última pergunta
+      if (Date.now() - ultimaEntrada >= 20 * 60 * 1000) {
+        tentativas = 0;
 
-      const check = await pool.query(
-        "SELECT ativo FROM pontos WHERE user_id = $1",
-        [userId]
-      );
+        while (tentativas < 3) {
+          tentativas++;
 
-      if (!check.rows[0]?.ativo) {
-        clearInterval(intervaloLembrete);
-        return;
+          await canal.send(
+            `⏰ <@${userId}> você ainda está ativo?\n` +
+            `Responda em até 2 minutos.\n` +
+            `Tentativa ${tentativas}/3`
+          );
+
+          const filtro = m => m.author.id === userId;
+
+          try {
+            await canal.awaitMessages({ filter: filtro, max: 1, time: 2 * 60 * 1000, errors: ["time"] });
+            await canal.send("✅ Presença confirmada. Ponto continua ativo.");
+            ultimaEntrada = Date.now(); // reinicia contador de 20min
+            break;
+          } catch {
+            if (tentativas >= 3) {
+              // encerra o ponto e atualiza o banco
+              const tempoTotal = Number(check.rows[0].total) + (Date.now() - Number(check.rows[0].entrada));
+
+              await pool.query(
+                "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+                [tempoTotal, userId]
+              );
+
+              await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
+              setTimeout(() => canal.delete().catch(() => {}), 5000);
+              return; // sai do loop
+            }
+
+            // espera 2 minutos antes da próxima tentativa
+            await new Promise(res => setTimeout(res, 2 * 60 * 1000));
+          }
+        }
       }
 
-      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
-    }, 20 * 60 * 1000);
+      // espera 1 segundo antes de atualizar novamente
+      await new Promise(res => setTimeout(res, 1000));
+    }
+  };
 
-    return;
-  }
-
+  loopPonto();
+}
   // =============================
   // SAIR
   // =============================
@@ -635,77 +669,7 @@ if (sub === "registro") {
     return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
 }
-  // =============================
-// SISTEMA DE INATIVIDADE - DENTRO DO COMANDO
-// =============================
 
-let tentativas = 0;
-
-const esperar = (ms) => new Promise(res => setTimeout(res, ms));
-
-const verificarAtividade = async () => {
-  while (true) {
-    // espera 20 minutos antes de perguntar
-    await esperar(20 * 60 * 1000);
-
-    const check = await pool.query(
-      "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
-      [userId]
-    );
-
-    if (!check.rows[0]?.ativo) break; // ponto já fechado, sai do loop
-
-    tentativas = 0;
-
-    while (tentativas < 3) {
-      tentativas++;
-
-      await canal.send(
-        `⏰ <@${userId}> você ainda está ativo?\n` +
-        `Responda em até 2 minutos.\n` +
-        `Tentativa ${tentativas}/3`
-      );
-
-      const filtro = m => m.author.id === userId;
-
-      try {
-        await canal.awaitMessages({
-          filter: filtro,
-          max: 1,
-          time: 2 * 60 * 1000,
-          errors: ["time"]
-        });
-
-        await canal.send("✅ Presença confirmada. Ponto continua ativo.");
-        break; // saiu do while de tentativas, espera mais 20 minutos
-      } catch {
-        if (tentativas >= 3) {
-          // calcula o tempo total e encerra o ponto
-          const tempo = Date.now() - Number(check.rows[0].entrada);
-          const novoTotal = Number(check.rows[0].total) + tempo;
-
-          await pool.query(
-            "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-            [novoTotal, userId]
-          );
-
-          await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
-          setTimeout(() => canal.delete().catch(() => {}), 5000);
-
-          return; // sai da função
-        }
-        // espera 2 minutos antes de tentar novamente
-        await esperar(2 * 60 * 1000);
-      }
-    }
-  }
-};
-
-// inicia a função dentro do comando, assim que o ponto é criado
-verificarAtividade();
-
-  
-  
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
 // =============================
@@ -1079,70 +1043,6 @@ if (command === "rec") {
     return message.reply("❌ Erro ao executar comando.");
   }
 }
-
-  // ======= COMANDO PARA CONFIRMAR COMPRA =======
-  if (command === "thl!compra" && args[0] === "confirmada") {
-    const user = message.mentions.users.first();
-    if (!user) return message.reply("❌ Mencione alguém.");
-
-    const member = message.guild.members.cache.get(user.id);
-    const cargoClienteId = "1475111107114041447"; // Coloque o ID do cargo de cliente
-
-    // Adiciona o cargo se não tiver
-    if (!member.roles.cache.has(cargoClienteId)) {
-      await member.roles.add(cargoClienteId);
-      message.channel.send(`✅ ${user.tag} agora é cliente!`);
-    }
-
-    // Verifica se já existe no banco
-    const result = await pool.query(
-      "SELECT * FROM clientes WHERE user_id = $1",
-      [user.id]
-    );
-
-    if (result.rows.length === 0) {
-      // Adiciona novo registro
-      await pool.query(
-        "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
-        [user.id, 1]
-      );
-      message.channel.send(`<@${user.id}> compra 1`);
-    } else {
-      // Atualiza compras existentes
-      const comprasAtuais = Number(result.rows[0].compras) + 1;
-      await pool.query(
-        "UPDATE clientes SET compras = $1 WHERE user_id = $2",
-        [comprasAtuais, user.id]
-      );
-      message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
-    }
-  }
-
-  // ======= COMANDO PARA LISTAR CLIENTES =======
-  if (command === "thl!clientes") {
-    const result = await pool.query(
-      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
-    );
-
-    if (result.rows.length === 0) return message.reply("Nenhum cliente registrado.");
-
-    let lista = "";
-    for (const row of result.rows) {
-      lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
-    }
-
-    // Divide em blocos de 2000 caracteres para não quebrar o Discord
-    const blocos = [];
-    while (lista.length > 0) {
-      blocos.push(lista.slice(0, 2000));
-      lista = lista.slice(2000);
-    }
-
-    for (const bloco of blocos) {
-      await message.channel.send(bloco);
-    }
-  }
-});
   
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
