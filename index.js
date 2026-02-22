@@ -3,12 +3,12 @@
 // =============================
 const { 
   Client, 
-  GatewayIntentBits, 
+  GatewayIntentBits,
   EmbedBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
   ChannelType,
   PermissionsBitField
 } = require("discord.js");
@@ -113,7 +113,6 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
   await mensagem.pin().catch(() => {});
 });
 
-//
 // =============================
 // INTERAÇÃO DO SELECT MENU
 // =============================
@@ -123,22 +122,17 @@ client.on("interactionCreate", async (interaction) => {
 
   const produto = interaction.values[0];
   const guild = interaction.guild;
-  const userId = interaction.user.id;
   const categoriaId = "1474885663425036470";
   const ticketName = `ticket-${interaction.user.username}`;
 
-  // 🔥 Verifica no BANCO se já possui ticket aberto
-  const checkTicket = await pool.query(
-    "SELECT * FROM tickets WHERE user_id = $1 AND guild_id = $2 AND status = 'aberto'",
-    [userId, guild.id]
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(
+    c => c.name === ticketName && c.parentId === categoriaId
   );
-
-  if (checkTicket.rows.length > 0) {
+  if (existingChannel) {
+    // Reset do select menu para poder clicar de novo
     await interaction.update({ components: interaction.message.components });
-    return interaction.followUp({
-      content: `❌ Você já possui um ticket aberto.`,
-      ephemeral: true
-    });
+    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
   }
 
   // Cria canal de ticket
@@ -148,16 +142,11 @@ client.on("interactionCreate", async (interaction) => {
     parent: categoriaId,
     permissionOverwrites: [
       { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
     ],
   });
 
-  // 🔥 Salva no banco
-  await pool.query(
-    "INSERT INTO tickets (user_id, guild_id, channel_id, produto) VALUES ($1, $2, $3, $4)",
-    [userId, guild.id, channel.id, produto]
-  );
-
+  // Produtos com valores
   const produtosInfo = {
     nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
     nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
@@ -186,19 +175,12 @@ client.on("interactionCreate", async (interaction) => {
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({
-    content: `<@&1472589662144040960> <@&1468017578747105390>`,
-    embeds: [ticketEmbed],
-    components: [fecharButton]
-  });
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
 
+  // Reset do select menu para permitir nova compra
   await interaction.update({ components: interaction.message.components });
-  await interaction.followUp({
-    content: `✅ Ticket criado! Verifique o canal ${channel}`,
-    ephemeral: true
-  });
+  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
 });
-
 
 // =============================
 // FECHAR TICKET
@@ -208,16 +190,7 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId !== "fechar_ticket") return;
 
   if (!interaction.channel.name.startsWith("ticket-"))
-    return interaction.reply({
-      content: "❌ Este botão só pode ser usado dentro de um ticket.",
-      ephemeral: true
-    });
-
-  // 🔥 Atualiza status no banco
-  await pool.query(
-    "UPDATE tickets SET status = 'fechado' WHERE channel_id = $1",
-    [interaction.channel.id]
-  );
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
 
   await interaction.channel.delete().catch(() => {});
 });
