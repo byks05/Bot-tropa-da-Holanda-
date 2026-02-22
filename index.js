@@ -172,7 +172,7 @@ client.on("ready", async () => {
 
   const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
+-# Compre Apenas com vendedor oficial <@1209478510847197216>, <@910351624189411408> ou atendentes.
 
 🛒 ** Nitro mensal (1 mês/3 mês) **
 
@@ -614,37 +614,40 @@ Novo saldo: ${novoSaldo} 💰`);
   }
   
   if (command === "fechar") {
-  // Extrai ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0];
+  if (!targetId) return message.channel.send("❌ Use: thl!fechar <@user>");
 
-  if (!targetId) return message.reply("❌ Use: thl!fechar <@user>");
-
-  // Pega os dados do usuário
   const result = await pool.query("SELECT total, entrada, ativo FROM pontos WHERE user_id=$1", [targetId]);
   const info = result.rows[0];
-  if (!info) return message.reply("❌ Usuário não encontrado.");
-  if (!info.ativo || !info.entrada) return message.reply("❌ Este usuário não tem sessão ativa.");
+  if (!info) return message.channel.send("❌ Usuário não encontrado.");
+  if (!info.ativo || !info.entrada) return message.channel.send("❌ Este usuário não tem sessão ativa.");
 
-  // Calcula o tempo da sessão e atualiza total
+  // Calcula o tempo e atualiza no banco
   const tempoSessao = Date.now() - Number(info.entrada);
   const novoTotal = Number(info.total || 0) + tempoSessao;
-
-  // Fecha a sessão no banco
   await pool.query(
     "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
     [novoTotal, targetId]
   );
 
   // Deleta o canal do usuário dentro da categoria
-  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria de canais
-  if (categoria && categoria.type === 4) { // tipo 4 = categoria
-    const canalDoUsuario = categoria.children.find(c => c.name.includes(targetId));
-    if (canalDoUsuario) await canalDoUsuario.delete("Sessão encerrada pelo bot");
+  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria
+  if (categoria && categoria.type === 4) { // tipo categoria
+    const canalDoUsuario = categoria.children.find(
+      c => c.isText() && c.name.includes(targetId)
+    );
+    if (canalDoUsuario) {
+      try {
+        await canalDoUsuario.delete("Sessão encerrada pelo bot");
+      } catch (err) {
+        console.error("Não foi possível deletar o canal:", err);
+      }
+    }
   }
 
   const minutos = Math.floor(novoTotal / 60000);
-  return message.reply(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
+  await message.channel.send(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
 }
 
   if (command === "comprar") {
