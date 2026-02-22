@@ -1238,7 +1238,6 @@ client.on("ready", async () => {
       canal TEXT
     );
   `);
-});
 
 // =============================
 // TICKET MENTION
