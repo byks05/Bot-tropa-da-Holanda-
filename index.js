@@ -16,12 +16,23 @@ require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 
-// 🔥 PostgreSQL
+// =============================
+// POSTGRESQL POOL
+// =============================
 const { Pool } = require("pg");
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }, // mantém seguro em produção
 });
+
+// Função de teste de conexão (opcional, útil para debug)
+pool.connect()
+  .then(client => {
+    console.log("Conectado ao PostgreSQL com sucesso!");
+    client.release();
+  })
+  .catch(err => console.error("Erro ao conectar no PostgreSQL:", err));
 
 // =============================
 // CLIENT
@@ -34,66 +45,12 @@ const client = new Client({
   ] 
 });
 
-// =============================
-// PAINEL FIXO DE LOJA
-// =============================
-client.on("ready", async () => {
+// Log de inicialização
+client.once("ready", () => {
   console.log(`${client.user.tag} está online!`);
-
-  const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
-  if (!canalEmbed) return console.error("Canal do painel fixo não encontrado.");
-
-  const produtos = [
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
-    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
-  ];
-
-  const row = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId("loja_select")
-      .setPlaceholder("Selecione um produto...")
-      .addOptions(produtos)
-  );
-
-  const textoPainel = `
-# Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
-
-🛒 ** Nitro mensal (1 mês/3 mês) **
-
-🛒 **CONTA VIRGEM +30 Dias**
-• Nunca tiverão Nitro  
-• Email confirmado  
-• Altere o email!  
-• Ótimas para ativar nitro  
-• Full acesso (pode trocar email & senha)
-
-🛒 **Ativação do nitro**  
-Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
-
-🛒 **Sp0tify Premium**
-
-🛒 **Molduras com icon personalizado**
-
-🛒 **Y0utub3 Premium**
-
--# Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes 🚨
-`;
-
-  // Apaga mensagens antigas do bot (opcional)
-  const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-  mensagens.forEach(msg => {
-    if (msg.author.id === client.user.id) msg.delete().catch(() => {});
-  });
-
-  const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
-  await mensagem.pin().catch(() => {});
 });
+
+module.exports = { client, pool }; // exporta para facilitar integração com outros módulos
 
 // =============================
 // INTERAÇÃO DO SELECT MENU
@@ -104,17 +61,22 @@ client.on("interactionCreate", async (interaction) => {
 
   const produto = interaction.values[0];
   const guild = interaction.guild;
+  const userId = interaction.user.id;
   const categoriaId = "1474885663425036470";
   const ticketName = `ticket-${interaction.user.username}`;
 
-  // Evita ticket duplicado
-  const existingChannel = guild.channels.cache.find(
-    c => c.name === ticketName && c.parentId === categoriaId
+  // 🔥 Verifica no BANCO se já possui ticket aberto
+  const checkTicket = await pool.query(
+    "SELECT * FROM tickets WHERE user_id = $1 AND guild_id = $2 AND status = 'aberto'",
+    [userId, guild.id]
   );
-  if (existingChannel) {
-    // Reset do select menu para poder clicar de novo
+
+  if (checkTicket.rows.length > 0) {
     await interaction.update({ components: interaction.message.components });
-    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+    return interaction.followUp({
+      content: `❌ Você já possui um ticket aberto.`,
+      ephemeral: true
+    });
   }
 
   // Cria canal de ticket
@@ -124,11 +86,16 @@ client.on("interactionCreate", async (interaction) => {
     parent: categoriaId,
     permissionOverwrites: [
       { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
     ],
   });
 
-  // Produtos com valores
+  // 🔥 Salva no banco
+  await pool.query(
+    "INSERT INTO tickets (user_id, guild_id, channel_id, produto) VALUES ($1, $2, $3, $4)",
+    [userId, guild.id, channel.id, produto]
+  );
+
   const produtosInfo = {
     nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
     nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
@@ -157,12 +124,19 @@ client.on("interactionCreate", async (interaction) => {
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+  await channel.send({
+    content: `<@&1472589662144040960> <@&1468017578747105390>`,
+    embeds: [ticketEmbed],
+    components: [fecharButton]
+  });
 
-  // Reset do select menu para permitir nova compra
   await interaction.update({ components: interaction.message.components });
-  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+  await interaction.followUp({
+    content: `✅ Ticket criado! Verifique o canal ${channel}`,
+    ephemeral: true
+  });
 });
+
 
 // =============================
 // FECHAR TICKET
@@ -172,7 +146,16 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId !== "fechar_ticket") return;
 
   if (!interaction.channel.name.startsWith("ticket-"))
-    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+    return interaction.reply({
+      content: "❌ Este botão só pode ser usado dentro de um ticket.",
+      ephemeral: true
+    });
+
+  // 🔥 Atualiza status no banco
+  await pool.query(
+    "UPDATE tickets SET status = 'fechado' WHERE channel_id = $1",
+    [interaction.channel.id]
+  );
 
   await interaction.channel.delete().catch(() => {});
 });
@@ -189,33 +172,24 @@ const IDS = {
 };
 
 // =============================
-// SISTEMA BATE PONTO
+// SISTEMA BATE PONTO - POSTGRESQL
 // =============================
-const DATA_FILE = path.join(__dirname, "pontos.json");
 
-// Garante que o arquivo exista
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({}));
+// Função para buscar usuário no banco
+async function getUser(userId, guildId) {
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1 AND guild_id = $2",
+    [userId, guildId]
+  );
+  return result.rows[0];
 }
 
-// Função para ler dados de forma segura
-function getData() {
-  try {
-    const raw = fs.readFileSync(DATA_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch (err) {
-    console.error("Erro ao ler pontos.json:", err);
-    return {};
-  }
-}
-
-// Função para salvar dados
-function saveData(data) {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error("Erro ao salvar pontos.json:", err);
-  }
+// Função para criar usuário se não existir
+async function createUser(userId, guildId) {
+  await pool.query(
+    "INSERT INTO pontos (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING",
+    [userId, guildId]
+  );
 }
 
 // =============================
@@ -227,23 +201,34 @@ const parseDuration = (time) => {
   if (!time) return null;
   const match = time.match(/^(\d+)([mh])$/);
   if (!match) return null;
+
   const value = Number(match[1]);
   const unit = match[2];
-  return unit === "m" ? value * 60000 : value * 3600000;
+
+  return unit === "m"
+    ? value * 60 * 1000
+    : value * 60 * 60 * 1000;
 };
 
 // Envia embed de log para o canal configurado
-const sendLog = (guild, embed) => {
-  const channel = guild.channels.cache.get(IDS.LOG_CHANNEL);
-  if (channel) channel.send({ embeds: [embed] }).catch(console.error);
+const sendLog = async (guild, embed) => {
+  try {
+    const channel = await guild.channels.fetch(IDS.LOG_CHANNEL).catch(() => null);
+    if (channel) await channel.send({ embeds: [embed] });
+  } catch (err) {
+    console.error("Erro ao enviar log:", err);
+  }
 };
 
 // Verifica se o membro pode usar comando de staff
-const canUseCommand = (member) => IDS.STAFF.some((id) => member.roles.cache.has(id));
+const canUseCommand = (member) => {
+  return IDS.STAFF.some((id) => member.roles.cache.has(id));
+};
 
 // Pega ou cria cargo de mute
 async function getMuteRole(guild) {
   let role = guild.roles.cache.find((r) => r.name === "Muted");
+
   if (!role) {
     try {
       role = await guild.roles.create({
@@ -254,8 +239,13 @@ async function getMuteRole(guild) {
       console.error("Erro ao criar cargo Muted:", err);
     }
   }
+
   return role;
 }
+
+// =============================
+// SISTEMA DE METAS POR CARGO
+// =============================
 
 // Lista de cargos e metas (em ms)
 const CARGOS = [
@@ -277,6 +267,7 @@ const CARGOS = [
   { id: "1474354265240899727", meta: 24 * 3600000 },
   { id: "1474364646629838970", meta: 24 * 3600000 },
   { id: "1468026315285205094", meta: 24 * 3600000 },
+
   // 48h
   { id: "1468018959797452881", meta: 48 * 3600000 },
   { id: "1473797846862921836", meta: 48 * 3600000 },
@@ -289,10 +280,14 @@ const CARGOS = [
 
 // Pega cargo atual do membro baseado nos cargos que ele possui
 const getCargoAtual = (member) => {
-  const cargosPossiveis = CARGOS.filter((c) => member.roles.cache.has(c.id));
+  const cargosPossiveis = CARGOS.filter((c) =>
+    member.roles.cache.has(c.id)
+  );
+
   if (!cargosPossiveis.length) return "Nenhum cargo";
-  // Pega o cargo com maior meta
+
   cargosPossiveis.sort((a, b) => b.meta - a.meta);
+
   return `<@&${cargosPossiveis[0].id}>`;
 };
 
@@ -338,21 +333,31 @@ client.on("messageCreate", async (message) => {
 
   const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
   const command = args.shift().toLowerCase();
-  const userId = message.author.id;
-  const guild = message.guild;
-  const data = getData();
 
-  // =============================
+  const userId = message.author.id;
+  const guildId = message.guild.id;
+
+  // 🔥 GARANTE QUE O USUÁRIO EXISTE NO BANCO
+  await createUser(userId, guildId);
+
+  // 🔥 BUSCA DADOS ATUALIZADOS DO BANCO
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1 AND guild_id = $2",
+    [userId, guildId]
+  );
+
+  const userData = result.rows[0];
+
+// =============================
 // COMANDO PONTO COMPLETO
 // =============================
 if (command === "ponto") {
 
-  const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
-  const CANAL_ENTRAR = "1474383177689731254"; // canal onde usar 'entrar'
+  const categoriaId = "1474413150441963615";
+  const CANAL_ENTRAR = "1474383177689731254";
   const userId = message.author.id;
   const guild = message.guild;
 
-  // Apenas cargos permitidos podem usar ponto
   const ALLOWED_PONTO = [
     "1468017578747105390",
     "1468069638935150635",
@@ -363,11 +368,24 @@ if (command === "ponto") {
     return message.reply("❌ Você não tem permissão para usar este comando.");
   }
 
-  const data = getData();
-  if (!data[userId]) {
-    data[userId] = { ativo: false, entrada: null, total: 0, canal: null, notificado: false };
+  // garante que o usuário existe no banco
+  let result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    await pool.query(
+      "INSERT INTO pontos (user_id) VALUES ($1)",
+      [userId]
+    );
+    result = await pool.query(
+      "SELECT * FROM pontos WHERE user_id = $1",
+      [userId]
+    );
   }
 
+  let data = result.rows[0];
   const sub = args[0]?.toLowerCase();
 
   // =============================
@@ -378,15 +396,14 @@ if (command === "ponto") {
     if (message.channel.id !== CANAL_ENTRAR)
       return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
 
-    if (data[userId].ativo)
+    if (data.ativo)
       return message.reply("❌ Você já iniciou seu ponto.");
 
-    data[userId].ativo = true;
-    data[userId].entrada = Date.now();
-    data[userId].notificado = false;
-    saveData(data);
+    await pool.query(
+      "UPDATE pontos SET ativo = true, entrada = $1, notificado = false WHERE user_id = $2",
+      [Date.now(), userId]
+    );
 
-    // cria canal privado
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: 0,
@@ -397,32 +414,49 @@ if (command === "ponto") {
       ]
     });
 
-    data[userId].canal = canal.id;
-    saveData(data);
+    await pool.query(
+      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+      [canal.id, userId]
+    );
 
     await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
     // contador tempo real
-    const intervaloTempo = setInterval(() => {
-      if (!data[userId]?.ativo) {
+    const intervaloTempo = setInterval(async () => {
+
+      const check = await pool.query(
+        "SELECT ativo, entrada FROM pontos WHERE user_id = $1",
+        [userId]
+      );
+
+      if (!check.rows[0]?.ativo) {
         clearInterval(intervaloTempo);
         clearInterval(intervaloLembrete);
         return;
       }
-      const tempoAtual = Date.now() - data[userId].entrada;
+
+      const tempoAtual = Date.now() - Number(check.rows[0].entrada);
       const horas = Math.floor(tempoAtual / 3600000);
       const minutos = Math.floor((tempoAtual % 3600000) / 60000);
       const segundos = Math.floor((tempoAtual % 60000) / 1000);
+
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
     }, 1000);
 
-    // lembrete 20 em 20 min
-    const intervaloLembrete = setInterval(() => {
-      if (!data[userId]?.ativo) {
+    // lembrete 20min
+    const intervaloLembrete = setInterval(async () => {
+
+      const check = await pool.query(
+        "SELECT ativo FROM pontos WHERE user_id = $1",
+        [userId]
+      );
+
+      if (!check.rows[0]?.ativo) {
         clearInterval(intervaloLembrete);
         return;
       }
+
       canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
     }, 20 * 60 * 1000);
 
@@ -434,121 +468,191 @@ if (command === "ponto") {
   // =============================
   if (sub === "sair") {
 
-    if (!data[userId].ativo)
+    if (!data.ativo)
       return message.reply("❌ Você não iniciou ponto.");
 
-    const tempo = Date.now() - data[userId].entrada;
-    data[userId].total += tempo;
-    data[userId].ativo = false;
-    data[userId].entrada = null;
-    data[userId].notificado = false;
-    const canalId = data[userId].canal;
-    data[userId].canal = null;
-    saveData(data);
+    const tempo = Date.now() - Number(data.entrada);
+    const novoTotal = Number(data.total) + tempo;
 
-    if (canalId) {
-      const canal = guild.channels.cache.get(canalId);
+    await pool.query(
+      "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+      [novoTotal, userId]
+    );
+
+    if (data.canal) {
+      const canal = guild.channels.cache.get(data.canal);
       if (canal) {
         await canal.send("🔴 Ponto finalizado. Canal será fechado.");
         setTimeout(() => canal.delete().catch(() => {}), 3000);
       }
     }
 
-    return message.reply(`🔴 Ponto finalizado! Tempo registrado com sucesso.`);
+    return message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
   }
 
-// =============================
-// STATUS
-// =============================
-if (sub === "status") {
-  const userId = message.member.id;
-  const info = data[userId];
-  if (!info) return message.reply("❌ Nenhum ponto ou coins registrado para você.");
+  // =============================
+  // STATUS
+  // =============================
+  if (sub === "status") {
 
-  // Total de tempo = ponto + addtempo
-  let total = info.total || 0;
-  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+    const result = await pool.query(
+      "SELECT * FROM pontos WHERE user_id = $1",
+      [userId]
+    );
 
-  // Calcula horas, minutos e segundos
-  const horas = Math.floor(total / 3600000);
-  const minutos = Math.floor((total % 3600000) / 60000);
-  const segundos = Math.floor((total % 60000) / 1000);
+    if (result.rows.length === 0)
+      return message.reply("❌ Nenhum ponto registrado.");
 
-  // Coins do usuário (addcoins + conversão de tempo)
-  const coins = info.coins || 0;
+    const info = result.rows[0];
 
-  // Cargo atual baseado em roles
-  const member = message.member;
-  const encontrado = CARGOS.find(c => member.roles.cache.has(c.id));
-  const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-
-  // Status ativo ou inativo
-  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-  // Mensagem final
-  return message.reply(
-    `📊 **Seu Status**\n` +
-    `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
-    `Coins: ${coins} 💰\n` +
-    `Status: ${status}\n` +
-    `Cargo atual: ${cargoAtual}`
-  );
-}
-  
-// =============================
-// REGISTRO (Ranking Top 10)
-// =============================
-if (sub === "registro") {
-  const ranking = Object.entries(data)
-    .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
-    .slice(0, 10);
-
-  if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
-
-  let texto = "";
-  for (const [uid, info] of ranking) {
-    let total = info.total || 0;
-    if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+    let total = Number(info.total);
+    if (info.ativo && info.entrada)
+      total += Date.now() - Number(info.entrada);
 
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
     const segundos = Math.floor((total % 60000) / 1000);
 
-    const member = await guild.members.fetch(uid).catch(() => null);
-    const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
+    const coins = info.coins || 0;
+
+    const encontrado = CARGOS.find(c => message.member.roles.cache.has(c.id));
     const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+
     const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-    texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    return message.reply(
+      `📊 **Seu Status**\n` +
+      `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
+      `Coins: ${coins} 💰\n` +
+      `Status: ${status}\n` +
+      `Cargo atual: ${cargoAtual}`
+    );
   }
 
-  return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+// =============================
+// REGISTRO COM PAGINAÇÃO
+// =============================
+if (sub === "registro") {
+
+  const ranking = await pool.query(
+    "SELECT * FROM pontos ORDER BY total DESC"
+  );
+
+  if (ranking.rows.length === 0)
+    return message.reply("Nenhum registro encontrado.");
+
+  const itensPorPagina = 10;
+  const totalPaginas = Math.ceil(ranking.rows.length / itensPorPagina);
+
+  let paginaAtual = 0;
+
+  const gerarEmbed = async (pagina) => {
+
+    const inicio = pagina * itensPorPagina;
+    const fim = inicio + itensPorPagina;
+    const dadosPagina = ranking.rows.slice(inicio, fim);
+
+    let descricao = "";
+    let posicao = inicio + 1;
+
+    for (const info of dadosPagina) {
+
+      let total = Number(info.total);
+
+      if (info.ativo && info.entrada)
+        total += Date.now() - Number(info.entrada);
+
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
+
+      const member = await guild.members.fetch(info.user_id).catch(() => null);
+      const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
+      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+      const status = info.ativo ? "🟢" : "🔴";
+
+      let medalha = "";
+      if (posicao === 1) medalha = "🥇 ";
+      else if (posicao === 2) medalha = "🥈 ";
+      else if (posicao === 3) medalha = "🥉 ";
+
+      descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+
+      posicao++;
+    }
+
+    return new EmbedBuilder()
+      .setTitle("📊 Ranking de Atividade")
+      .setDescription(descricao || "Sem dados.")
+      .setFooter({ text: `Página ${pagina + 1} de ${totalPaginas}` })
+      .setColor("Blue");
+  };
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("rank_prev")
+      .setLabel("⬅️")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId("rank_next")
+      .setLabel("➡️")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const mensagem = await message.reply({
+    embeds: [await gerarEmbed(paginaAtual)],
+    components: totalPaginas > 1 ? [row] : []
+  });
+
+  const collector = mensagem.createMessageComponentCollector({
+    time: 60000
+  });
+
+  collector.on("collect", async interaction => {
+
+    if (interaction.user.id !== message.author.id)
+      return interaction.reply({ content: "❌ Apenas quem executou o comando pode usar os botões.", ephemeral: true });
+
+    if (interaction.customId === "rank_prev") {
+      if (paginaAtual > 0) paginaAtual--;
+    }
+
+    if (interaction.customId === "rank_next") {
+      if (paginaAtual < totalPaginas - 1) paginaAtual++;
+    }
+
+    await interaction.update({
+      embeds: [await gerarEmbed(paginaAtual)],
+      components: totalPaginas > 1 ? [row] : []
+    });
+  });
+
+  collector.on("end", () => {
+    mensagem.edit({ components: [] }).catch(() => {});
+  });
 }
-  
+
   // =============================
-  // RESETAR HORAS DE TODOS
+  // RESET
   // =============================
   if (sub === "reset") {
 
-    // Apenas staff pode usar
     if (!canUseCommand(message.member))
       return message.reply("❌ Você não tem permissão para usar este comando.");
 
-    for (const uid in data) {
-      data[uid].total = 0;
-      data[uid].entrada = data[uid].ativo ? Date.now() : null;
-    }
+    await pool.query(
+      "UPDATE pontos SET total = 0, entrada = CASE WHEN ativo = true THEN $1 ELSE NULL END",
+      [Date.now()]
+    );
 
-    saveData(data);
-    return message.reply("✅ Todas as horas de todos os usuários foram resetadas com sucesso!");
+    return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
-
 }
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
 // =============================
-const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem usar addcoins/addtempo
+const ADM_IDS = ["1468017578747105390", "1468069638935150635"];
 const ALLOWED_REC = [
   "1468017578747105390",
   "1468069638935150635",
@@ -559,16 +663,26 @@ const ALLOWED_REC = [
 // COMANDO ADDCOINS
 // =============================
 if (command === "addcoins") {
+
   if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
     return message.reply("❌ Você não tem permissão.");
 
   const user = message.mentions.members.first();
   const coins = parseInt(args[1]);
-  if (!user || isNaN(coins)) return message.reply("❌ Use: thl!addcoins <@usuário> <quantidade>");
 
-  if (!data[user.id]) data[user.id] = { total: 0, coins: 0, ativo: false, entrada: null };
-  data[user.id].coins += coins;
-  saveData(data);
+  if (!user || isNaN(coins))
+    return message.reply("❌ Use: thl!addcoins <@usuário> <quantidade>");
+
+  // garante que o usuário existe
+  await pool.query(
+    "INSERT INTO pontos (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
+    [user.id]
+  );
+
+  await pool.query(
+    "UPDATE pontos SET coins = coins + $1 WHERE user_id = $2",
+    [coins, user.id]
+  );
 
   message.reply(`✅ Adicionados ${coins} coins para ${user}`);
 }
@@ -577,13 +691,15 @@ if (command === "addcoins") {
 // COMANDO ADDTEMPO
 // =============================
 if (command === "addtempo") {
+
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  const valor = args[1]; // Ex: 3h ou 45m
+  const valor = args[1];
   if (!valor) return message.reply("❌ Informe o tempo para adicionar (ex: 3h ou 45m).");
 
   let milissegundos = 0;
+
   if (valor.endsWith("h")) {
     milissegundos = parseInt(valor) * 60 * 60 * 1000;
   } else if (valor.endsWith("m")) {
@@ -592,11 +708,16 @@ if (command === "addtempo") {
     return message.reply("❌ Formato inválido. Use h para horas ou m para minutos.");
   }
 
-  const userId = user.id;
-  if (!data[userId]) data[userId] = { total: 0, coins: 0, ativo: false, entrada: null };
+  // garante que o usuário existe
+  await pool.query(
+    "INSERT INTO pontos (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
+    [user.id]
+  );
 
-  data[userId].total += milissegundos;
-  saveData(data);
+  await pool.query(
+    "UPDATE pontos SET total = total + $1 WHERE user_id = $2",
+    [milissegundos, user.id]
+  );
 
   message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
 }
@@ -605,52 +726,70 @@ if (command === "addtempo") {
 // COMANDO CONVERTER TEMPO EM COINS
 // =============================
 if (command === "converter") {
+
   const userId = message.author.id;
-  const info = data[userId];
-  if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
 
-  if (!args[0]) return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1",
+    [userId]
+  );
 
-  // Parse de horas ou minutos
+  if (result.rows.length === 0)
+    return message.reply("❌ Você não tem tempo registrado para converter.");
+
+  const info = result.rows[0];
+
+  if (!args[0])
+    return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+
   const input = args[0].toLowerCase();
   let minutos = 0;
+
   if (input.endsWith("h")) {
     const h = parseFloat(input.replace("h", ""));
-    if (isNaN(h) || h <= 0) return message.reply("❌ Quantidade inválida.");
+    if (isNaN(h) || h <= 0)
+      return message.reply("❌ Quantidade inválida.");
     minutos = h * 60;
   } else if (input.endsWith("m")) {
     const m = parseFloat(input.replace("m", ""));
-    if (isNaN(m) || m <= 0) return message.reply("❌ Quantidade inválida.");
+    if (isNaN(m) || m <= 0)
+      return message.reply("❌ Quantidade inválida.");
     minutos = m;
   } else {
     return message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
   }
 
-  // Calcula tempo total disponível (ponto + addtempo)
-  let total = info.total || 0;
-  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
+  // calcula tempo disponível
+  let total = Number(info.total);
+  if (info.ativo && info.entrada)
+    total += Date.now() - Number(info.entrada);
+
   const totalMinutos = Math.floor(total / 60000);
 
-  if (minutos > totalMinutos) return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
+  if (minutos > totalMinutos)
+    return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
 
-  // Subtrai tempo do total
   const minutosEmMs = minutos * 60000;
-  info.total -= minutosEmMs;
 
-  // Calcula coins (1h = 100 coins → 1m ≈ 1,6667 coins)
+  // calcula coins (1h = 100 coins)
   const coins = Math.floor(minutos * (100 / 60));
-  info.coins = (info.coins || 0) + coins;
 
-  saveData(data);
+  await pool.query(
+    "UPDATE pontos SET total = total - $1, coins = coins + $2 WHERE user_id = $3",
+    [minutosEmMs, coins, userId]
+  );
 
-  // Formata horas e minutos convertidos
+  const novoSaldo = Number(info.coins) + coins;
+
   const horasConvertidas = Math.floor(minutos / 60);
   const minutosConvertidos = Math.floor(minutos % 60);
 
-  return message.reply(`✅ Conversão realizada com sucesso!
+  return message.reply(
+`✅ Conversão realizada com sucesso!
 Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
 Coins recebidos: ${coins} 💰
-Novo saldo de coins: ${info.coins} 💰`);
+Novo saldo de coins: ${novoSaldo} 💰`
+  );
 }
 
 // =============================
@@ -659,6 +798,7 @@ Novo saldo de coins: ${info.coins} 💰`);
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelType, PermissionsBitField, EmbedBuilder } = require("discord.js");
 
 if (command === "ponto" && args[0]?.toLowerCase() === "loja") {
+
   const embed = new EmbedBuilder()
     .setTitle("🛒 Loja de Produtos")
     .setDescription(
@@ -673,16 +813,17 @@ if (command === "ponto" && args[0]?.toLowerCase() === "loja") {
 
   const msg = await message.reply({ embeds: [embed] });
 
-  // Apaga a mensagem da lista após 15 segundos
   setTimeout(() => {
     msg.delete().catch(() => {});
   }, 15000);
 }
 
+
 // =============================
 // COMANDO COMPRAR
 // =============================
 if (command === "comprar") {
+
   const produtoArg = args[0]?.toLowerCase();
   if (!produtoArg) return message.reply("❌ Use: thl!comprar <produto>");
 
@@ -698,24 +839,42 @@ if (command === "comprar") {
   if (!produto) return message.reply("❌ Produto inválido.");
 
   const userId = message.author.id;
-  if (!data[userId]) data[userId] = { coins: 0 };
-  const info = data[userId];
+
+  // garante que usuário exista
+  await pool.query(
+    "INSERT INTO pontos (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING",
+    [userId]
+  );
+
+  const result = await pool.query(
+    "SELECT coins FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  const saldo = Number(result.rows[0].coins);
 
   // Checa saldo
-  if ((info.coins || 0) < produto.preco) {
+  if (saldo < produto.preco) {
     return message.reply(`❌ Você não tem coins suficientes para comprar **${produto.nome}**.`);
   }
 
-  // Subtrai coins
-  info.coins -= produto.preco;
-  saveData(data);
-
+  // Verifica se já tem ticket aberto
   const guild = message.guild;
-  const categoriaId = "1474366472326222013"; // Categoria de tickets
-  const existingChannel = guild.channels.cache.find(c => 
-    c.name === `ticket-${message.author.username}` && c.parentId === categoriaId
+  const categoriaId = "1474366472326222013";
+
+  const existingChannel = guild.channels.cache.find(c =>
+    c.name === `ticket-${message.author.username}` &&
+    c.parentId === categoriaId
   );
-  if (existingChannel) return message.reply(`❌ Você já possui um ticket aberto: ${existingChannel}`);
+
+  if (existingChannel)
+    return message.reply(`❌ Você já possui um ticket aberto: ${existingChannel}`);
+
+  // Desconta coins no banco
+  await pool.query(
+    "UPDATE pontos SET coins = coins - $1 WHERE user_id = $2",
+    [produto.preco, userId]
+  );
 
   // Cria canal de ticket
   const channel = await guild.channels.create({
@@ -738,7 +897,6 @@ if (command === "comprar") {
     .setColor("Green")
     .setTimestamp();
 
-  // Botão de fechar ticket
   const fecharButton = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("fechar_ticket")
@@ -746,20 +904,29 @@ if (command === "comprar") {
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+  await channel.send({
+    content: `<@&1472589662144040960> <@&1468017578747105390>`,
+    embeds: [ticketEmbed],
+    components: [fecharButton]
+  });
 
   message.reply(`✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`);
 }
+
 
 // =============================
 // FECHAR TICKET
 // =============================
 client.on("interactionCreate", async interaction => {
+
   if (!interaction.isButton()) return;
   if (interaction.customId !== "fechar_ticket") return;
 
   if (!interaction.channel.name.startsWith("ticket-"))
-    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+    return interaction.reply({
+      content: "❌ Este botão só pode ser usado dentro de um ticket.",
+      ephemeral: true
+    });
 
   await interaction.channel.delete().catch(() => {});
 });
@@ -813,70 +980,105 @@ if (command === "unmutecall") {
   message.reply(`${user} foi desmutado na call.`);
 }
   
-  
 // =============================
 // COMANDO REC
 // =============================
 if (command === "rec") {
-  const user = message.mentions.members.first();
-  if(!user) return message.reply("❌ Mencione um usuário válido.");
-  if(!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id))) return message.reply("❌ Sem permissão.");
 
-  const subCommand = args.find(a => !a.includes(user.id))?.toLowerCase();
-  const secondArg = args.find((a,i) => !a.includes(user.id) && i>0)?.toLowerCase();
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
+    return message.reply("❌ Sem permissão.");
+
+  const subCommand = args[1]?.toLowerCase();
+  const secondArg = args[2]?.toLowerCase();
 
   try {
-    if(subCommand === "add" && secondArg === "menina") {
+
+    if (subCommand === "add" && secondArg === "menina") {
       await user.roles.remove("1468024885354959142");
-      await user.roles.add(["1472223890821611714","1468283328510558208","1468026315285205094"]);
+      await user.roles.add([
+        "1472223890821611714",
+        "1468283328510558208",
+        "1468026315285205094"
+      ]);
       return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
     }
-    if(subCommand === "add") {
+
+    if (subCommand === "add") {
       await user.roles.remove("1468024885354959142");
-      await user.roles.add(["1468283328510558208","1468026315285205094"]);
+      await user.roles.add([
+        "1468283328510558208",
+        "1468026315285205094"
+      ]);
       return message.reply(`✅ Cargos aplicados em ${user}`);
     }
-    return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
-  } catch (err) { console.error(err); return message.reply("❌ Erro ao executar comando."); }
-}
-});  
 
+    return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
+
+  } catch (err) {
+    console.error(err);
+    return message.reply("❌ Erro ao executar comando.");
+  }
+}
+  
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
 client.on("ready", async () => {
-  const data = getData();
+
   const guild = client.guilds.cache.first();
   if (!guild) return;
 
   const categoriaId = "1468715109722357782";
 
-  for (const userId in data) {
-    if (data[userId].ativo) {
-      try {
-        const canal = await guild.channels.create({
-          name: `ponto-recuperado`,
-          type: 0,
-          parent: categoriaId,
-          permissionOverwrites: [
-            { id: guild.id, deny: ["ViewChannel"] },
-            { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-          ]
-        });
+  // Garante tabela
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pontos (
+      user_id TEXT PRIMARY KEY,
+      total BIGINT DEFAULT 0,
+      ativo BOOLEAN DEFAULT false,
+      entrada BIGINT,
+      canal TEXT,
+      coins BIGINT DEFAULT 0
+    );
+  `);
 
-        data[userId].canal = canal.id;
-        saveData(data);
+  // Busca todos ativos no banco
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE ativo = true"
+  );
 
-        canal.send("⚠️ Sessão recuperada após reinício do bot.");
+  for (const user of result.rows) {
 
-      } catch (err) {
-        console.log("Erro ao recriar canal:", err);
-      }
+    try {
+
+      const canal = await guild.channels.create({
+        name: `ponto-recuperado`,
+        type: 0,
+        parent: categoriaId,
+        permissionOverwrites: [
+          { id: guild.id, deny: ["ViewChannel"] },
+          { id: user.user_id, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+        ]
+      });
+
+      await pool.query(
+        "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+        [canal.id, user.user_id]
+      );
+
+      canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
+    } catch (err) {
+      console.log("Erro ao recriar canal:", err);
     }
   }
 
   console.log(`Bot online como ${client.user.tag}`);
-
+});
+  
   // Criação da tabela PostgreSQL
   await pool.query(`
     CREATE TABLE IF NOT EXISTS pontos (
