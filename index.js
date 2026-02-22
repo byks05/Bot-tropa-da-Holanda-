@@ -568,22 +568,20 @@ if (command === "ponto") {
 // REGISTRO COM PAGINAÇÃO
 // =============================
 if (sub === "registro") {
-  const ranking = await pool.query(
-    "SELECT * FROM pontos ORDER BY total DESC"
-  );
+  const ranking = await pool.query("SELECT * FROM pontos ORDER BY total DESC");
 
   if (ranking.rows.length === 0)
     return message.reply("Nenhum registro encontrado.");
 
-  let posicao = 1;
+  // Discord tem limite de 4096 caracteres por embed
+  const limiteEmbed = 3500;
   let descricao = "";
-  const maxLength = 4000; // limite de caracteres por embed
-  const embeds = [];
+  let embeds = [];
+  let posicao = 1;
 
   for (const info of ranking.rows) {
     let total = Number(info.total);
-    if (info.ativo && info.entrada)
-      total += Date.now() - Number(info.entrada);
+    if (info.ativo && info.entrada) total += Date.now() - Number(info.entrada);
 
     const horas = Math.floor(total / 3600000);
     const minutos = Math.floor((total % 3600000) / 60000);
@@ -599,10 +597,10 @@ if (sub === "registro") {
     else if (posicao === 2) medalha = "🥈 ";
     else if (posicao === 3) medalha = "🥉 ";
 
-    const linha = `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
 
-    // se passar do limite, cria um embed novo
-    if (descricao.length + linha.length > maxLength) {
+    // Se passar do limite, cria um embed e reseta a descrição
+    if (descricao.length > limiteEmbed) {
       embeds.push(
         new EmbedBuilder()
           .setTitle("📊 Ranking de Atividade")
@@ -612,11 +610,10 @@ if (sub === "registro") {
       descricao = "";
     }
 
-    descricao += linha;
     posicao++;
   }
 
-  // adiciona o restante
+  // Pega o que sobrou
   if (descricao.length > 0) {
     embeds.push(
       new EmbedBuilder()
@@ -626,12 +623,11 @@ if (sub === "registro") {
     );
   }
 
-  // envia todos os embeds
+  // Envia todos os embeds
   for (const embed of embeds) {
     await message.channel.send({ embeds: [embed] });
   }
-}
-  
+}  
   // =============================
   // RESET
   // =============================
