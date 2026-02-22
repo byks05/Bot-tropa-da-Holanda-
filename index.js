@@ -120,23 +120,46 @@ client.once("ready", async () => {
   console.log(`Bot logado como ${client.user.tag}`);
 
   const guild = client.guilds.cache.first();
-  if (!guild) return;
+  if (!guild) return console.error("Servidor não encontrado.");
 
   // Recupera sessões ativas
   const result = await pool.query("SELECT * FROM pontos WHERE ativo = true");
   for (const user of result.rows) {
     try {
-      const canal = await guild.channels.create({
-        name: `ponto-recuperado`,
-        type: ChannelType.GuildText,
-        parent: CATEGORIA_PONTO,
-        permissionOverwrites: [
-          { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-          { id: user.user_id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
-        ]
-      });
-      await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, user.user_id]);
-      canal.send("⚠️ Sessão recuperada após reinício do bot.");
+      // Verifica se já existe um canal para este usuário na categoria
+      let canalExistente = guild.channels.cache.find(
+        c => c.parentId === CATEGORIA_PONTO && c.name === `ponto-${user.user_id}`
+      );
+
+      if (!canalExistente) {
+        // Cria canal único por usuário
+        canalExistente = await guild.channels.create({
+          name: `ponto-${user.user_id}`,
+          type: ChannelType.GuildText,
+          parent: CATEGORIA_PONTO,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+            {
+              id: user.user_id,
+              allow: [
+                PermissionsBitField.Flags.ViewChannel,
+                PermissionsBitField.Flags.SendMessages,
+                PermissionsBitField.Flags.ReadMessageHistory
+              ]
+            }
+          ]
+        });
+
+        // Atualiza canal_id no banco
+        await pool.query("UPDATE pontos SET canal_id = $1 WHERE user_id = $2", [canalExistente.id, user.user_id]);
+      }
+
+      // Mensagem de aviso no canal do usuário
+      await canalExistente.send("⚠️ Sessão recuperada após reinício do bot.");
+
+      // Opcional: enviar log em canal de logs
+      const canalLogs = guild.channels.cache.get(IDS.LOG_CHANNEL);
+      if (canalLogs) canalLogs.send(`Sessão do usuário <@${user.user_id}> recuperada após reinício do bot.`);
     } catch (err) {
       console.error("Erro ao recriar canal:", err);
     }
@@ -591,7 +614,72 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Usuário <@${targetId}> teve todos os dados resetados! Coins e tempo zerados.`);
   }
+  //============
+  // Fechartodos
+  //=============
+  if (sub === "fechartodos") {
+  // Seleciona todos os usuários ativos
+  const result = await pool.query("SELECT user_id, entrada, total, canal_id FROM pontos WHERE ativo=true");
+  if (result.rows.length === 0) return message.channel.send("❌ Nenhum usuário com pontos ativos.");
+
+  for (const user of result.rows) {
+    const tempoAtual = Number(user.total || 0);
+    const tempoSessao = Date.now() - Number(user.entrada || 0);
+    const novoTotal = tempoAtual + tempoSessao;
+
+    // Atualiza banco e remove canal_id
+    await pool.query(
+      "UPDATE pontos SET total=$1, ativo=false, entrada=NULL, canal_id=NULL WHERE user_id=$2",
+      [novoTotal, user.user_id]
+    );
+
+    // Deleta o canal do usuário
+    if (user.canal_id) {
+      const canal = message.guild.channels.cache.get(user.canal_id);
+      if (canal) {
+        try { await canal.delete("Sessão encerrada pelo bot"); } 
+        catch (err) { console.error("Erro ao deletar canal:", err); }
+      }
+    }
+  }
+
+  return message.channel.send(`✅ Todas as sessões ativas foram fechadas e os canais correspondentes deletados.`);
+  }
   
+  //============
+  // fechar
+  //==========
+  if (command === "fechar") {
+  const target = args[0];
+  const targetId = target?.match(/\d+/)?.[0];
+  if (!targetId) return message.channel.send("❌ Use: thl!fechar <@user>");
+
+  // Pega os dados do usuário
+  const result = await pool.query("SELECT total, entrada, ativo, canal_id FROM pontos WHERE user_id=$1", [targetId]);
+  const info = result.rows[0];
+  if (!info) return message.channel.send("❌ Usuário não encontrado.");
+  if (!info.ativo || !info.entrada) return message.channel.send("❌ Este usuário não tem sessão ativa.");
+
+  // Calcula o tempo da sessão e atualiza no banco
+  const tempoSessao = Date.now() - Number(info.entrada);
+  const novoTotal = Number(info.total || 0) + tempoSessao;
+  await pool.query(
+    "UPDATE pontos SET total=$1, ativo=false, entrada=NULL, canal_id=NULL WHERE user_id=$2",
+    [novoTotal, targetId]
+  );
+
+  // Deleta o canal do usuário
+  if (info.canal_id) {
+    const canal = message.guild.channels.cache.get(info.canal_id);
+    if (canal) {
+      try { await canal.delete("Sessão encerrada pelo bot"); } 
+      catch (err) { console.error("Erro ao deletar canal:", err); }
+    }
+  }
+
+  const minutos = Math.floor(novoTotal / 60000);
+  await message.channel.send(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
+  }
   //========
   // Comprar
   //========
