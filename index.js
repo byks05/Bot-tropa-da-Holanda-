@@ -27,12 +27,15 @@ const pool = new Pool({
 });
 
 // Função de teste de conexão (opcional, útil para debug)
-pool.connect()
-  .then(client => {
+(async () => {
+  try {
+    const clientPG = await pool.connect();
     console.log("Conectado ao PostgreSQL com sucesso!");
-    client.release();
-  })
-  .catch(err => console.error("Erro ao conectar no PostgreSQL:", err));
+    clientPG.release();
+  } catch (err) {
+    console.error("Erro ao conectar no PostgreSQL:", err);
+  }
+})();
 
 // =============================
 // CLIENT
@@ -50,7 +53,10 @@ client.once("ready", () => {
   console.log(`${client.user.tag} está online!`);
 });
 
-module.exports = { client, pool }; // exporta para facilitar integração com outros módulos
+// =============================
+// EXPORTS
+// =============================
+module.exports = { client, pool };
 
 // =============================
 // PAINEL FIXO DE LOJA
@@ -80,9 +86,9 @@ client.on("ready", async () => {
 
   const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
+-# Compre Apenas com vendedor oficial <@1209478510847197216>,  <@910351624189411408> ou atendentes.
 
-🛒 ** Nitro mensal (1 mês/3 mês) **
+🛒 **Nitro mensal (1 mês/3 mês)**
 
 🛒 **CONTA VIRGEM +30 Dias**
 • Nunca tiverão Nitro  
@@ -114,86 +120,81 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
 });
 
 // =============================
-// INTERAÇÃO DO SELECT MENU
+// INTERAÇÃO DO SELECT MENU & BOTÃO
 // =============================
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isStringSelectMenu()) return;
-  if (interaction.customId !== "loja_select") return;
+  // ----------- SELECT MENU -----------
+  if (interaction.isStringSelectMenu() && interaction.customId === "loja_select") {
+    const produto = interaction.values[0];
+    const guild = interaction.guild;
+    const categoriaId = "1474885663425036470";
+    const ticketName = `ticket-${interaction.user.username}`;
 
-  const produto = interaction.values[0];
-  const guild = interaction.guild;
-  const categoriaId = "1474885663425036470";
-  const ticketName = `ticket-${interaction.user.username}`;
+    // Evita ticket duplicado
+    const existingChannel = guild.channels.cache.find(
+      c => c.name === ticketName && c.parentId === categoriaId
+    );
+    if (existingChannel) {
+      await interaction.update({ components: interaction.message.components });
+      return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+    }
 
-  // Evita ticket duplicado
-  const existingChannel = guild.channels.cache.find(
-    c => c.name === ticketName && c.parentId === categoriaId
-  );
-  if (existingChannel) {
-    // Reset do select menu para poder clicar de novo
+    // Cria canal de ticket
+    const channel = await guild.channels.create({
+      name: ticketName,
+      type: ChannelType.GuildText,
+      parent: categoriaId,
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      ],
+    });
+
+    // Produtos com valores
+    const produtosInfo = {
+      nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
+      nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
+      conta_virgem: { nome: "Contas virgem +30 dias", valor: "5 R$" },
+      ativacao_nitro: { nome: "Ativação Nitro", valor: "1,50 R$" },
+      spotify: { nome: "Spotify Premium", valor: "5 R$" },
+      moldura: { nome: "Molduras com icon personalizado", valor: "2 R$" },
+      youtube: { nome: "Y0utub3 Premium", valor: "6 R$" },
+    };
+
+    const prodSelecionado = produtosInfo[produto];
+
+    const ticketEmbed = new EmbedBuilder()
+      .setTitle(`🛒 Ticket de Compra - ${prodSelecionado.nome}`)
+      .setDescription(
+        `${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\n\n` +
+        `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
+      )
+      .setColor("Green")
+      .setTimestamp();
+
+    const fecharButton = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("fechar_ticket")
+        .setLabel("🔒 Fechar Ticket")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+    // Reset do select menu para permitir nova compra
     await interaction.update({ components: interaction.message.components });
-    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+    return interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
   }
 
-  // Cria canal de ticket
-  const channel = await guild.channels.create({
-    name: ticketName,
-    type: ChannelType.GuildText,
-    parent: categoriaId,
-    permissionOverwrites: [
-      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-    ],
-  });
-
-  // Produtos com valores
-  const produtosInfo = {
-    nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
-    nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
-    conta_virgem: { nome: "Contas virgem +30 dias", valor: "5 R$" },
-    ativacao_nitro: { nome: "Ativação Nitro", valor: "1,50 R$" },
-    spotify: { nome: "Spotify Premium", valor: "5 R$" },
-    moldura: { nome: "Molduras com icon personalizado", valor: "2 R$" },
-    youtube: { nome: "Y0utub3 Premium", valor: "6 R$" },
-  };
-
-  const prodSelecionado = produtosInfo[produto];
-
-  const ticketEmbed = new EmbedBuilder()
-    .setTitle(`🛒 Ticket de Compra - ${prodSelecionado.nome}`)
-    .setDescription(
-      `${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\n\n` +
-      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
-    )
-    .setColor("Green")
-    .setTimestamp();
-
-  const fecharButton = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("fechar_ticket")
-      .setLabel("🔒 Fechar Ticket")
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
-
-  // Reset do select menu para permitir nova compra
-  await interaction.update({ components: interaction.message.components });
-  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+  // ----------- BOTÃO FECHAR -----------
+  if (interaction.isButton() && interaction.customId === "fechar_ticket") {
+    if (!interaction.channel.name.startsWith("ticket-")) {
+      return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+    }
+    await interaction.channel.delete().catch(() => {});
+  }
 });
 
-// =============================
-// FECHAR TICKET
-// =============================
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isButton()) return;
-  if (interaction.customId !== "fechar_ticket") return;
-
-  if (!interaction.channel.name.startsWith("ticket-"))
-    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
-
-  await interaction.channel.delete().catch(() => {});
-});
 // =============================
 // CONFIG
 // =============================
@@ -325,8 +326,6 @@ const getCargoAtual = (member) => {
 
   return `<@&${cargosPossiveis[0].id}>`;
 };
-
-
 
 // =============================
 // MESSAGE CREATE
