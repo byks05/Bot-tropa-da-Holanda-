@@ -223,7 +223,8 @@ async function getUser(userId, guildId) {
 // Função para criar usuário se não existir
 async function createUser(userId, guildId) {
   await pool.query(
-    "INSERT INTO pontos (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING",
+    `INSERT INTO pontos (user_id, guild_id) VALUES ($1, $2)
+     ON CONFLICT (user_id, guild_id) DO NOTHING`,
     [userId, guildId]
   );
 }
@@ -241,9 +242,7 @@ const parseDuration = (time) => {
   const value = Number(match[1]);
   const unit = match[2];
 
-  return unit === "m"
-    ? value * 60 * 1000
-    : value * 60 * 60 * 1000;
+  return unit === "m" ? value * 60 * 1000 : value * 60 * 60 * 1000;
 };
 
 // Envia embed de log para o canal configurado
@@ -257,9 +256,7 @@ const sendLog = async (guild, embed) => {
 };
 
 // Verifica se o membro pode usar comando de staff
-const canUseCommand = (member) => {
-  return IDS.STAFF.some((id) => member.roles.cache.has(id));
-};
+const canUseCommand = (member) => IDS.STAFF.some((id) => member.roles.cache.has(id));
 
 // Pega ou cria cargo de mute
 async function getMuteRole(guild) {
@@ -316,9 +313,7 @@ const CARGOS = [
 
 // Pega cargo atual do membro baseado nos cargos que ele possui
 const getCargoAtual = (member) => {
-  const cargosPossiveis = CARGOS.filter((c) =>
-    member.roles.cache.has(c.id)
-  );
+  const cargosPossiveis = CARGOS.filter((c) => member.roles.cache.has(c.id));
 
   if (!cargosPossiveis.length) return "Nenhum cargo";
 
@@ -326,7 +321,6 @@ const getCargoAtual = (member) => {
 
   return `<@&${cargosPossiveis[0].id}>`;
 };
-
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -377,79 +371,79 @@ client.on("messageCreate", async (message) => {
   await createUser(userId, guildId);
 
   // 🔥 BUSCA DADOS ATUALIZADOS DO BANCO
-  const result = await pool.query(
+  const userDataResult = await pool.query(
     "SELECT * FROM pontos WHERE user_id = $1 AND guild_id = $2",
     [userId, guildId]
   );
+  const userData = userDataResult.rows[0];
 
-  const userData = result.rows[0];
+  // ======= COMANDO PARA CONFIRMAR COMPRA =======
+  if (command === "compra" && args[0]?.toLowerCase() === "confirmada") {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("❌ Mencione alguém.");
 
-// ======= COMANDO PARA CONFIRMAR COMPRA =======
-if (command === "compra" && args[0]?.toLowerCase() === "confirmada") {
-  const user = message.mentions.users.first();
-  if (!user) return message.reply("❌ Mencione alguém.");
+    const member = await message.guild.members.fetch(user.id).catch(() => null);
+    if (!member) return message.reply("❌ Membro não encontrado no servidor.");
 
-  const member = await message.guild.members.fetch(user.id).catch(() => null);
-  if (!member) return message.reply("❌ Membro não encontrado no servidor.");
+    const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
 
-  const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
+    // Adiciona o cargo se o usuário não tiver
+    if (!member.roles.cache.has(cargoClienteId)) {
+      await member.roles.add(cargoClienteId).catch(() => {
+        message.channel.send("❌ Não consegui adicionar o cargo. Verifique permissões.");
+      });
+      message.channel.send(`✅ ${user.tag} agora é cliente!`);
+    }
 
-  // Adiciona o cargo se o usuário não tiver
-  if (!member.roles.cache.has(cargoClienteId)) {
-    await member.roles.add(cargoClienteId).catch(() => {
-      message.channel.send("❌ Não consegui adicionar o cargo. Verifique permissões.");
-    });
-    message.channel.send(`✅ ${user.tag} agora é cliente!`);
-  }
-
-  // Verifica se o usuário já existe no banco
-  const result = await pool.query(
-    "SELECT * FROM clientes WHERE user_id = $1",
-    [user.id]
-  );
-
-  if (result.rows.length === 0) {
-    // Adiciona novo registro
-    await pool.query(
-      "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
-      [user.id, 1]
+    // Verifica se o usuário já existe no banco
+    const clienteResult = await pool.query(
+      "SELECT * FROM clientes WHERE user_id = $1",
+      [user.id]
     );
-    message.channel.send(`<@${user.id}> compra 1`);
-  } else {
-    // Atualiza compras existentes
-    const comprasAtuais = Number(result.rows[0].compras) + 1;
-    await pool.query(
-      "UPDATE clientes SET compras = $1 WHERE user_id = $2",
-      [comprasAtuais, user.id]
+
+    if (clienteResult.rows.length === 0) {
+      // Adiciona novo registro
+      await pool.query(
+        "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
+        [user.id, 1]
+      );
+      message.channel.send(`<@${user.id}> compra 1`);
+    } else {
+      // Atualiza compras existentes
+      const comprasAtuais = Number(clienteResult.rows[0].compras) + 1;
+      await pool.query(
+        "UPDATE clientes SET compras = $1 WHERE user_id = $2",
+        [comprasAtuais, user.id]
+      );
+      message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
+    }
+  }
+
+  // ======= COMANDO PARA LISTAR CLIENTES =======
+  if (command === "clientes") {
+    const clientesResult = await pool.query(
+      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
     );
-    message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
+
+    if (clientesResult.rows.length === 0) return message.reply("Nenhum cliente registrado.");
+
+    let lista = "";
+    for (const row of clientesResult.rows) {
+      lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
+    }
+
+    // Divide em blocos de 2000 caracteres para não quebrar o Discord
+    const blocos = [];
+    while (lista.length > 0) {
+      blocos.push(lista.slice(0, 2000));
+      lista = lista.slice(2000);
+    }
+
+    for (const bloco of blocos) {
+      await message.channel.send(bloco);
+    }
   }
-}
-
-// ======= COMANDO PARA LISTAR CLIENTES =======
-if (command === "clientes") {
-  const result = await pool.query(
-    "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
-  );
-
-  if (result.rows.length === 0) return message.reply("Nenhum cliente registrado.");
-
-  let lista = "";
-  for (const row of result.rows) {
-    lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
-  }
-
-  // Divide em blocos de 2000 caracteres para não quebrar o Discord
-  const blocos = [];
-  while (lista.length > 0) {
-    blocos.push(lista.slice(0, 2000));
-    lista = lista.slice(2000);
-  }
-
-  for (const bloco of blocos) {
-    await message.channel.send(bloco);
-  }
-}
+});
 // =============================
 // COMANDO PONTO COMPLETO
 // =============================
@@ -516,11 +510,11 @@ if (command === "ponto") {
     // cria o canal do ponto
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
-      type: 0,
+      type: ChannelType.GuildText,
       parent: categoriaId,
       permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
       ]
     });
 
@@ -556,7 +550,7 @@ if (command === "ponto") {
         const minutos = Math.floor((tempoAtual % 3600000) / 60000);
         const segundos = Math.floor((tempoAtual % 60000) / 1000);
 
-        canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+        await canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
         // lembrete a cada 20 minutos
         if (Date.now() - ultimaEntrada >= 20 * 60 * 1000) {
@@ -604,164 +598,159 @@ if (command === "ponto") {
     loopPonto();
   }
 
- // =============================
-// SAIR
-// =============================
-if (sub === "sair") {
-
-  // bloqueio de canal proibido
-  if (message.channel.id === CANAL_PROIBIDO) {
-    const userData = await pool.query(
-      "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
-      [userId]
-    );
-
-    if (userData.rows[0]?.canal) {
-      const msg = await message.reply(
-        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
-      );
-      return setTimeout(() => msg.delete().catch(() => {}), 60000);
-    }
-  }
-
-  if (!data.ativo) {
-    const msg = await message.reply("❌ Você não iniciou ponto.");
-    return setTimeout(() => msg.delete().catch(() => {}), 60000);
-  }
-
-  const tempo = Date.now() - Number(data.entrada);
-  const novoTotal = Number(data.total) + tempo;
-
-  await pool.query(
-    "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-    [novoTotal, userId]
-  );
-
-  if (data.canal) {
-    const canal = guild.channels.cache.get(data.canal);
-    if (canal) {
-      const msgCanal = await canal.send("🔴 Ponto finalizado. Canal será fechado.");
-      setTimeout(() => msgCanal.delete().catch(() => {}), 60000);
-      setTimeout(() => canal.delete().catch(() => {}), 3000);
-    }
-  }
-
-  const msg = await message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
-  return setTimeout(() => msg.delete().catch(() => {}), 60000);
-}
-
-// =============================
-// STATUS
-// =============================
-if (sub === "status") {
-
-  // bloqueio de canal proibido
-  if (message.channel.id === CANAL_PROIBIDO) {
-    const userData = await pool.query(
-      "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
-      [userId]
-    );
-
-    if (userData.rows[0]?.canal) {
-      const msg = await message.reply(
-        `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
-      );
-      return setTimeout(() => msg.delete().catch(() => {}), 60000);
-    }
-  }
-
-  const result = await pool.query(
-    "SELECT * FROM pontos WHERE user_id = $1",
-    [userId]
-  );
-
-  if (result.rows.length === 0) {
-    const msg = await message.reply("❌ Nenhum ponto registrado.");
-    return setTimeout(() => msg.delete().catch(() => {}), 60000);
-  }
-
-  const info = result.rows[0];
-
-  let total = Number(info.total);
-  if (info.ativo && info.entrada)
-    total += Date.now() - Number(info.entrada);
-
-  const horas = Math.floor(total / 3600000);
-  const minutos = Math.floor((total % 3600000) / 60000);
-  const segundos = Math.floor((total % 60000) / 1000);
-
-  const coins = info.coins || 0;
-
-  const encontrado = CARGOS.find(c => message.member.roles.cache.has(c.id));
-  const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-
-  const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
-
-  const msg = await message.reply(
-    `📊 **Seu Status**\n` +
-    `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
-    `Coins: ${coins} 💰\n` +
-    `Status: ${status}\n` +
-    `Cargo atual: ${cargoAtual}`
-  );
-  return setTimeout(() => msg.delete().catch(() => {}), 60000);
-}
-  
-// =============================
-// REGISTRO COM PAGINAÇÃO
-// =============================
-if (sub === "registro") {
-  try {
-    // Pega todos os registros do banco ordenados pelo total
-    const ranking = await pool.query(
-      "SELECT * FROM pontos ORDER BY total DESC"
-    );
-
-    if (ranking.rows.length === 0)
-      return message.reply("Nenhum registro encontrado.");
-
-    let descricao = "";
-    let posicao = 1;
-
-    for (const info of ranking.rows) {
-      let total = Number(info.total);
-
-      if (info.ativo && info.entrada)
-        total += Date.now() - Number(info.entrada);
-
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
-
-      const member = await guild.members.fetch(info.user_id).catch(() => null);
-      const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
-      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-      const status = info.ativo ? "🟢" : "🔴";
-
-      let medalha = "";
-      if (posicao === 1) medalha = "🥇 ";
-      else if (posicao === 2) medalha = "🥈 ";
-      else if (posicao === 3) medalha = "🥉 ";
-
-      descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
-
-      posicao++;
-    }
-
-    // Se a lista passar de 2000 caracteres, divide em várias mensagens
-    while (descricao.length > 0) {
-      const enviar = descricao.slice(0, 2000);
-      descricao = descricao.slice(2000);
-      await message.channel.send(enviar);
-    }
-
-  } catch (err) {
-    console.error(err);
-    return message.reply("❌ Ocorreu um erro ao gerar o ranking.");
-  }
-}
   // =============================
-  // RESET
+  // COMANDO THL!PONTO SAIR
+  // =============================
+  if (sub === "sair") {
+
+    // bloqueio de canal proibido
+    if (message.channel.id === CANAL_PROIBIDO) {
+      const userDataCanal = await pool.query(
+        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
+        [userId]
+      );
+
+      if (userDataCanal.rows[0]?.canal) {
+        const msg = await message.reply(
+          `❌ Use seu canal de ponto: <#${userDataCanal.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
+        );
+        return setTimeout(() => msg.delete().catch(() => {}), 60000);
+      }
+    }
+
+    if (!data.ativo) {
+      const msg = await message.reply("❌ Você não iniciou ponto.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
+
+    const tempo = Date.now() - Number(data.entrada);
+    const novoTotal = Number(data.total) + tempo;
+
+    await pool.query(
+      "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+      [novoTotal, userId]
+    );
+
+    if (data.canal) {
+      const canal = guild.channels.cache.get(data.canal);
+      if (canal) {
+        const msgCanal = await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+        setTimeout(() => msgCanal.delete().catch(() => {}), 60000);
+        setTimeout(() => canal.delete().catch(() => {}), 3000);
+      }
+    }
+
+    const msg = await message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  // =============================
+  // COMANDO THL!PONTO STATUS
+  // =============================
+  if (sub === "status") {
+
+    // bloqueio de canal proibido
+    if (message.channel.id === CANAL_PROIBIDO) {
+      const userDataCanal = await pool.query(
+        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
+        [userId]
+      );
+
+      if (userDataCanal.rows[0]?.canal) {
+        const msg = await message.reply(
+          `❌ Use seu canal de ponto: <#${userDataCanal.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
+        );
+        return setTimeout(() => msg.delete().catch(() => {}), 60000);
+      }
+    }
+
+    const statusResult = await pool.query(
+      "SELECT * FROM pontos WHERE user_id = $1",
+      [userId]
+    );
+
+    if (statusResult.rows.length === 0) {
+      const msg = await message.reply("❌ Nenhum ponto registrado.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
+
+    const info = statusResult.rows[0];
+
+    let total = Number(info.total);
+    if (info.ativo && info.entrada)
+      total += Date.now() - Number(info.entrada);
+
+    const horas = Math.floor(total / 3600000);
+    const minutos = Math.floor((total % 3600000) / 60000);
+    const segundos = Math.floor((total % 60000) / 1000);
+
+    const coins = info.coins || 0;
+
+    const encontrado = CARGOS.find(c => message.member.roles.cache.has(c.id));
+    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+
+    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+    const msg = await message.reply(
+      `📊 **Seu Status**\n` +
+      `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
+      `Coins: ${coins} 💰\n` +
+      `Status: ${status}\n` +
+      `Cargo atual: ${cargoAtual}`
+    );
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  // =============================
+  // COMANDO THL!PONTO REGISTRO
+  // =============================
+  if (sub === "registro") {
+    try {
+      const ranking = await pool.query(
+        "SELECT * FROM pontos ORDER BY total DESC"
+      );
+
+      if (ranking.rows.length === 0)
+        return message.reply("Nenhum registro encontrado.");
+
+      let descricao = "";
+      let posicao = 1;
+
+      for (const info of ranking.rows) {
+        let total = Number(info.total);
+
+        if (info.ativo && info.entrada)
+          total += Date.now() - Number(info.entrada);
+
+        const member = await guild.members.fetch(info.user_id).catch(() => null);
+        const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
+        const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+        const status = info.ativo ? "🟢" : "🔴";
+
+        let medalha = "";
+        if (posicao === 1) medalha = "🥇 ";
+        else if (posicao === 2) medalha = "🥈 ";
+        else if (posicao === 3) medalha = "🥉 ";
+
+        descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+
+        posicao++;
+      }
+
+      while (descricao.length > 0) {
+        const enviar = descricao.slice(0, 2000);
+        descricao = descricao.slice(2000);
+        await message.channel.send(enviar);
+      }
+
+    } catch (err) {
+      console.error(err);
+      return message.reply("❌ Ocorreu um erro ao gerar o ranking.");
+    }
+  }
+
+  // =============================
+  // COMANDO THL!PONTO RESET
   // =============================
   if (sub === "reset") {
 
@@ -776,7 +765,7 @@ if (sub === "registro") {
     return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
 
-
+}
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
 // =============================
@@ -808,7 +797,7 @@ if (command === "addcoins") {
   );
 
   await pool.query(
-    "UPDATE pontos SET coins = coins + $1 WHERE user_id = $2",
+    "UPDATE pontos SET coins = COALESCE(coins, 0) + $1 WHERE user_id = $2",
     [coins, user.id]
   );
 
@@ -843,14 +832,14 @@ if (command === "addtempo") {
   );
 
   await pool.query(
-    "UPDATE pontos SET total = total + $1 WHERE user_id = $2",
+    "UPDATE pontos SET total = COALESCE(total,0) + $1 WHERE user_id = $2",
     [milissegundos, user.id]
   );
 
   message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
 }
 
-  // =============================
+// =============================
 // COMANDO CONVERTER TEMPO EM COINS
 // =============================
 if (command === "converter") {
@@ -904,7 +893,7 @@ if (command === "converter") {
   }
 
   // calcula tempo disponível
-  let total = Number(info.total);
+  let total = Number(info.total || 0);
   if (info.ativo && info.entrada)
     total += Date.now() - Number(info.entrada);
 
@@ -921,7 +910,7 @@ if (command === "converter") {
   const coins = Math.floor(minutos * (100 / 60));
 
   await pool.query(
-    "UPDATE pontos SET total = total - $1, coins = coins + $2 WHERE user_id = $3",
+    "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
     [minutosEmMs, coins, userId]
   );
 
@@ -938,8 +927,7 @@ Novo saldo de coins: ${novoSaldo} 💰`
   );
 
   setTimeout(() => msg.delete().catch(() => {}), 60000);
-}
-  
+}  
 // =============================
 // COMANDO LOJA - LISTA DE PRODUTOS
 // =============================
