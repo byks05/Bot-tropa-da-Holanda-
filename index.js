@@ -703,6 +703,44 @@ const verificarAtividade = async () => {
 
 // inicia a função dentro do comando, assim que o ponto é criado
 verificarAtividade();
+
+  // Compras cliente 
+  if (command === "compra" && args[0] === "confirmada") {
+  const user = message.mentions.users.first();
+  if (!user) return message.reply("❌ Marque um usuário.");
+
+  const membro = message.guild.members.cache.get(user.id);
+  const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
+
+  // Adiciona cargo se não tiver
+  if (!membro.roles.cache.has(cargoClienteId)) {
+    await membro.roles.add(cargoClienteId).catch(console.error);
+    await message.channel.send(`✅ ${user.tag} agora é cliente!`);
+  }
+
+  // Checa se o usuário já está na tabela
+  const res = await pool.query(
+    "SELECT compras FROM clientes WHERE user_id = $1",
+    [user.id]
+  );
+
+  if (res.rows.length === 0) {
+    // Cria registro se não existir
+    await pool.query(
+      "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
+      [user.id, 1]
+    );
+    await message.channel.send(`<@${user.id}> compra 1`);
+  } else {
+    // Atualiza registro se já existir
+    const novasCompras = res.rows[0].compras + 1;
+    await pool.query(
+      "UPDATE clientes SET compras = $1 WHERE user_id = $2",
+      [novasCompras, user.id]
+    );
+    await message.channel.send(`<@${user.id}> compras ${novasCompras}`);
+  }
+  }
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
