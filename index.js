@@ -458,6 +458,7 @@ if (command === "ponto") {
 
   const categoriaId = "1474413150441963615";
   const CANAL_ENTRAR = "1474383177689731254";
+  const CANAL_PROIBIDO = "1474383177689731254"; // onde status e sair não podem ser usados
   const userId = message.author.id;
   const guild = message.guild;
 
@@ -468,7 +469,8 @@ if (command === "ponto") {
   ];
 
   if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
+    const msg = await message.reply("❌ Você não tem permissão para usar este comando.");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
 
   // garante que o usuário existe no banco
@@ -491,122 +493,139 @@ if (command === "ponto") {
   let data = result.rows[0];
   const sub = args[0]?.toLowerCase();
 
- // =============================
-// COMANDO THL!PONTO ENTRAR
-// =============================
-if (sub === "entrar") {
+  // =============================
+  // COMANDO THL!PONTO ENTRAR
+  // =============================
+  if (sub === "entrar") {
 
-  if (message.channel.id !== CANAL_ENTRAR)
-    return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+    if (message.channel.id !== CANAL_ENTRAR) {
+      const msg = await message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
 
-  if (data.ativo)
-    return message.reply("❌ Você já iniciou seu ponto.");
+    if (data.ativo) {
+      const msg = await message.reply("❌ Você já iniciou seu ponto.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
 
-  // ativa o ponto no banco
-  await pool.query(
-    "UPDATE pontos SET ativo = true, entrada = $1, notificado = false WHERE user_id = $2",
-    [Date.now(), userId]
-  );
+    // ativa o ponto no banco
+    await pool.query(
+      "UPDATE pontos SET ativo = true, entrada = $1, notificado = false WHERE user_id = $2",
+      [Date.now(), userId]
+    );
 
-  // cria o canal do ponto
-  const canal = await guild.channels.create({
-    name: `ponto-${message.author.username}`,
-    type: 0, // texto
-    parent: categoriaId,
-    permissionOverwrites: [
-      { id: guild.id, deny: ["ViewChannel"] },
-      { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-    ]
-  });
+    // cria o canal do ponto
+    const canal = await guild.channels.create({
+      name: `ponto-${message.author.username}`,
+      type: 0,
+      parent: categoriaId,
+      permissionOverwrites: [
+        { id: guild.id, deny: ["ViewChannel"] },
+        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+      ]
+    });
 
-  await pool.query(
-    "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-    [canal.id, userId]
-  );
+    await pool.query(
+      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+      [canal.id, userId]
+    );
 
-  await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-  await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+    const botMsg = await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
+    await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-  // ==============================
-  // LOOP UNIFICADO: TEMPO + INATIVIDADE
-  // ==============================
-  let tentativas = 0;
-  let ultimaEntrada = Date.now(); // controla o lembrete de 20 minutos
+    setTimeout(() => botMsg.delete().catch(() => {}), 60000);
 
-  const loopPonto = async () => {
-    while (true) {
+    // ==============================
+    // LOOP UNIFICADO: TEMPO + INATIVIDADE
+    // ==============================
+    let tentativas = 0;
+    let ultimaEntrada = Date.now();
 
-      // busca o ponto atual
-      const check = await pool.query(
-        "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
-        [userId]
-      );
+    const loopPonto = async () => {
+      while (true) {
 
-      if (!check.rows[0]?.ativo) break; // ponto fechado, sai do loop
+        const check = await pool.query(
+          "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
+          [userId]
+        );
 
-      // atualiza o tempo no tópico do canal
-      const tempoAtual = Date.now() - Number(check.rows[0].entrada);
-      const horas = Math.floor(tempoAtual / 3600000);
-      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
-      const segundos = Math.floor((tempoAtual % 60000) / 1000);
+        if (!check.rows[0]?.ativo) break;
 
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+        // atualiza tópico do canal
+        const tempoAtual = Date.now() - Number(check.rows[0].entrada);
+        const horas = Math.floor(tempoAtual / 3600000);
+        const minutos = Math.floor((tempoAtual % 3600000) / 60000);
+        const segundos = Math.floor((tempoAtual % 60000) / 1000);
 
-      // verifica se passou 20 minutos desde a última pergunta
-      if (Date.now() - ultimaEntrada >= 20 * 60 * 1000) {
-        tentativas = 0;
+        canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
-        while (tentativas < 3) {
-          tentativas++;
+        // lembrete a cada 20 minutos
+        if (Date.now() - ultimaEntrada >= 20 * 60 * 1000) {
+          tentativas = 0;
 
-          await canal.send(
-            `⏰ <@${userId}> você ainda está ativo?\n` +
-            `Responda em até 2 minutos.\n` +
-            `Tentativa ${tentativas}/3`
-          );
+          while (tentativas < 3) {
+            tentativas++;
 
-          const filtro = m => m.author.id === userId;
+            await canal.send(
+              `⏰ <@${userId}> você ainda está ativo?\n` +
+              `Responda em até 2 minutos.\n` +
+              `Tentativa ${tentativas}/3`
+            );
 
-          try {
-            await canal.awaitMessages({ filter: filtro, max: 1, time: 2 * 60 * 1000, errors: ["time"] });
-            await canal.send("✅ Presença confirmada. Ponto continua ativo.");
-            ultimaEntrada = Date.now(); // reinicia contador de 20min
-            break;
-          } catch {
-            if (tentativas >= 3) {
-              // encerra o ponto e atualiza o banco
-              const tempoTotal = Number(check.rows[0].total) + (Date.now() - Number(check.rows[0].entrada));
+            const filtro = m => m.author.id === userId;
 
-              await pool.query(
-                "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-                [tempoTotal, userId]
-              );
+            try {
+              await canal.awaitMessages({ filter: filtro, max: 1, time: 2 * 60 * 1000, errors: ["time"] });
+              await canal.send("✅ Presença confirmada. Ponto continua ativo.");
+              ultimaEntrada = Date.now();
+              break;
+            } catch {
+              if (tentativas >= 3) {
+                const tempoTotal = Number(check.rows[0].total) + (Date.now() - Number(check.rows[0].entrada));
 
-              await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
-              setTimeout(() => canal.delete().catch(() => {}), 5000);
-              return; // sai do loop
+                await pool.query(
+                  "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+                  [tempoTotal, userId]
+                );
+
+                await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
+                setTimeout(() => canal.delete().catch(() => {}), 5000);
+                return;
+              }
+
+              await new Promise(res => setTimeout(res, 2 * 60 * 1000));
             }
-
-            // espera 2 minutos antes da próxima tentativa
-            await new Promise(res => setTimeout(res, 2 * 60 * 1000));
           }
         }
+
+        await new Promise(res => setTimeout(res, 1000));
       }
+    };
 
-      // espera 1 segundo antes de atualizar novamente
-      await new Promise(res => setTimeout(res, 1000));
-    }
-  };
+    loopPonto();
+  }
 
-  loopPonto();
-}
   // =============================
   // SAIR
   // =============================
   if (sub === "sair") {
 
-    if (!data.ativo)
-      return message.reply("❌ Você não iniciou ponto.");
+    // bloqueio de canal proibido
+    if (message.channel.id === CANAL_PROIBIDO) {
+      const userData = await pool.query(
+        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
+        [userId]
+      );
+      if (userData.rows[0]?.canal) {
+        const msg = await message.reply(`❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando.`);
+        return setTimeout(() => msg.delete().catch(() => {}), 60000);
+      }
+    }
+
+    if (!data.ativo) {
+      const msg = await message.reply("❌ Você não iniciou ponto.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
 
     const tempo = Date.now() - Number(data.entrada);
     const novoTotal = Number(data.total) + tempo;
@@ -619,12 +638,14 @@ if (sub === "entrar") {
     if (data.canal) {
       const canal = guild.channels.cache.get(data.canal);
       if (canal) {
-        await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+        const msgCanal = await canal.send("🔴 Ponto finalizado. Canal será fechado.");
+        setTimeout(() => msgCanal.delete().catch(() => {}), 60000);
         setTimeout(() => canal.delete().catch(() => {}), 3000);
       }
     }
 
-    return message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
+    const msg = await message.reply("🔴 Ponto finalizado! Tempo registrado com sucesso.");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
 
   // =============================
@@ -632,13 +653,27 @@ if (sub === "entrar") {
   // =============================
   if (sub === "status") {
 
+    // bloqueio de canal proibido
+    if (message.channel.id === CANAL_PROIBIDO) {
+      const userData = await pool.query(
+        "SELECT canal FROM pontos WHERE user_id = $1 AND ativo = true",
+        [userId]
+      );
+      if (userData.rows[0]?.canal) {
+        const msg = await message.reply(`❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando.`);
+        return setTimeout(() => msg.delete().catch(() => {}), 60000);
+      }
+    }
+
     const result = await pool.query(
       "SELECT * FROM pontos WHERE user_id = $1",
       [userId]
     );
 
-    if (result.rows.length === 0)
-      return message.reply("❌ Nenhum ponto registrado.");
+    if (result.rows.length === 0) {
+      const msg = await message.reply("❌ Nenhum ponto registrado.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
 
     const info = result.rows[0];
 
@@ -657,14 +692,16 @@ if (sub === "entrar") {
 
     const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-    return message.reply(
+    const msg = await message.reply(
       `📊 **Seu Status**\n` +
       `Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
       `Coins: ${coins} 💰\n` +
       `Status: ${status}\n` +
       `Cargo atual: ${cargoAtual}`
     );
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
+}
 
 // =============================
 // REGISTRO COM PAGINAÇÃO
@@ -815,35 +852,51 @@ if (command === "addtempo") {
 if (command === "converter") {
 
   const userId = message.author.id;
+  const CANAL_PROIBIDO = "1474383177689731254"; // canal bloqueado
+
+  // bloqueio de canal proibido
+  if (message.channel.id === CANAL_PROIBIDO) {
+    const msg = await message.reply(`❌ Use este comando no canal correto: <#1474934788233236671>`);
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
 
   const result = await pool.query(
     "SELECT * FROM pontos WHERE user_id = $1",
     [userId]
   );
 
-  if (result.rows.length === 0)
-    return message.reply("❌ Você não tem tempo registrado para converter.");
+  if (result.rows.length === 0) {
+    const msg = await message.reply("❌ Você não tem tempo registrado para converter.");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
 
   const info = result.rows[0];
 
-  if (!args[0])
-    return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+  if (!args[0]) {
+    const msg = await message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
 
   const input = args[0].toLowerCase();
   let minutos = 0;
 
   if (input.endsWith("h")) {
     const h = parseFloat(input.replace("h", ""));
-    if (isNaN(h) || h <= 0)
-      return message.reply("❌ Quantidade inválida.");
+    if (isNaN(h) || h <= 0) {
+      const msg = await message.reply("❌ Quantidade inválida.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
     minutos = h * 60;
   } else if (input.endsWith("m")) {
     const m = parseFloat(input.replace("m", ""));
-    if (isNaN(m) || m <= 0)
-      return message.reply("❌ Quantidade inválida.");
+    if (isNaN(m) || m <= 0) {
+      const msg = await message.reply("❌ Quantidade inválida.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
     minutos = m;
   } else {
-    return message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
+    const msg = await message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
   }
 
   // calcula tempo disponível
@@ -853,8 +906,10 @@ if (command === "converter") {
 
   const totalMinutos = Math.floor(total / 60000);
 
-  if (minutos > totalMinutos)
-    return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
+  if (minutos > totalMinutos) {
+    const msg = await message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
 
   const minutosEmMs = minutos * 60000;
 
@@ -866,17 +921,19 @@ if (command === "converter") {
     [minutosEmMs, coins, userId]
   );
 
-  const novoSaldo = Number(info.coins) + coins;
+  const novoSaldo = (info.coins || 0) + coins;
 
   const horasConvertidas = Math.floor(minutos / 60);
   const minutosConvertidos = Math.floor(minutos % 60);
 
-  return message.reply(
+  const msg = await message.reply(
 `✅ Conversão realizada com sucesso!
 Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
 Coins recebidos: ${coins} 💰
 Novo saldo de coins: ${novoSaldo} 💰`
   );
+
+  setTimeout(() => msg.delete().catch(() => {}), 60000);
 }
 
 // =============================
