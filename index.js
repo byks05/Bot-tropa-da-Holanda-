@@ -508,6 +508,7 @@ Tempo convertido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m
 Coins recebidos: ${coins} 💰
 Novo saldo: ${novoSaldo} 💰`);
 }
+  
   if (command === "removercoins") {
   // Extrai o ID puro da menção
   const target = args[0];
@@ -529,6 +530,104 @@ Novo saldo: ${novoSaldo} 💰`);
   await pool.query("UPDATE pontos SET coins=$1 WHERE user_id=$2", [novoSaldo, targetId]);
 
   return message.reply(`✅ Foram removidos ${quantidade} 💰 do usuário. Novo saldo: ${novoSaldo} 💰`);
+  }
+  if (command === "removertempo") {
+  // Extrai o ID puro da menção
+  const target = args[0];
+  const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
+  const input = args[1]?.toLowerCase(); // tempo a remover ex: 2h ou 30m
+
+  if (!targetId || !input) 
+    return message.reply("❌ Use: thl!removertempo <@user> <quantidade>h/m");
+
+  // Converte para minutos
+  let minutos = 0;
+  if (input.endsWith("h")) minutos = parseFloat(input.replace("h", "")) * 60;
+  else if (input.endsWith("m")) minutos = parseFloat(input.replace("m", ""));
+  else return message.reply("❌ Formato inválido. Use h ou m.");
+
+  const msRemover = minutos * 60000; // converte para ms
+
+  // Pega o total atual do usuário
+  const result = await pool.query("SELECT total FROM pontos WHERE user_id=$1", [targetId]);
+  const info = result.rows[0];
+  if (!info) return message.reply("❌ Usuário não encontrado ou sem tempo registrado.");
+
+  const totalAtual = Number(info.total || 0);
+  const novoTotal = Math.max(totalAtual - msRemover, 0); // nunca negativo
+
+  // Atualiza no banco
+  await pool.query("UPDATE pontos SET total=$1 WHERE user_id=$2", [novoTotal, targetId]);
+
+  const horas = Math.floor(novoTotal / 3600000);
+  const minutosRestantes = Math.floor((novoTotal % 3600000) / 60000);
+
+  return message.reply(`✅ Tempo removido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m\nNovo total de tempo: ${horas}h ${minutosRestantes}m`);
+  }
+  if (command === "resetuser") {
+  // Extrai ID puro da menção
+  const target = args[0];
+  const targetId = target?.match(/\d+/)?.[0];
+
+  if (!targetId) return message.reply("❌ Use: thl!resetuser <@user>");
+
+  // Verifica se o usuário existe no banco
+  const result = await pool.query("SELECT * FROM pontos WHERE user_id=$1", [targetId]);
+  const info = result.rows[0];
+  if (!info) return message.reply("❌ Usuário não encontrado.");
+
+  // Reseta coins e tempo
+  await pool.query("UPDATE pontos SET coins=0, total=0, ativo=false, entrada=NULL WHERE user_id=$1", [targetId]);
+
+  return message.reply(`✅ Usuário <@${targetId}> teve todos os dados resetados! Coins e tempo zerados.`);
+  }
+  if (command === "fechartodos") {
+  // Seleciona todos os usuários que estão ativos
+  const result = await pool.query("SELECT user_id, entrada, total FROM pontos WHERE ativo=true");
+
+  if (result.rows.length === 0) 
+    return message.reply("❌ Nenhum usuário com pontos ativos.");
+
+  // Para cada usuário, atualiza o total e fecha a sessão
+  for (const user of result.rows) {
+    const tempoAtual = Number(user.total || 0);
+    const tempoSessao = Date.now() - Number(user.entrada || 0);
+    const novoTotal = tempoAtual + tempoSessao;
+
+    await pool.query(
+      "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
+      [novoTotal, user.user_id]
+    );
+  }
+
+  return message.reply(`✅ Todas as sessões ativas foram fechadas e o tempo atualizado.`);
+  }
+  if (command === "fechar") {
+  // Extrai ID puro da menção
+  const target = args[0];
+  const targetId = target?.match(/\d+/)?.[0];
+
+  if (!targetId) return message.reply("❌ Use: thl!fechar <@user>");
+
+  // Pega os dados do usuário
+  const result = await pool.query("SELECT total, entrada, ativo FROM pontos WHERE user_id=$1", [targetId]);
+  const info = result.rows[0];
+  if (!info) return message.reply("❌ Usuário não encontrado.");
+
+  if (!info.ativo || !info.entrada) return message.reply("❌ Este usuário não tem sessão ativa.");
+
+  // Calcula o tempo da sessão e atualiza total
+  const tempoSessao = Date.now() - Number(info.entrada);
+  const novoTotal = Number(info.total || 0) + tempoSessao;
+
+  // Fecha a sessão
+  await pool.query(
+    "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
+    [novoTotal, targetId]
+  );
+
+  const minutos = Math.floor(novoTotal / 60000);
+  return message.reply(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
   }
 
   if (command === "comprar") {
