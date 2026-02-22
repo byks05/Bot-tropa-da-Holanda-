@@ -64,7 +64,25 @@ client.on("ready", async () => {
 # Produtos | Tropa da Holanda 🇳🇱
 - Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
 
-<:carrinho:1467522339842556132> **Selecione um produto no menu abaixo para abrir o ticket.**
+🛒 **Nitro mensal (1 mês/3 mês)**
+
+🛒 **CONTA VIRGEM +30 Dias**
+• Nunca tiverão N1tro  
+• Email confirmado  
+• Altere o email!  
+• Ótimas para ativar nitro  
+• Full acesso (pode trocar email & senha)
+
+🛒 **Ativação do nitro**  
+Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmos ativamos.
+
+🛒 **Sp0tify Premium**
+
+🛒 **Molduras com icon personalizado**
+
+🛒 **Y0utub3 Premium**
+
+- Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes <a:Alerta:1467938107759526161>
 `;
 
   // Apaga mensagem antiga se existir
