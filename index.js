@@ -641,7 +641,7 @@ if (sub === "registro") {
       return message.reply("❌ Você não tem permissão para usar este comando.");
 
     await pool.query(
-      "UPDATE pontos SET total = 0, entrada = CASE WHEN ativo = true THEN $1 ELSE NULL END",
+      "UPDATE pontos SET total = 0, entrada = CASE WHEN ativo = true THEN $1 ELSE NULL::bigint END",
       [Date.now()]
     );
 
