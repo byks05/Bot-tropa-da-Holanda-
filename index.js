@@ -648,6 +648,77 @@ if (sub === "registro") {
     return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
 }
+
+// =============================
+// SISTEMA DE INATIVIDADE COM INTERVALO DE 2 MIN
+// =============================
+
+let tentativas = 0;
+
+const esperar = (ms) => new Promise(res => setTimeout(res, ms));
+
+const verificarAtividade = async () => {
+
+  const check = await pool.query(
+    "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  if (!check.rows[0]?.ativo) return;
+
+  while (tentativas < 3) {
+
+    tentativas++;
+
+    await canal.send(
+      `⏰ <@${userId}> você ainda está ativo?\n` +
+      `Responda em até 2 minutos.\n` +
+      `Tentativa ${tentativas}/3`
+    );
+
+    const filtro = m => m.author.id === userId;
+
+    try {
+
+      await canal.awaitMessages({
+        filter: filtro,
+        max: 1,
+        time: 2 * 60 * 1000,
+        errors: ["time"]
+      });
+
+      tentativas = 0; // resetou
+      await canal.send("✅ Presença confirmada. Ponto continua ativo.");
+      return;
+
+    } catch {
+
+      if (tentativas >= 3) {
+
+        const tempo = Date.now() - Number(check.rows[0].entrada);
+        const novoTotal = Number(check.rows[0].total) + tempo;
+
+        await pool.query(
+          "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+          [novoTotal, userId]
+        );
+
+        await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
+        setTimeout(() => canal.delete().catch(() => {}), 5000);
+
+        return;
+      }
+
+      // 🔥 espera 2 minutos antes da próxima tentativa
+      await esperar(2 * 60 * 1000);
+    }
+  }
+};
+
+// começa 20 minutos após iniciar o ponto
+setTimeout(() => {
+  verificarAtividade();
+}, 20 * 60 * 1000);  
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
