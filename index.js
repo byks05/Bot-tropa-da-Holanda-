@@ -846,6 +846,96 @@ if (command === "addtempo") {
   message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
 }
 
+  // =============================
+// COMANDO CONVERTER TEMPO EM COINS
+// =============================
+if (command === "converter") {
+
+  const userId = message.author.id;
+  const CANAL_PROIBIDO = "1474383177689731254"; // canal bloqueado
+
+  // bloqueio de canal proibido
+  if (message.channel.id === CANAL_PROIBIDO) {
+    const msg = await message.reply(`❌ Use este comando no canal correto: <#1474934788233236671>`);
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  const result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  if (result.rows.length === 0) {
+    const msg = await message.reply("❌ Você não tem tempo registrado para converter.");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  const info = result.rows[0];
+
+  if (!args[0]) {
+    const msg = await message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  const input = args[0].toLowerCase();
+  let minutos = 0;
+
+  if (input.endsWith("h")) {
+    const h = parseFloat(input.replace("h", ""));
+    if (isNaN(h) || h <= 0) {
+      const msg = await message.reply("❌ Quantidade inválida.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
+    minutos = h * 60;
+  } else if (input.endsWith("m")) {
+    const m = parseFloat(input.replace("m", ""));
+    if (isNaN(m) || m <= 0) {
+      const msg = await message.reply("❌ Quantidade inválida.");
+      return setTimeout(() => msg.delete().catch(() => {}), 60000);
+    }
+    minutos = m;
+  } else {
+    const msg = await message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  // calcula tempo disponível
+  let total = Number(info.total);
+  if (info.ativo && info.entrada)
+    total += Date.now() - Number(info.entrada);
+
+  const totalMinutos = Math.floor(total / 60000);
+
+  if (minutos > totalMinutos) {
+    const msg = await message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
+    return setTimeout(() => msg.delete().catch(() => {}), 60000);
+  }
+
+  const minutosEmMs = minutos * 60000;
+
+  // calcula coins (1h = 100 coins)
+  const coins = Math.floor(minutos * (100 / 60));
+
+  await pool.query(
+    "UPDATE pontos SET total = total - $1, coins = coins + $2 WHERE user_id = $3",
+    [minutosEmMs, coins, userId]
+  );
+
+  const novoSaldo = (info.coins || 0) + coins;
+
+  const horasConvertidas = Math.floor(minutos / 60);
+  const minutosConvertidos = Math.floor(minutos % 60);
+
+  const msg = await message.reply(
+`✅ Conversão realizada com sucesso!
+Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
+Coins recebidos: ${coins} 💰
+Novo saldo de coins: ${novoSaldo} 💰`
+  );
+
+  setTimeout(() => msg.delete().catch(() => {}), 60000);
+}
+  
 // =============================
 // COMANDO LOJA - LISTA DE PRODUTOS
 // =============================
