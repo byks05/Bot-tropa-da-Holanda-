@@ -62,7 +62,7 @@ client.on("ready", async () => {
 
   const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216>, ou atendentes.
+-# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes.
 
 🛒 ** Nitro mensal (1 mês/3 mês) **
 
@@ -76,14 +76,13 @@ client.on("ready", async () => {
 🛒 **Ativação do nitro**  
 Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
 
-🛒 **Sp0tify Premium**
+🛒 **Spotify Premium**
 
 🛒 **Molduras com icon personalizado**
 
-🛒 **Y0utub3 Premium**
+🛒 **Youtube Premium**
 
--# Compre Apenas com o vendedor oficial <@1209478510847197216>, e os atendentes 🚨
-`;
+-# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
   // Apaga mensagens antigas do bot (opcional)
   const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
@@ -872,7 +871,8 @@ if (command === "rec") {
 
   return message.reply(resposta);
 }
-  );  
+}  
+          );  
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
