@@ -326,6 +326,8 @@ const getCargoAtual = (member) => {
   return `<@&${cargosPossiveis[0].id}>`;
 };
 
+
+
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -633,9 +635,8 @@ if (sub === "registro") {
     return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
 }
-
-// =============================
-// SISTEMA DE INATIVIDADE COM INTERVALO DE 2 MIN
+  // =============================
+// SISTEMA DE INATIVIDADE - DENTRO DO COMANDO
 // =============================
 
 let tentativas = 0;
@@ -643,67 +644,65 @@ let tentativas = 0;
 const esperar = (ms) => new Promise(res => setTimeout(res, ms));
 
 const verificarAtividade = async () => {
+  while (true) {
+    // espera 20 minutos antes de perguntar
+    await esperar(20 * 60 * 1000);
 
-  const check = await pool.query(
-    "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
-    [userId]
-  );
-
-  if (!check.rows[0]?.ativo) return;
-
-  while (tentativas < 3) {
-
-    tentativas++;
-
-    await canal.send(
-      `⏰ <@${userId}> você ainda está ativo?\n` +
-      `Responda em até 2 minutos.\n` +
-      `Tentativa ${tentativas}/3`
+    const check = await pool.query(
+      "SELECT ativo, entrada, total FROM pontos WHERE user_id = $1",
+      [userId]
     );
 
-    const filtro = m => m.author.id === userId;
+    if (!check.rows[0]?.ativo) break; // ponto já fechado, sai do loop
 
-    try {
+    tentativas = 0;
 
-      await canal.awaitMessages({
-        filter: filtro,
-        max: 1,
-        time: 2 * 60 * 1000,
-        errors: ["time"]
-      });
+    while (tentativas < 3) {
+      tentativas++;
 
-      tentativas = 0; // resetou
-      await canal.send("✅ Presença confirmada. Ponto continua ativo.");
-      return;
+      await canal.send(
+        `⏰ <@${userId}> você ainda está ativo?\n` +
+        `Responda em até 2 minutos.\n` +
+        `Tentativa ${tentativas}/3`
+      );
 
-    } catch {
+      const filtro = m => m.author.id === userId;
 
-      if (tentativas >= 3) {
+      try {
+        await canal.awaitMessages({
+          filter: filtro,
+          max: 1,
+          time: 2 * 60 * 1000,
+          errors: ["time"]
+        });
 
-        const tempo = Date.now() - Number(check.rows[0].entrada);
-        const novoTotal = Number(check.rows[0].total) + tempo;
+        await canal.send("✅ Presença confirmada. Ponto continua ativo.");
+        break; // saiu do while de tentativas, espera mais 20 minutos
+      } catch {
+        if (tentativas >= 3) {
+          // calcula o tempo total e encerra o ponto
+          const tempo = Date.now() - Number(check.rows[0].entrada);
+          const novoTotal = Number(check.rows[0].total) + tempo;
 
-        await pool.query(
-          "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-          [novoTotal, userId]
-        );
+          await pool.query(
+            "UPDATE pontos SET total = $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
+            [novoTotal, userId]
+          );
 
-        await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
-        setTimeout(() => canal.delete().catch(() => {}), 5000);
+          await canal.send("🔴 Ponto encerrado automaticamente por inatividade.");
+          setTimeout(() => canal.delete().catch(() => {}), 5000);
 
-        return;
+          return; // sai da função
+        }
+        // espera 2 minutos antes de tentar novamente
+        await esperar(2 * 60 * 1000);
       }
-
-      // 🔥 espera 2 minutos antes da próxima tentativa
-      await esperar(2 * 60 * 1000);
     }
   }
 };
 
-// começa 20 minutos após iniciar o ponto
-setTimeout(() => {
-  verificarAtividade();
-}, 20 * 60 * 1000);  
+// inicia a função dentro do comando, assim que o ponto é criado
+verificarAtividade();
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
