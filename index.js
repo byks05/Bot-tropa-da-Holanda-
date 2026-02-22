@@ -862,7 +862,7 @@ if (command === "rec") {
     // NADA É RETORNADO AO USUÁRIO, apenas log no console
   }
 }
-}
+
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
