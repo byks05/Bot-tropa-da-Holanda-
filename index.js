@@ -19,6 +19,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent
   ]
 });
+
 // -------------------
 // PostgreSQL
 // -------------------
@@ -49,17 +50,51 @@ const ALLOWED_REC = ["1468017578747105390","1468069638935150635","14680664224909
 const ALLOWED_PONTO = ["1468017578747105390","1468069638935150635","1468026315285205094"];
 const CANAL_PROIBIDO = "1474383177689731254";
 const CATEGORIA_PONTO = "1474413150441963615";
-const CARGOS = []; // seus cargos personalizados
+
+// -------------------
+// Lista de cargos e metas (em ms)
+const CARGOS = [
+  // 24h
+  { id: "1468021327129743483", meta: 24 * 3600000 },
+  { id: "1468021411720335432", meta: 24 * 3600000 },
+  { id: "1468021554993561661", meta: 24 * 3600000 },
+  { id: "1468021724598501376", meta: 24 * 3600000 },
+  { id: "1468021924943888455", meta: 24 * 3600000 },
+  { id: "1468652058973569078", meta: 24 * 3600000 },
+  { id: "1474353689723535572", meta: 24 * 3600000 },
+  { id: "1474353834485612687", meta: 24 * 3600000 },
+  { id: "1474353946205098097", meta: 24 * 3600000 },
+  { id: "1474364575297175694", meta: 24 * 3600000 },
+  { id: "1474364617756250132", meta: 24 * 3600000 },
+  { id: "1474354117362188350", meta: 24 * 3600000 },
+  { id: "1474354176816451710", meta: 24 * 3600000 },
+  { id: "1474354212350726225", meta: 24 * 3600000 },
+  { id: "1474354265240899727", meta: 24 * 3600000 },
+  { id: "1474364646629838970", meta: 24 * 3600000 },
+  { id: "1468026315285205094", meta: 24 * 3600000 },
+  // 48h
+  { id: "1468018959797452881", meta: 48 * 3600000 },
+  { id: "1473797846862921836", meta: 48 * 3600000 },
+  { id: "1468018098354393098", meta: 48 * 3600000 },
+  { id: "1468019077984293111", meta: 48 * 3600000 },
+  { id: "1468019282633035857", meta: 48 * 3600000 },
+  { id: "1468019717938614456", meta: 48 * 3600000 },
+  { id: "1468716461773164739", meta: 48 * 3600000 }
+];
+
+// IDs extras
 const IDS = {
   TICKET_CATEGORY: "1474366472326222013",
-  RECRUITMENT_ROLE: "1472589662144040960"
+  RECRUITMENT_ROLE: "1472589662144040960",
+  LOG_CHANNEL: "1474380000000000000", // exemplo
+  STAFF: ["1468017578747105390", "1468069638935150635"]
 };
 
 // -------------------
-// Função utilitária
+// Funções utilitárias
 // -------------------
 function canUseCommand(member) {
-  return ADM_IDS.some(id => member.roles.cache.has(id)) || ADM_IDS.includes(member.id);
+  return IDS.STAFF.some(id => member.roles.cache.has(id)) || ADM_IDS.includes(member.id);
 }
 
 function parseDuration(str) {
@@ -69,6 +104,15 @@ function parseDuration(str) {
   return null;
 }
 
+// Retorna o cargo atual baseado no tempo acumulado
+function getCargoAtual(member) {
+  const cargosPossiveis = CARGOS.filter(c => member.roles.cache.has(c.id));
+  if (!cargosPossiveis.length) return "Nenhum cargo";
+  cargosPossiveis.sort((a, b) => b.meta - a.meta);
+  return `<@&${cargosPossiveis[0].id}>`;
+}
+
+module.exports = { client, pool, CATEGORIA_PONTO, canUseCommand, parseDuration, getCargoAtual, IDS, CARGOS };
 // -------------------
 // Evento ready
 // -------------------
@@ -98,6 +142,7 @@ client.once("ready", async () => {
     }
   }
 });
+
 // index.js - Parte 2
 // =============================
 // PAINEL FIXO DE LOJA
