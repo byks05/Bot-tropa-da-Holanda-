@@ -468,7 +468,7 @@ client.on("messageCreate", async (message) => {
   // =============================
   // COMANDOS ADDCOINS / ADDTEMPO / CONVERTER / COMPRAR
   // =============================
-  if (sub === "addcoins") {
+  if (command === "addcoins") {
     if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id))) return message.reply("❌ Sem permissão.");
     const user = message.mentions.members.first();
     const coins = parseInt(args[1]);
@@ -497,7 +497,7 @@ client.on("messageCreate", async (message) => {
   //========
   // Converter
   //========
-  if (sub === "converter") {
+  if (command === "converter") {
   const result = await pool.query("SELECT * FROM pontos WHERE user_id=$1", [userId]);
   const info = result.rows[0];
   if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
@@ -536,7 +536,7 @@ Novo saldo: ${novoSaldo} 💰`);
   //========
   // Removercoins
   //========
-  if (sub === "removercoins") {
+  if (command === "removercoins") {
   // Extrai o ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
@@ -561,7 +561,7 @@ Novo saldo: ${novoSaldo} 💰`);
   //========
   // Removertempo
   //========
-  if (sub === "removertempo") {
+  if (command === "removertempo") {
   // Extrai o ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
@@ -597,7 +597,7 @@ Novo saldo: ${novoSaldo} 💰`);
   //========
   // Resetuser
   //========
-  if (sub === "resetuser") {
+  if (command === "resetuser") {
   // Extrai ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0];
@@ -614,72 +614,7 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Usuário <@${targetId}> teve todos os dados resetados! Coins e tempo zerados.`);
   }
-  //============
-  // Fechartodos
-  //=============
-  if (sub === "fechartodos") {
-  // Seleciona todos os usuários ativos
-  const result = await pool.query("SELECT user_id, entrada, total, canal_id FROM pontos WHERE ativo=true");
-  if (result.rows.length === 0) return message.channel.send("❌ Nenhum usuário com pontos ativos.");
-
-  for (const user of result.rows) {
-    const tempoAtual = Number(user.total || 0);
-    const tempoSessao = Date.now() - Number(user.entrada || 0);
-    const novoTotal = tempoAtual + tempoSessao;
-
-    // Atualiza banco e remove canal_id
-    await pool.query(
-      "UPDATE pontos SET total=$1, ativo=false, entrada=NULL, canal_id=NULL WHERE user_id=$2",
-      [novoTotal, user.user_id]
-    );
-
-    // Deleta o canal do usuário
-    if (user.canal_id) {
-      const canal = message.guild.channels.cache.get(user.canal_id);
-      if (canal) {
-        try { await canal.delete("Sessão encerrada pelo bot"); } 
-        catch (err) { console.error("Erro ao deletar canal:", err); }
-      }
-    }
-  }
-
-  return message.channel.send(`✅ Todas as sessões ativas foram fechadas e os canais correspondentes deletados.`);
-  }
   
-  //============
-  // fechar
-  //==========
-  if (command === "fechar") {
-  const target = args[0];
-  const targetId = target?.match(/\d+/)?.[0];
-  if (!targetId) return message.channel.send("❌ Use: thl!fechar <@user>");
-
-  // Pega os dados do usuário
-  const result = await pool.query("SELECT total, entrada, ativo, canal_id FROM pontos WHERE user_id=$1", [targetId]);
-  const info = result.rows[0];
-  if (!info) return message.channel.send("❌ Usuário não encontrado.");
-  if (!info.ativo || !info.entrada) return message.channel.send("❌ Este usuário não tem sessão ativa.");
-
-  // Calcula o tempo da sessão e atualiza no banco
-  const tempoSessao = Date.now() - Number(info.entrada);
-  const novoTotal = Number(info.total || 0) + tempoSessao;
-  await pool.query(
-    "UPDATE pontos SET total=$1, ativo=false, entrada=NULL, canal_id=NULL WHERE user_id=$2",
-    [novoTotal, targetId]
-  );
-
-  // Deleta o canal do usuário
-  if (info.canal_id) {
-    const canal = message.guild.channels.cache.get(info.canal_id);
-    if (canal) {
-      try { await canal.delete("Sessão encerrada pelo bot"); } 
-      catch (err) { console.error("Erro ao deletar canal:", err); }
-    }
-  }
-
-  const minutos = Math.floor(novoTotal / 60000);
-  await message.channel.send(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
-  }
   //========
   // Comprar
   //========
