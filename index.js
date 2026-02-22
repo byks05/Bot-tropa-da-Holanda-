@@ -617,10 +617,11 @@ if (command === "ponto") {
         [userId]
       );
       if (userData.rows[0]?.canal) {
-        const msg = await message.reply(`❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando.`);
-        return setTimeout(() => msg.delete().catch(() => {}), 60000);
-      }
-    }
+  const msg = await message.reply(
+    `❌ Use seu canal de ponto: <#${userData.rows[0].canal}> para este comando ou o canal <#1474934788233236671>.`
+  );
+  return setTimeout(() => msg.delete().catch(() => {}), 60000);
+}
 
     if (!data.ativo) {
       const msg = await message.reply("❌ Você não iniciou ponto.");
