@@ -585,10 +585,14 @@ Novo saldo: ${novoSaldo} 💰`);
   
   if (command === "fechartodos") {
   // Seleciona todos os usuários que estão ativos
-  const result = await pool.query("SELECT user_id, entrada, total, canal_id FROM pontos WHERE ativo=true");
+  const result = await pool.query("SELECT user_id, entrada, total FROM pontos WHERE ativo=true");
 
   if (result.rows.length === 0) 
     return message.reply("❌ Nenhum usuário com pontos ativos.");
+
+  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria de canais de sessão
+  if (!categoria || categoria.type !== 4) // tipo 4 = categoria
+    return message.reply("❌ Categoria de sessão não encontrada.");
 
   for (const user of result.rows) {
     const tempoAtual = Number(user.total || 0);
@@ -601,14 +605,12 @@ Novo saldo: ${novoSaldo} 💰`);
       [novoTotal, user.user_id]
     );
 
-    // Fecha/deleta o canal de chat se existir
-    if (user.canal_id) {
-      const canal = message.guild.channels.cache.get(user.canal_id);
-      if (canal) await canal.delete("Sessão encerrada pelo bot");
-    }
+    // Procura e deleta o canal do usuário dentro da categoria
+    const canalDoUsuario = categoria.children.find(c => c.name.includes(user.user_id));
+    if (canalDoUsuario) await canalDoUsuario.delete("Sessão encerrada pelo bot");
   }
 
-  return message.reply(`✅ Todas as sessões ativas foram fechadas e os canais correspondentes deletados.`);
+  return message.reply(`✅ Todas as sessões ativas foram fechadas e os canais na categoria deletados.`);
   }
   
   if (command === "fechar") {
@@ -619,7 +621,7 @@ Novo saldo: ${novoSaldo} 💰`);
   if (!targetId) return message.reply("❌ Use: thl!fechar <@user>");
 
   // Pega os dados do usuário
-  const result = await pool.query("SELECT total, entrada, ativo, canal_id FROM pontos WHERE user_id=$1", [targetId]);
+  const result = await pool.query("SELECT total, entrada, ativo FROM pontos WHERE user_id=$1", [targetId]);
   const info = result.rows[0];
   if (!info) return message.reply("❌ Usuário não encontrado.");
   if (!info.ativo || !info.entrada) return message.reply("❌ Este usuário não tem sessão ativa.");
@@ -634,10 +636,11 @@ Novo saldo: ${novoSaldo} 💰`);
     [novoTotal, targetId]
   );
 
-  // Fecha (ou deleta) o canal de chat se existir
-  if (info.canal_id) {
-    const canal = message.guild.channels.cache.get(info.canal_id);
-    if (canal) await canal.delete("Sessão encerrada pelo bot");
+  // Deleta o canal do usuário dentro da categoria
+  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria de canais
+  if (categoria && categoria.type === 4) { // tipo 4 = categoria
+    const canalDoUsuario = categoria.children.find(c => c.name.includes(targetId));
+    if (canalDoUsuario) await canalDoUsuario.delete("Sessão encerrada pelo bot");
   }
 
   const minutos = Math.floor(novoTotal / 60000);
