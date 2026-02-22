@@ -771,7 +771,7 @@ if (sub === "registro") {
 
     return message.reply("✅ Todas as horas foram resetadas com sucesso!");
   }
-}
+
 
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
