@@ -564,6 +564,7 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Tempo removido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m\nNovo total de tempo: ${horas}h ${minutosRestantes}m`);
   }
+  
   if (command === "resetuser") {
   // Extrai ID puro da menção
   const target = args[0];
@@ -581,27 +582,35 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Usuário <@${targetId}> teve todos os dados resetados! Coins e tempo zerados.`);
   }
+  
   if (command === "fechartodos") {
   // Seleciona todos os usuários que estão ativos
-  const result = await pool.query("SELECT user_id, entrada, total FROM pontos WHERE ativo=true");
+  const result = await pool.query("SELECT user_id, entrada, total, canal_id FROM pontos WHERE ativo=true");
 
   if (result.rows.length === 0) 
     return message.reply("❌ Nenhum usuário com pontos ativos.");
 
-  // Para cada usuário, atualiza o total e fecha a sessão
   for (const user of result.rows) {
     const tempoAtual = Number(user.total || 0);
     const tempoSessao = Date.now() - Number(user.entrada || 0);
     const novoTotal = tempoAtual + tempoSessao;
 
+    // Fecha a sessão no banco
     await pool.query(
       "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
       [novoTotal, user.user_id]
     );
+
+    // Fecha/deleta o canal de chat se existir
+    if (user.canal_id) {
+      const canal = message.guild.channels.cache.get(user.canal_id);
+      if (canal) await canal.delete("Sessão encerrada pelo bot");
+    }
   }
 
-  return message.reply(`✅ Todas as sessões ativas foram fechadas e o tempo atualizado.`);
+  return message.reply(`✅ Todas as sessões ativas foram fechadas e os canais correspondentes deletados.`);
   }
+  
   if (command === "fechar") {
   // Extrai ID puro da menção
   const target = args[0];
@@ -610,25 +619,30 @@ Novo saldo: ${novoSaldo} 💰`);
   if (!targetId) return message.reply("❌ Use: thl!fechar <@user>");
 
   // Pega os dados do usuário
-  const result = await pool.query("SELECT total, entrada, ativo FROM pontos WHERE user_id=$1", [targetId]);
+  const result = await pool.query("SELECT total, entrada, ativo, canal_id FROM pontos WHERE user_id=$1", [targetId]);
   const info = result.rows[0];
   if (!info) return message.reply("❌ Usuário não encontrado.");
-
   if (!info.ativo || !info.entrada) return message.reply("❌ Este usuário não tem sessão ativa.");
 
   // Calcula o tempo da sessão e atualiza total
   const tempoSessao = Date.now() - Number(info.entrada);
   const novoTotal = Number(info.total || 0) + tempoSessao;
 
-  // Fecha a sessão
+  // Fecha a sessão no banco
   await pool.query(
     "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
     [novoTotal, targetId]
   );
 
+  // Fecha (ou deleta) o canal de chat se existir
+  if (info.canal_id) {
+    const canal = message.guild.channels.cache.get(info.canal_id);
+    if (canal) await canal.delete("Sessão encerrada pelo bot");
+  }
+
   const minutos = Math.floor(novoTotal / 60000);
   return message.reply(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
-  }
+}
 
   if (command === "comprar") {
     const produtoArg = args[0]?.toLowerCase();
