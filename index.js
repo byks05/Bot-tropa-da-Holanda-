@@ -262,7 +262,7 @@ client.on("messageCreate", async (message) => {
     // -----------------------------
     // START
     // -----------------------------
-    if (sub === "start") {
+    if (sub === "entrar") {
       const result = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
       let data = result.rows[0];
 
