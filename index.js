@@ -1,38 +1,24 @@
 require('dotenv').config();
-
-const { 
-  Client, 
-  GatewayIntentBits, 
-  Partials, 
-  PermissionsBitField, 
-  ChannelType, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  StringSelectMenuBuilder, 
-  EmbedBuilder 
-} = require('discord.js');
-
+const { Client, GatewayIntentBits, Partials, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js');
 const { Pool } = require('pg');
 
-// Configura a conexão com PostgreSQL
+// === Conexão com PostgreSQL ===
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // obrigatório no Railway
+  ssl: { rejectUnauthorized: false }
 });
 
 // Função para executar queries
 async function query(sql, params) {
   const client = await pool.connect();
   try {
-    const res = await client.query(sql, params);
-    return res;
+    return await client.query(sql, params);
   } finally {
     client.release();
   }
 }
 
-// Cria a tabela de pontos se não existir
+// === Cria tabela apenas uma vez ===
 (async () => {
   await query(`
     CREATE TABLE IF NOT EXISTS pontos (
@@ -46,7 +32,7 @@ async function query(sql, params) {
   `);
 })();
 
-// Inicializa o client do Discord
+// === Inicializa o Discord Client ===
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -57,6 +43,7 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]
 });
 
+// Aqui você continua com seus comandos e eventos
 // Aqui você continua com o restante do seu código de comandos
 // ------------------- // Config Discord // ------------------- const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers], partials: [Partials.Channel] });
 
