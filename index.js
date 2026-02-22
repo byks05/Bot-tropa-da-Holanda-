@@ -582,7 +582,6 @@ if (sub === "registro") {
   let paginaAtual = 0;
 
   const gerarEmbed = async (pagina) => {
-
     const inicio = pagina * itensPorPagina;
     const fim = inicio + itensPorPagina;
     const dadosPagina = ranking.rows.slice(inicio, fim);
@@ -591,7 +590,6 @@ if (sub === "registro") {
     let posicao = inicio + 1;
 
     for (const info of dadosPagina) {
-
       let total = Number(info.total);
 
       if (info.ativo && info.entrada)
@@ -623,6 +621,7 @@ if (sub === "registro") {
       .setColor("Blue");
   };
 
+  // === MOVER ActionRowBuilder PARA DENTRO DO COMANDO ===
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("rank_prev")
@@ -644,15 +643,12 @@ if (sub === "registro") {
   });
 
   collector.on("collect", async interaction => {
-
     if (interaction.user.id !== message.author.id)
       return interaction.reply({ content: "❌ Apenas quem executou o comando pode usar os botões.", ephemeral: true });
 
     if (interaction.customId === "rank_prev") {
       if (paginaAtual > 0) paginaAtual--;
-    }
-
-    if (interaction.customId === "rank_next") {
+    } else if (interaction.customId === "rank_next") {
       if (paginaAtual < totalPaginas - 1) paginaAtual++;
     }
 
@@ -666,7 +662,7 @@ if (sub === "registro") {
     mensagem.edit({ components: [] }).catch(() => {});
   });
 }
-
+  
   // =============================
   // RESET
   // =============================
