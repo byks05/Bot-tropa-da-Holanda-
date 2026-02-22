@@ -869,7 +869,6 @@ if (command === "rec") {
       return message.reply("❌ Ocorreu um erro ao executar o comando.");
     }
   }
-}
   );  
 
 // =============================
