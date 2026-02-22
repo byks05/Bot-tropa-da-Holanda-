@@ -704,69 +704,7 @@ const verificarAtividade = async () => {
 // inicia a função dentro do comando, assim que o ponto é criado
 verificarAtividade();
 
-  // Compras cliente 
-  if (command === "compra" && args[0] === "confirmada") {
-  const user = message.mentions.users.first();
-  if (!user) return message.reply("❌ Marque um usuário.");
-
-  const membro = message.guild.members.cache.get(user.id);
-  const cargoClienteId = "1475111107114041447"; // ID do cargo de cliente
-
-  // Adiciona cargo se não tiver
-  if (!membro.roles.cache.has(cargoClienteId)) {
-    await membro.roles.add(cargoClienteId).catch(console.error);
-    await message.channel.send(`✅ ${user.tag} agora é cliente!`);
-  }
-
-  // Checa se o usuário já está na tabela
-  const res = await pool.query(
-    "SELECT compras FROM clientes WHERE user_id = $1",
-    [user.id]
-  );
-
-  if (res.rows.length === 0) {
-    // Cria registro se não existir
-    await pool.query(
-      "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
-      [user.id, 1]
-    );
-    await message.channel.send(`<@${user.id}> compra 1`);
-  } else {
-    // Atualiza registro se já existir
-    const novasCompras = res.rows[0].compras + 1;
-    await pool.query(
-      "UPDATE clientes SET compras = $1 WHERE user_id = $2",
-      [novasCompras, user.id]
-    );
-    await message.channel.send(`<@${user.id}> compras ${novasCompras}`);
-  }
-  }
-
-  // ======= COMANDO PARA LISTAR CLIENTES =======
-  if (command === "thl!clientes") {
-    const result = await pool.query(
-      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
-    );
-
-    if (result.rows.length === 0) return message.reply("Nenhum cliente registrado.");
-
-    let lista = "";
-    for (const row of result.rows) {
-      lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
-    }
-
-    // Divide em blocos de 2000 caracteres para não quebrar o Discord
-    const blocos = [];
-    while (lista.length > 0) {
-      blocos.push(lista.slice(0, 2000));
-      lista = lista.slice(2000);
-    }
-
-    for (const bloco of blocos) {
-      await message.channel.send(bloco);
-    }
-  }
-});
+  
   
 // =============================
 // CONFIGURAÇÕES DE PERMISSÕES
@@ -1141,6 +1079,70 @@ if (command === "rec") {
     return message.reply("❌ Erro ao executar comando.");
   }
 }
+
+  // ======= COMANDO PARA CONFIRMAR COMPRA =======
+  if (command === "thl!compra" && args[0] === "confirmada") {
+    const user = message.mentions.users.first();
+    if (!user) return message.reply("❌ Mencione alguém.");
+
+    const member = message.guild.members.cache.get(user.id);
+    const cargoClienteId = "1475111107114041447"; // Coloque o ID do cargo de cliente
+
+    // Adiciona o cargo se não tiver
+    if (!member.roles.cache.has(cargoClienteId)) {
+      await member.roles.add(cargoClienteId);
+      message.channel.send(`✅ ${user.tag} agora é cliente!`);
+    }
+
+    // Verifica se já existe no banco
+    const result = await pool.query(
+      "SELECT * FROM clientes WHERE user_id = $1",
+      [user.id]
+    );
+
+    if (result.rows.length === 0) {
+      // Adiciona novo registro
+      await pool.query(
+        "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
+        [user.id, 1]
+      );
+      message.channel.send(`<@${user.id}> compra 1`);
+    } else {
+      // Atualiza compras existentes
+      const comprasAtuais = Number(result.rows[0].compras) + 1;
+      await pool.query(
+        "UPDATE clientes SET compras = $1 WHERE user_id = $2",
+        [comprasAtuais, user.id]
+      );
+      message.channel.send(`<@${user.id}> compras ${comprasAtuais}`);
+    }
+  }
+
+  // ======= COMANDO PARA LISTAR CLIENTES =======
+  if (command === "thl!clientes") {
+    const result = await pool.query(
+      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
+    );
+
+    if (result.rows.length === 0) return message.reply("Nenhum cliente registrado.");
+
+    let lista = "";
+    for (const row of result.rows) {
+      lista += `<@${row.user_id}> → compras: ${row.compras}\n`;
+    }
+
+    // Divide em blocos de 2000 caracteres para não quebrar o Discord
+    const blocos = [];
+    while (lista.length > 0) {
+      blocos.push(lista.slice(0, 2000));
+      lista = lista.slice(2000);
+    }
+
+    for (const bloco of blocos) {
+      await message.channel.send(bloco);
+    }
+  }
+});
   
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
