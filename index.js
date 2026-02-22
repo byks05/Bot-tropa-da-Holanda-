@@ -568,66 +568,55 @@ if (command === "ponto") {
 // REGISTRO COM PAGINAÇÃO
 // =============================
 if (sub === "registro") {
-  const ranking = await pool.query("SELECT * FROM pontos ORDER BY total DESC");
+  try {
+    // Pega todos os registros do banco ordenados pelo total
+    const ranking = await pool.query(
+      "SELECT * FROM pontos ORDER BY total DESC"
+    );
 
-  if (ranking.rows.length === 0)
-    return message.reply("Nenhum registro encontrado.");
+    if (ranking.rows.length === 0)
+      return message.reply("Nenhum registro encontrado.");
 
-  // Discord tem limite de 4096 caracteres por embed
-  const limiteEmbed = 3500;
-  let descricao = "";
-  let embeds = [];
-  let posicao = 1;
+    let descricao = "";
+    let posicao = 1;
 
-  for (const info of ranking.rows) {
-    let total = Number(info.total);
-    if (info.ativo && info.entrada) total += Date.now() - Number(info.entrada);
+    for (const info of ranking.rows) {
+      let total = Number(info.total);
 
-    const horas = Math.floor(total / 3600000);
-    const minutos = Math.floor((total % 3600000) / 60000);
-    const segundos = Math.floor((total % 60000) / 1000);
+      if (info.ativo && info.entrada)
+        total += Date.now() - Number(info.entrada);
 
-    const member = await guild.members.fetch(info.user_id).catch(() => null);
-    const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
-    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-    const status = info.ativo ? "🟢" : "🔴";
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
 
-    let medalha = "";
-    if (posicao === 1) medalha = "🥇 ";
-    else if (posicao === 2) medalha = "🥈 ";
-    else if (posicao === 3) medalha = "🥉 ";
+      const member = await guild.members.fetch(info.user_id).catch(() => null);
+      const encontrado = member ? CARGOS.find(c => member.roles.cache.has(c.id)) : null;
+      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+      const status = info.ativo ? "🟢" : "🔴";
 
-    descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+      let medalha = "";
+      if (posicao === 1) medalha = "🥇 ";
+      else if (posicao === 2) medalha = "🥈 ";
+      else if (posicao === 3) medalha = "🥉 ";
 
-    // Se passar do limite, cria um embed e reseta a descrição
-    if (descricao.length > limiteEmbed) {
-      embeds.push(
-        new EmbedBuilder()
-          .setTitle("📊 Ranking de Atividade")
-          .setDescription(descricao)
-          .setColor("Blue")
-      );
-      descricao = "";
+      descricao += `**${medalha}${posicao}º** <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+
+      posicao++;
     }
 
-    posicao++;
-  }
+    // Se a lista passar de 2000 caracteres, divide em várias mensagens
+    while (descricao.length > 0) {
+      const enviar = descricao.slice(0, 2000);
+      descricao = descricao.slice(2000);
+      await message.channel.send(enviar);
+    }
 
-  // Pega o que sobrou
-  if (descricao.length > 0) {
-    embeds.push(
-      new EmbedBuilder()
-        .setTitle("📊 Ranking de Atividade")
-        .setDescription(descricao)
-        .setColor("Blue")
-    );
+  } catch (err) {
+    console.error(err);
+    return message.reply("❌ Ocorreu um erro ao gerar o ranking.");
   }
-
-  // Envia todos os embeds
-  for (const embed of embeds) {
-    await message.channel.send({ embeds: [embed] });
-  }
-}  
+}
   // =============================
   // RESET
   // =============================
