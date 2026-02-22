@@ -445,7 +445,7 @@ client.on("messageCreate", async (message) => {
   // =============================
   // COMANDOS ADDCOINS / ADDTEMPO / CONVERTER / COMPRAR
   // =============================
-  if (command === "addcoins") {
+  if (sub === "addcoins") {
     if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id))) return message.reply("❌ Sem permissão.");
     const user = message.mentions.members.first();
     const coins = parseInt(args[1]);
@@ -456,7 +456,7 @@ client.on("messageCreate", async (message) => {
     return message.reply(`✅ Adicionados ${coins} coins para ${user}`);
   }
 
-  if (command === "addtempo") {
+  if (sub === "addtempo") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("❌ Mencione um usuário válido.");
     const valor = args[1];
@@ -471,8 +471,10 @@ client.on("messageCreate", async (message) => {
     await pool.query("UPDATE pontos SET total=COALESCE(total,0)+$1 WHERE user_id=$2", [ms, user.id]);
     return message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
   }
-
-  if (command === "converter") {
+  //========
+  // Converter
+  //========
+  if (sub === "converter") {
   const result = await pool.query("SELECT * FROM pontos WHERE user_id=$1", [userId]);
   const info = result.rows[0];
   if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
@@ -508,8 +510,10 @@ Tempo convertido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m
 Coins recebidos: ${coins} 💰
 Novo saldo: ${novoSaldo} 💰`);
 }
-  
-  if (command === "removercoins") {
+  //========
+  // Removercoins
+  //========
+  if (sub === "removercoins") {
   // Extrai o ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
@@ -531,7 +535,10 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Foram removidos ${quantidade} 💰 do usuário. Novo saldo: ${novoSaldo} 💰`);
   }
-  if (command === "removertempo") {
+  //========
+  // Removertempo
+  //========
+  if (sub === "removertempo") {
   // Extrai o ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
@@ -564,8 +571,10 @@ Novo saldo: ${novoSaldo} 💰`);
 
   return message.reply(`✅ Tempo removido: ${Math.floor(minutos/60)}h ${Math.floor(minutos%60)}m\nNovo total de tempo: ${horas}h ${minutosRestantes}m`);
   }
-  
-  if (command === "resetuser") {
+  //========
+  // Resetuser
+  //========
+  if (sub === "resetuser") {
   // Extrai ID puro da menção
   const target = args[0];
   const targetId = target?.match(/\d+/)?.[0];
@@ -583,73 +592,9 @@ Novo saldo: ${novoSaldo} 💰`);
   return message.reply(`✅ Usuário <@${targetId}> teve todos os dados resetados! Coins e tempo zerados.`);
   }
   
-  if (command === "fechartodos") {
-  // Seleciona todos os usuários que estão ativos
-  const result = await pool.query("SELECT user_id, entrada, total FROM pontos WHERE ativo=true");
-
-  if (result.rows.length === 0) 
-    return message.reply("❌ Nenhum usuário com pontos ativos.");
-
-  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria de canais de sessão
-  if (!categoria || categoria.type !== 4) // tipo 4 = categoria
-    return message.reply("❌ Categoria de sessão não encontrada.");
-
-  for (const user of result.rows) {
-    const tempoAtual = Number(user.total || 0);
-    const tempoSessao = Date.now() - Number(user.entrada || 0);
-    const novoTotal = tempoAtual + tempoSessao;
-
-    // Fecha a sessão no banco
-    await pool.query(
-      "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
-      [novoTotal, user.user_id]
-    );
-
-    // Procura e deleta o canal do usuário dentro da categoria
-    const canalDoUsuario = categoria.children.find(c => c.name.includes(user.user_id));
-    if (canalDoUsuario) await canalDoUsuario.delete("Sessão encerrada pelo bot");
-  }
-
-  return message.reply(`✅ Todas as sessões ativas foram fechadas e os canais na categoria deletados.`);
-  }
-  
-  if (command === "fechar") {
-  const target = args[0];
-  const targetId = target?.match(/\d+/)?.[0];
-  if (!targetId) return message.channel.send("❌ Use: thl!fechar <@user>");
-
-  const result = await pool.query("SELECT total, entrada, ativo FROM pontos WHERE user_id=$1", [targetId]);
-  const info = result.rows[0];
-  if (!info) return message.channel.send("❌ Usuário não encontrado.");
-  if (!info.ativo || !info.entrada) return message.channel.send("❌ Este usuário não tem sessão ativa.");
-
-  // Calcula o tempo e atualiza no banco
-  const tempoSessao = Date.now() - Number(info.entrada);
-  const novoTotal = Number(info.total || 0) + tempoSessao;
-  await pool.query(
-    "UPDATE pontos SET total=$1, ativo=false, entrada=NULL WHERE user_id=$2",
-    [novoTotal, targetId]
-  );
-
-  // Deleta o canal do usuário dentro da categoria
-  const categoria = message.guild.channels.cache.get("1474413150441963615"); // categoria
-  if (categoria && categoria.type === 4) { // tipo categoria
-    const canalDoUsuario = categoria.children.find(
-      c => c.isText() && c.name.includes(targetId)
-    );
-    if (canalDoUsuario) {
-      try {
-        await canalDoUsuario.delete("Sessão encerrada pelo bot");
-      } catch (err) {
-        console.error("Não foi possível deletar o canal:", err);
-      }
-    }
-  }
-
-  const minutos = Math.floor(novoTotal / 60000);
-  await message.channel.send(`✅ Sessão do usuário <@${targetId}> fechada!\nTempo total acumulado: ${Math.floor(minutos/60)}h ${minutos%60}m`);
-}
-
+  //========
+  // Comprar
+  //========
   if (command === "comprar") {
     const produtoArg = args[0]?.toLowerCase();
     if (!produtoArg) return message.reply("❌ Use: thl!comprar <produto>");
