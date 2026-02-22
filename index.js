@@ -834,8 +834,13 @@ if (command === "rec") {
     if(subCommand === "add") {
       await user.roles.remove("1468024885354959142");
       await user.roles.add(["1468283328510558208","1468026315285205094"]);
-      return message.reply(`✅ Cargos aplicados em ${user}`);
+      return message.reply(`✅ Cargos " normais "aplicados em ${user}`);
     }
+    if(subCommand === "aliados") {
+      await user.roles.remove("1468024885354959142");
+      await user.roles.add(["1468279104624398509","1468283328510558208"]);
+      return message.reply(`✅ Cargos aliados aplicados em ${user}`);
+       }
     return message.reply("❌ Use: thl!rec <@usuário> add ou add menina");
   } catch (err) { console.error(err); return message.reply("❌ Erro ao executar comando."); }
 }
