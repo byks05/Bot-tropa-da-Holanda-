@@ -509,11 +509,13 @@ Coins recebidos: ${coins} 💰
 Novo saldo: ${novoSaldo} 💰`);
 }
   if (command === "removercoins") {
-  const targetId = args[0]; // ID do usuário alvo
-  const quantidade = parseInt(args[1]); // quantidade a remover
+  // Extrai o ID puro da menção
+  const target = args[0];
+  const targetId = target?.match(/\d+/)?.[0]; // pega apenas os números
+  const quantidade = parseInt(args[1]);
 
-  if (!targetId || isNaN(quantidade)) 
-    return message.reply("❌ Use: thl!removercoins <user_id> <quantidade>");
+  if (!targetId || isNaN(quantidade))
+    return message.reply("❌ Use: thl!removercoins <@user> <quantidade>");
 
   // Pega o saldo atual do usuário
   const result = await pool.query("SELECT coins FROM pontos WHERE user_id=$1", [targetId]);
