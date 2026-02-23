@@ -272,15 +272,8 @@ const IDS = {
 };
 
 // =============================
-// SISTEMA BATE PONTO COM POSTGRESQL
+// FUNÇÃO REGISTRAR PONTO
 // =============================
-const { Pool } = require("pg");
-
-const pg = new Pool({
-  connectionString: process.env.DATABASE_URL, // seu DATABASE_URL no .env
-});
-
-// Função para registrar ponto
 async function registrarPonto(userId) {
   try {
     // Buscar pontos atuais
@@ -301,19 +294,6 @@ async function registrarPonto(userId) {
   } catch (err) {
     console.error("Erro ao registrar ponto:", err);
     throw err;
-  }
-}
-
-// Exemplo de uso no messageCreate
-if (command === "bataponto") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-
-  try {
-    const total = await registrarPonto(user.id);
-    return message.reply(`✅ Ponto registrado para ${user.user.tag}. Total de pontos: **${total}**`);
-  } catch {
-    return message.reply("❌ Ocorreu um erro ao registrar o ponto.");
   }
 }
 
