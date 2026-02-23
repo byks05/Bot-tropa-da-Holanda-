@@ -897,7 +897,7 @@ Novo saldo: ${saldoFinal} 💰`
   );
 }   
 
-  // =============================
+// =============================
 // COMANDO FECHAR TODOS PONTOS
 // =============================
 if (command === "fechartodos") {
@@ -921,13 +921,25 @@ if (command === "fechartodos") {
 
     let fechados = 0;
 
-    // Deleta cada canal, ignora erro se já estiver fechado ou não puder deletar
     for (const canal of canais.values()) {
-      await canal.delete().catch(() => {});
-      fechados++;
+      try {
+        // Deleta o canal
+        await canal.delete();
+
+        // Atualiza o banco: marca como inativo e zera o campo canal
+        await pool.query(
+          "UPDATE pontos SET ativo = false, canal = NULL WHERE canal = $1",
+          [canal.id]
+        );
+
+        fechados++;
+      } catch {
+        // Ignora erro de canal já deletado ou sem permissão
+        continue;
+      }
     }
 
-    return message.reply(`✅ ${fechados} canais de ponto foram fechados com sucesso.`);
+    return message.reply(`✅ ${fechados} canais de ponto foram fechados e registros atualizados com sucesso.`);
 
   } catch (err) {
     console.error("Erro ao fechar pontos:", err);
