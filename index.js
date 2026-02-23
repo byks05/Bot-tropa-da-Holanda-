@@ -184,25 +184,6 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 
-if (command === "ponto") {
-  (async () => {
-    const { ActionRowBuilder, StringSelectMenuBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
-    const userId = message.author.id;
-    const guild = message.guild;
-    const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
-    const CANAL_ENTRAR = "1474383177689731254"; // canal fixo onde usar 'entrar'
-
-    // Apenas cargos permitidos
-    const ALLOWED_PONTO = [
-      "1468017578747105390",
-      "1468069638935150635",
-      "1468026315285205094"
-    ];
-
-    if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
-      return message.reply("❌ Você não tem permissão para usar este comando.");
-    }
-
     // =====================
     // SELECT MENU FIXO
     // =====================
