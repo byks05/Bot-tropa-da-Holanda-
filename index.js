@@ -1301,6 +1301,51 @@ if (command === "listaclientes") {
     return message.reply("❌ Ocorreu um erro ao buscar os clientes.");
   }
  }
+  // =============================
+// RESETAR COINS
+// =============================
+if (command === "resetcoins") {
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+    return message.reply("❌ Sem permissão para usar este comando.");
+
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  try {
+    await pool.query(
+      "UPDATE clientes SET coins = 0 WHERE user_id = $1",
+      [user.id]
+    );
+    return message.reply(`✅ Coins de ${user.user.tag} foram resetados para 0.`);
+  } catch (err) {
+    console.error("Erro ao resetar coins:", err);
+    return message.reply("❌ Ocorreu um erro ao resetar os coins.");
+  }
+}
+
+// =============================
+// RESETAR TEMPO
+// =============================
+if (command === "resettempo") {
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+    return message.reply("❌ Sem permissão para usar este comando.");
+
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  try {
+    await pool.query(
+      "UPDATE pontos SET total = 0 WHERE user_id = $1",
+      [user.id]
+    );
+    return message.reply(`✅ Tempo de ${user.user.tag} foi resetado para 0.`);
+  } catch (err) {
+    console.error("Erro ao resetar tempo:", err);
+    return message.reply("❌ Ocorreu um erro ao resetar o tempo.");
+  }
+}
 
 });
 
