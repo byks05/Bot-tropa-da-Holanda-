@@ -111,7 +111,7 @@ async function reativarPontosAtivos(pg, client, guildId) {
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guildId = "SEU_ID_DA_GUILD"; // coloque aqui o ID da sua guild
+  const guildId = "1468007116936843359"; // coloque aqui o ID da sua guild
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
