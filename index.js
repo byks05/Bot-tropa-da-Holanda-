@@ -586,15 +586,43 @@ if (command === "ponto") {
   // ENTRAR
   // =============================
   if (sub === "entrar") {
-
-  if (message.channel.id !== CANAL_ENTRAR)
-    return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
-
-  if (userData.ativo)
-    return message.reply("❌ Você já iniciou seu ponto.");
-
   try {
-    // ✅ Cria o canal primeiro
+    if (message.channel.id !== CANAL_ENTRAR)
+      return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
+
+    const res = await pool.query(
+      "SELECT * FROM pontos WHERE user_id = $1",
+      [userId]
+    );
+    let userData = res.rows[0];
+
+    if (!userData) {
+      // Se não existe registro, cria
+      await pool.query(
+        "INSERT INTO pontos (user_id, total, ativo) VALUES ($1, 0, false)",
+        [userId]
+      );
+      userData = { user_id: userId, ativo: false };
+    }
+
+    if (userData.ativo)
+      return message.reply("❌ Você já iniciou seu ponto.");
+
+    const guild = message.guild;
+    if (!guild) return message.reply("❌ Guild não encontrada.");
+
+    const categoriaId = "1474413150441963615"; // substitua pelo ID da sua categoria
+    const categoria = guild.channels.cache.get(categoriaId);
+    if (!categoria || categoria.type !== ChannelType.GuildCategory)
+      return message.reply("❌ Categoria de pontos inválida ou não encontrada.");
+
+    // Atualiza banco antes de criar canal
+    await pool.query(
+      "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
+      [Date.now(), userId]
+    );
+
+    // Cria canal de ponto
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: ChannelType.GuildText,
@@ -615,19 +643,19 @@ if (command === "ponto") {
       ],
     });
 
-    // ✅ Atualiza banco de dados somente depois de criar o canal
+    // Atualiza ID do canal no banco
     await pool.query(
-      "UPDATE pontos SET ativo = true, entrada = $1, canal = $2 WHERE user_id = $3",
-      [Date.now(), canal.id, userId]
+      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+      [canal.id, userId]
     );
 
-    // ✅ Mensagens de confirmação
+    // Mensagens de confirmação
     await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
   } catch (err) {
     console.error("Erro ao iniciar ponto:", err);
-    return message.reply("❌ Ocorreu um erro ao tentar iniciar o ponto.");
+    return message.reply(`❌ Ocorreu um erro ao tentar iniciar o ponto.\n\`\`\`${err.message}\`\`\``);
   }
 }
 
