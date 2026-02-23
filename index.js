@@ -80,7 +80,8 @@ client.once("clientReady", async () => {
 
     if (mensagemExistente) return; // Já existe painel, não recria
 
-    const mensagem = awit canalEmbed.send({
+    // ⚡ Corrigido aqui: 'awit' → 'await'
+    const mensagem = await canalEmbed.send({
       content: textoPainel,
       components: [row]
     });
@@ -92,6 +93,7 @@ client.once("clientReady", async () => {
     console.error("Erro ao atualizar o painel:", err);
   }
 });
+
 // =============================
 // INTERAÇÃO DO SELECT MENU
 // =============================
@@ -109,7 +111,6 @@ client.on("interactionCreate", async (interaction) => {
     c => c.name === ticketName && c.parentId === categoriaId
   );
   if (existingChannel) {
-    // Reset do select menu para poder clicar de novo
     await interaction.update({ components: interaction.message.components });
     return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
   }
@@ -125,7 +126,6 @@ client.on("interactionCreate", async (interaction) => {
     ],
   });
 
-  // Produtos com valores
   const produtosInfo = {
     vip: { nome: "Vip", valor: "6000 coins" },
     robux: { nome: "Robux", valor: "4000 coins" },
@@ -154,7 +154,6 @@ client.on("interactionCreate", async (interaction) => {
 
   await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
 
-  // Reset do select menu para permitir nova compra
   await interaction.update({ components: interaction.message.components });
   await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
 });
