@@ -188,7 +188,7 @@ client.once("clientReady", async () => {
   } catch (err) {
     console.error("Erro ao buscar sessões no banco:", err);
   }
-
+});
 // =============================
 // CLIENT READY (PAINEL FIXO DE LOJA)
 // =============================
@@ -248,7 +248,6 @@ client.once("clientReady", async () => {
     console.error("Erro ao atualizar o painel:", err);
   }
 });
-
 // =============================
 // INTERAÇÃO DO SELECT MENU
 // =============================
