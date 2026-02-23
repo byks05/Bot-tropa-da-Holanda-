@@ -1120,8 +1120,19 @@ if (message.content.startsWith("thl!")) {
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
-client.on("clientReady", async () => {
-  console.log(`${client.user.tag} está online!`);
+client.once("ready", async () => {
+  console.log(`Bot online como ${client.user.tag}`);
+
+  // Criação da tabela PostgreSQL
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pontos (
+      user_id TEXT PRIMARY KEY,
+      total BIGINT DEFAULT 0,
+      ativo BOOLEAN DEFAULT false,
+      entrada BIGINT,
+      canal TEXT
+    );
+  `);
 
   const data = await getData();
   const guild = client.guilds.cache.first();
@@ -1137,31 +1148,24 @@ client.on("clientReady", async () => {
         parent: categoriaId,
         permissionOverwrites: [
           { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+          {
+            id: userId,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.ReadMessageHistory
+            ]
+          }
         ]
       });
 
       await saveData(userId, canal.id);
-
       await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
     } catch (err) {
       console.log("Erro ao recriar canal:", err);
     }
   }
-});
-
-  console.log(`Bot online como ${client.user.tag}`);
-
-  // Criação da tabela PostgreSQL
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS pontos (
-      user_id TEXT PRIMARY KEY,
-      total BIGINT DEFAULT 0,
-      ativo BOOLEAN DEFAULT false,
-      entrada BIGINT,
-      canal TEXT
-    );
-  `);
 });
 
 // =============================
