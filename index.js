@@ -27,27 +27,32 @@ const pool = new Pool({
 // =============================
 // CLIENT & DATABASE
 // =============================
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
-
-const pg = new Pool({
-  connectionString: process.env.DATABASE_URL, // coloque seu DATABASE_URL no .env
+const client = new Client({ 
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.MessageContent
+  ] 
 });
 
 // =============================
 // FUNÇÃO REATIVAR PONTOS
 // =============================
-async function reativarPontosAtivos(pg, client, guildId) {
+async function reativarPontosAtivos(client, guildId) {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
-  const res = await pg.query('SELECT * FROM pontos WHERE ativo = TRUE AND canal IS NOT NULL');
+  const res = await pool.query(
+    'SELECT * FROM pontos WHERE ativo = TRUE AND canal IS NOT NULL'
+  );
+
   const data = {};
   res.rows.forEach(row => {
     data[row.user_id] = {
       total: row.total,
       entrada: row.entrada ? new Date(row.entrada).getTime() : null,
       ativo: row.ativo,
-      canal: row.canal_id
+      canal: row.canal
     };
   });
 
@@ -81,20 +86,38 @@ async function reativarPontosAtivos(pg, client, guildId) {
       await canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`);
 
       const filtro = m => m.author.id === userId && m.channel.id === canal.id;
+
       try {
-        await canal.awaitMessages({ filter: filtro, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
+        await canal.awaitMessages({
+          filter: filtro,
+          max: 1,
+          time: 5 * 60 * 1000,
+          errors: ['time']
+        });
       } catch {
-        const tempoEncerrado = (info.total || 0) + (info.entrada ? Date.now() - info.entrada : 0);
+        const tempoEncerrado =
+          (info.total || 0) +
+          (info.entrada ? Date.now() - info.entrada : 0);
+
         info.total = tempoEncerrado;
         info.ativo = false;
         info.entrada = null;
 
-        await pg.query(
+        await pool.query(
           'UPDATE pontos SET total=$1, entrada=$2, ativo=$3 WHERE user_id=$4',
           [info.total, null, info.ativo, userId]
         );
 
-        await canal.send(`🔴 Nenhuma resposta recebida. Ponto encerrado automaticamente. Tempo total: ${Math.floor(tempoEncerrado/3600000)}h ${Math.floor((tempoEncerrado%3600000)/60000)}m ${Math.floor((tempoEncerrado%60000)/1000)}s`);
+        await canal.send(
+          `🔴 Nenhuma resposta recebida. Ponto encerrado automaticamente. Tempo total: ${
+            Math.floor(tempoEncerrado/3600000)
+          }h ${
+            Math.floor((tempoEncerrado%3600000)/60000)
+          }m ${
+            Math.floor((tempoEncerrado%60000)/1000)
+          }s`
+        );
+
         canal.delete().catch(() => {});
 
         clearInterval(intervaloTempo);
@@ -119,7 +142,6 @@ client.once("clientReady", async () => {
   const categoriaId = "1468715109722357782";
 
   try {
-    // Pega todas as sessões ativas do banco
     const res = await pool.query(
       "SELECT userid, canal FROM sessoes WHERE ativo = true"
     );
@@ -128,21 +150,27 @@ client.once("clientReady", async () => {
       const userId = row.userid;
 
       try {
+        const member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) continue;
+
         const canal = await guild.channels.create({
           name: "ponto-recuperado",
           type: ChannelType.GuildText,
           parent: categoriaId,
           permissionOverwrites: [
-            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
             {
-              id: userId,
+              id: guild.roles.everyone.id,
+              deny: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+              id: member.id,
               allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
-              ]
-            }
-          ]
+                PermissionFlagsBits.ReadMessageHistory,
+              ],
+            },
+          ],
         });
 
         await pool.query(
@@ -160,20 +188,23 @@ client.once("clientReady", async () => {
   } catch (err) {
     console.error("Erro ao buscar sessões no banco:", err);
   }
- // =============================
-// PAINEL FIXO DE LOJA
-// =============================
-const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
 
-if (canalEmbed) {
+// =============================
+// CLIENT READY (PAINEL FIXO DE LOJA)
+// =============================
+client.once("clientReady", async () => {
+
+  const canalEmbed = await client.channels.fetch("1474885764990107790").catch(() => null);
+  if (!canalEmbed) return;
+
   const produtos = [
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
-    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6" },
   ];
 
   const row = new ActionRowBuilder().addComponents(
@@ -188,46 +219,34 @@ if (canalEmbed) {
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 
 > 🛒 ** Nitro mensal (1 mês/3 mês) **
-
 > 🛒 **CONTA VIRGEM +30 Dias**
-• Nunca tiverão Nitro  
-• Email confirmado  
-• Altere o email!  
-• Ótimas para ativar nitro  
-• Full acesso (pode trocar email & senha)
-
-> 🛒 **Ativação do nitro**  
-Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
-
+> 🛒 **Ativação do nitro**
 > 🛒 **Spotify Premium**
-
 > 🛒 **Molduras com icon personalizado**
-
 > 🛒 **Youtube Premium**
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
-  // Criamos uma função assíncrona para todo o processo
-  async function atualizarPainel() {
-    try {
-      // Apaga mensagens antigas do bot (opcional)
-      const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-      mensagens.forEach(msg => {
-        if (msg.author.id === client.user.id) msg.delete().catch(() => {});
-      });
+  try {
+    // 🔥 Evita recriar se já existir mensagem do bot fixada
+    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+    const mensagemExistente = mensagens.find(
+      m => m.author.id === client.user.id && m.components.length > 0
+    );
 
-      // Envia e pin a nova mensagem
-      const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
-      await mensagem.pin().catch(() => {});
-    } catch (err) {
-      console.error("Erro ao atualizar o painel:", err);
-    }
+    if (mensagemExistente) return; // Já existe painel, não recria
+
+    const mensagem = await canalEmbed.send({
+      content: textoPainel,
+      components: [row]
+    });
+
+    await mensagem.pin().catch(() => {});
+    console.log("Painel da loja criado com sucesso.");
+
+  } catch (err) {
+    console.error("Erro ao atualizar o painel:", err);
   }
-
-  // Chama a função
-  atualizarPainel();
-}
-
 });
 
 // =============================
@@ -265,13 +284,13 @@ client.on("interactionCreate", async (interaction) => {
 
   // Produtos com valores
   const produtosInfo = {
-    nitro_1: { nome: "Nitro 1 mês", valor: "3 R$" },
-    nitro_3: { nome: "Nitro 3 meses", valor: "6 R$" },
-    conta_virgem: { nome: "Contas virgem +30 dias", valor: "5 R$" },
-    ativacao_nitro: { nome: "Ativação Nitro", valor: "1,50 R$" },
-    spotify: { nome: "Spotify Premium", valor: "5 R$" },
-    moldura: { nome: "Molduras com icon personalizado", valor: "2 R$" },
-    youtube: { nome: "Y0utub3 Premium", valor: "6 R$" },
+    nitro_1: { nome: "Nitro 1 mês", valor: "R$ 3" },
+    nitro_3: { nome: "Nitro 3 meses", valor: "R$ 6" },
+    conta_virgem: { nome: "Contas virgem +30 dias", valor: "R$ 5" },
+    ativacao_nitro: { nome: "Ativação Nitro", valor: "R$ 1,50" },
+    spotify: { nome: "Spotify Premium", valor: "R$ 5" },
+    moldura: { nome: "Molduras com icon personalizado", valor: "R$ 2" },
+    youtube: { nome: "Y0utub3 Premium", valor: "R$ 6" },
   };
 
   const prodSelecionado = produtosInfo[produto];
@@ -330,26 +349,35 @@ const IDS = {
 async function registrarPonto(userId) {
   try {
     // Buscar pontos atuais
-    const res = await pg.query('SELECT pontos FROM pontos WHERE user_id = $1', [userId]);
+    const res = await pool.query(
+      'SELECT pontos FROM pontos WHERE user_id = $1',
+      [userId]
+    );
 
     let pontos = 1;
 
     if (res.rows.length === 0) {
       // Inserir novo usuário
-      await pg.query('INSERT INTO pontos (user_id, pontos) VALUES ($1, $2)', [userId, pontos]);
+      await pool.query(
+        'INSERT INTO pontos (user_id, pontos) VALUES ($1, $2)',
+        [userId, pontos]
+      );
     } else {
       // Atualizar pontos
       pontos = res.rows[0].pontos + 1;
-      await pg.query('UPDATE pontos SET pontos = $1 WHERE user_id = $2', [pontos, userId]);
+      await pool.query(
+        'UPDATE pontos SET pontos = $1 WHERE user_id = $2',
+        [pontos, userId]
+      );
     }
 
-    return pontos; // Retorna total de pontos após registro
+    return pontos;
   } catch (err) {
     console.error("Erro ao registrar ponto:", err);
     throw err;
   }
 }
-
+  
 // =============================
 // UTILS
 // =============================
@@ -495,8 +523,7 @@ if (!data) {
 
   data = result.rows[0];
 }
-  
-// =============================
+  // =============================
 // COMANDO PONTO COMPLETO (POSTGRESQL)
 // =============================
 if (command === "ponto") {
@@ -549,12 +576,22 @@ if (command === "ponto") {
 
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
-      type: 0,
+      type: ChannelType.GuildText,
       parent: categoriaId,
       permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-      ]
+        {
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: userId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
+        },
+      ],
     });
 
     await pool.query(
@@ -565,65 +602,12 @@ if (command === "ponto") {
     await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-    // 🔥 CONTADOR EM TEMPO REAL
-    const intervaloTempo = setInterval(async () => {
-
-      const check = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
-      const info = check.rows[0];
-      if (!info.ativo) {
-        clearInterval(intervaloTempo);
-        clearInterval(intervaloLembrete);
-        return;
-      }
-
-      const total = Number(info.total) + (Date.now() - Number(info.entrada));
-
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
-
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    }, 1000);
-
-    // 🔔 LEMBRETE
-    const intervaloLembrete = setInterval(async () => {
-
-      const check = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
-      const info = check.rows[0];
-
-      if (!info.ativo) {
-        clearInterval(intervaloLembrete);
-        return;
-      }
-
-      await canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status**`);
-
-      try {
-        const filtro = m => m.author.id === userId && m.channel.id === canal.id;
-        await canal.awaitMessages({ filter: filtro, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
-      } catch {
-
-        const tempoEncerrado = Number(info.total) + (Date.now() - Number(info.entrada));
-
-        await pool.query(
-          "UPDATE pontos SET ativo = false, entrada = NULL, total = $1 WHERE user_id = $2",
-          [tempoEncerrado, userId]
-        );
-
-        await canal.send("🔴 Ponto encerrado automaticamente.");
-        canal.delete().catch(() => {});
-
-        clearInterval(intervaloTempo);
-        clearInterval(intervaloLembrete);
-      }
-
-    }, 20 * 60 * 1000);
   }
 
   // =============================
   // SAIR
   // =============================
-  if (sub === "sair") {
+  else if (sub === "sair") {
 
     if (!userData.ativo)
       return message.reply("❌ Você não iniciou ponto.");
@@ -650,7 +634,7 @@ if (command === "ponto") {
   // =============================
   // STATUS
   // =============================
-  if (sub === "status") {
+  else if (sub === "status") {
 
     const check = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
     const info = check.rows[0];
@@ -670,7 +654,6 @@ if (command === "ponto") {
     const segundos = Math.floor((total % 60000) / 1000);
 
     const coins = Number(info.coins);
-
     const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
     return message.reply(
@@ -680,75 +663,74 @@ if (command === "ponto") {
       `Status: ${status}`
     );
   }
-}
-  
-// =============================
-// REGISTRO (Ranking Completo - PostgreSQL)
-// =============================
-if (sub === "registro") {
 
-  const res = await pool.query("SELECT * FROM pontos");
-  const ranking = res.rows;
+  // =============================
+  // REGISTRO
+  // =============================
+  else if (sub === "registro") {
 
-  if (ranking.length === 0)
-    return message.reply("Nenhum registro encontrado.");
+    const res = await pool.query("SELECT * FROM pontos");
+    const ranking = res.rows;
 
-  // Ordena pelo total (incluindo quem está ativo)
-  ranking.sort((a, b) => {
-    const totalA = Number(a.total) + (a.ativo && a.entrada ? Date.now() - Number(a.entrada) : 0);
-    const totalB = Number(b.total) + (b.ativo && b.entrada ? Date.now() - Number(b.entrada) : 0);
-    return totalB - totalA;
-  });
+    if (ranking.length === 0)
+      return message.reply("Nenhum registro encontrado.");
 
-  let texto = "";
-  let contador = 1;
+    ranking.sort((a, b) => {
+      const totalA = Number(a.total) + (a.ativo && a.entrada ? Date.now() - Number(a.entrada) : 0);
+      const totalB = Number(b.total) + (b.ativo && b.entrada ? Date.now() - Number(b.entrada) : 0);
+      return totalB - totalA;
+    });
 
-  for (const info of ranking) {
+    let texto = "";
+    let contador = 1;
 
-    let total = Number(info.total);
-    if (info.ativo && info.entrada)
-      total += Date.now() - Number(info.entrada);
+    for (const info of ranking) {
 
-    const horas = Math.floor(total / 3600000);
-    const minutos = Math.floor((total % 3600000) / 60000);
-    const segundos = Math.floor((total % 60000) / 1000);
+      let total = Number(info.total);
+      if (info.ativo && info.entrada)
+        total += Date.now() - Number(info.entrada);
 
-    const member = await guild.members.fetch(info.user_id).catch(() => null);
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
 
-    const encontrado = member
-      ? CARGOS.find(c => member.roles.cache.has(c.id))
-      : null;
+      const member = await guild.members.fetch(info.user_id).catch(() => null);
 
-    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+      const encontrado = member
+        ? CARGOS.find(c => member.roles.cache.has(c.id))
+        : null;
 
-    texto += `${contador}. <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
-    contador++;
+      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+      const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+
+      texto += `${contador}. <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+      contador++;
+    }
+
+    return message.reply(
+      `📊 **Ranking de Atividade – Todos os Usuários**\n\n${texto}`
+    );
   }
 
-  return message.reply(
-    `📊 **Ranking de Atividade – Todos os Usuários**\n\n${texto}`
-  );
-}
-  
   // =============================
-// RESETAR HORAS DE TODOS
-// =============================
-if (sub === "reset") {
+  // RESET
+  // =============================
+  else if (sub === "reset") {
 
-  if (!canUseCommand(message.member))
-    return message.reply("❌ Você não tem permissão para usar este comando.");
+    if (!canUseCommand(message.member))
+      return message.reply("❌ Você não tem permissão para usar este comando.");
 
-  await pool.query(`
-    UPDATE pontos
-    SET total = 0,
-        entrada = CASE
-          WHEN ativo = true THEN ${Date.now()}
-          ELSE NULL
-        END
-  `);
+    await pool.query(`
+      UPDATE pontos
+      SET total = 0,
+          entrada = CASE
+            WHEN ativo = true THEN ${Date.now()}
+            ELSE NULL
+          END
+    `);
 
-  return message.reply("✅ Todas as horas foram resetadas com sucesso!");
+    return message.reply("✅ Todas as horas foram resetadas com sucesso!");
+  }
 }
 
 // =============================
