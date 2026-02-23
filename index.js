@@ -185,183 +185,101 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// SELECT MENU FIXO
+// PAINEL DE ADMIN FIXO
 // =====================
-const entrarMenu = new ActionRowBuilder().addComponents(
-  new StringSelectMenuBuilder()
-    .setCustomId("ponto_menu")
-    .setPlaceholder("Selecione uma ação")
-    .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-);
+const adminChannelId = "1474384292015640626"; // Canal que você quer fixar o painel
+let painelMensagemId = null; // Aqui vamos guardar o ID da mensagem do painel
 
-// ID do canal fixo
-const canalPainelId = "1474383177689731254";
+async function criarPainelAdmin(client) {
+  try {
+    const canal = await client.channels.fetch(adminChannelId);
+    if (!canal) return console.log("Canal de administração não encontrado.");
 
-// =====================
-// FUNÇÃO PARA GARANTIR QUE O PAINEL EXISTE
-// =====================
-async function garantirPainel(client) {
-  const canalPainel = await client.channels.fetch(canalPainelId);
+    // Botões do painel
+    const botoesAdmin = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("registro")
+        .setLabel("📋 Registro")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("resetUser")
+        .setLabel("🔄 Reset Usuário")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("resetAll")
+        .setLabel("🗑 Reset Todos")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("addCoins")
+        .setLabel("💰 Adicionar Coins")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId("addTime")
+        .setLabel("⏱ Adicionar Tempo")
+        .setStyle(ButtonStyle.Success)
+    );
 
-  const mensagens = await canalPainel.messages.fetch({ limit: 50 });
-  const painelExistente = mensagens.find(msg =>
-    msg.components.some(row =>
-      row.components.some(c => c.customId === "ponto_menu")
-    )
-  );
+    let conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
 
-  if (!painelExistente) {
-    await canalPainel.send({ content: "Selecione uma ação:", components: [entrarMenu] });
-    console.log("Painel de ponto criado no canal fixo!");
-  } else {
-    console.log("Painel de ponto já existe.");
+    // Se já existe a mensagem, atualiza
+    if (painelMensagemId) {
+      const mensagem = await canal.messages.fetch(painelMensagemId).catch(() => null);
+      if (mensagem) {
+        await mensagem.edit({ content: conteudo, components: [botoesAdmin] });
+        return;
+      }
+    }
+
+    // Se não existe, envia nova mensagem
+    const mensagemNova = await canal.send({ content: conteudo, components: [botoesAdmin] });
+    painelMensagemId = mensagemNova.id;
+  } catch (err) {
+    console.log("Erro ao criar painel de admin:", err);
   }
 }
 
 // =====================
-// QUANDO O BOT LIGA
+// CHAMA AO LIGAR O BOT
 // =====================
-client.once("ready", async () => {
-  await garantirPainel(client);
+client.once("ready", () => {
+  criarPainelAdmin(client);
 });
 
 // =====================
-// MONITORA SE ALGUÉM APAGOU A MENSAGEM
-// =====================
-client.on("messageDelete", async (message) => {
-  if (message.channel.id !== canalPainelId) return;
-  if (!message.components.some(row => row.components.some(c => c.customId === "ponto_menu"))) return;
-
-  // recria o painel se a mensagem for apagada
-  await garantirPainel(client);
-  console.log("Painel de ponto reapareceu após exclusão!");
-});
-
-// =====================
-// INTERAÇÃO DO SELECT MENU
+// INTERAÇÃO COM BOTÕES
 // =====================
 client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isStringSelectMenu()) return;
-  if (interaction.customId !== "ponto_menu") return;
+  if (!interaction.isButton()) return;
 
-  if (interaction.values[0] === "entrar") {
-    const userId = interaction.user.id;
-    const guild = interaction.guild;
-    const categoriaId = "1474413150441963615"; // categoria para os canais do ponto
+  const userId = interaction.user.id;
 
-    // =====================
-    // PEGANDO DADOS DO USUÁRIO NO POSTGRES
-    // =====================
-    let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
-    let userData = res.rows[0];
+  switch (interaction.customId) {
+    case "registro":
+      // Aqui você faz uma query no Postgres e mostra a lista de usuários
+      const res = await pool.query("SELECT user_id, ativo, total FROM pontos");
+      let lista = res.rows.map(u => `> <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ${Math.floor(u.total/3600000)}h`).join("\n");
+      await interaction.reply({ content: lista || "Nenhum usuário encontrado.", ephemeral: true });
+      break;
 
-    if (!userData) {
-      await pool.query(
-        "INSERT INTO pontos (user_id, ativo, total, entrada, canal) VALUES ($1, false, 0, NULL, NULL)",
-        [userId]
-      );
-      userData = { ativo: false, entrada: null, canal: null };
-    }
+    case "resetUser":
+      // Espera o admin mandar @usuário e valor via chat, você processa depois
+      await interaction.reply({ content: "Resete um usuário usando: `@usuário`", ephemeral: true });
+      break;
 
-    if (userData.ativo)
-      return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
+    case "resetAll":
+      await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL");
+      await interaction.reply({ content: "✅ Todos os usuários resetados!", ephemeral: true });
+      break;
 
-    const now = Date.now();
-    await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, userId]);
+    case "addCoins":
+      await interaction.reply({ content: "Use: `@usuário quantidade` para adicionar coins", ephemeral: true });
+      break;
 
-    // =====================
-    // CRIA CANAL PRIVADO
-    // =====================
-    const canal = await guild.channels.create({
-      name: `ponto-${interaction.user.username}`,
-      type: ChannelType.GuildText,
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-      ],
-    });
-
-    await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
-
-    // =====================
-    // BOTÕES DO CANAL
-    // =====================
-    const botaoMenu = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("status")
-        .setLabel("📊 Status")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("sair")
-        .setLabel("🔴 Sair")
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botaoMenu] });
-
-    // =====================
-    // CONTADOR TEMPO REAL
-    // =====================
-    const intervaloTempo = setInterval(async () => {
-      const check = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [userId]);
-      if (!check.rows[0]?.ativo) {
-        clearInterval(intervaloTempo);
-        return;
-      }
-      const tempoAtual = Date.now() - check.rows[0].entrada;
-      const horas = Math.floor(tempoAtual / 3600000);
-      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
-      const segundos = Math.floor((tempoAtual % 60000) / 1000);
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    }, 1000);
-
-    // =====================
-    // INTERAÇÃO COM OS BOTÕES
-    // =====================
-    const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
-    const collector = canal.createMessageComponentCollector({ filter, time: 86400000 });
-
-    collector.on("collect", async i => {
-      if (i.customId === "status") {
-        const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
-        if (!status.rows[0]?.entrada) return i.reply({ content: "❌ Nenhum ponto iniciado.", ephemeral: true });
-
-        const tempoAtual = Date.now() - status.rows[0].entrada;
-        const h = Math.floor(tempoAtual / 3600000);
-        const m = Math.floor((tempoAtual % 3600000) / 60000);
-        const s = Math.floor((tempoAtual % 60000) / 1000);
-        await i.reply({ content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s`, ephemeral: true });
-      } else if (i.customId === "sair") {
-        await pool.query(
-          "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL WHERE user_id = $2",
-          [Date.now() - now, userId]
-        );
-        clearInterval(intervaloTempo);
-        await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
-        canal.delete().catch(() => {});
-      }
-    });
-
-    // =====================
-    // RESET DO SELECT MENU PARA PODER CLICAR NOVAMENTE
-    // =====================
-    const resetMenu = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("ponto_menu")
-        .setPlaceholder("Selecione uma ação")
-        .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-    );
-
-    await interaction.update({
-      content: "Selecione uma ação:", 
-      components: [resetMenu]
-    });
-
-    await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
+    case "addTime":
+      await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para adicionar tempo", ephemeral: true });
+      break;
   }
 });
-
 // =============================
 // CONFIG
 // =============================
