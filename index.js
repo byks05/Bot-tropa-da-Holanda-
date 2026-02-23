@@ -41,10 +41,16 @@ const client = new Client({
 // =============================
 client.on("guildMemberRemove", async (member) => {
   try {
+    // Remove do banco de pontos
     await pool.query("DELETE FROM pontos WHERE user_id = $1", [member.id]);
-    console.log(`Usuário ${member.user.tag} removido do banco de dados.`);
+    
+    // Se tiver outras tabelas como "clientes" ou "sessoes", remova também
+    await pool.query("DELETE FROM clientes WHERE user_id = $1", [member.id]);
+    await pool.query("DELETE FROM sessoes WHERE userid = $1", [member.id]);
+
+    console.log(`✅ Usuário ${member.user.tag} removido do banco.`);
   } catch (err) {
-    console.error(`Erro ao remover usuário ${member.user.tag} do banco:`, err);
+    console.error("❌ Erro ao remover usuário do banco:", err);
   }
 });
 // =============================
