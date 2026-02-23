@@ -1295,7 +1295,7 @@ client.once("ready", async () => {
     const guild = client.guilds.cache.first();
     if (!guild) return;
 
-    const categoriaId = "1468715109722357782";
+    const categoriaId = "1474413150441963615";
 
     // 🔥 BUSCA SESSÕES ATIVAS NO BANCO
     const res = await pool.query("SELECT user_id, canal FROM pontos WHERE ativo = true");
