@@ -370,64 +370,93 @@ if (command === "ponto") {
 
   const sub = args[0]?.toLowerCase();
 
-  // =============================
-  // ENTRAR
-  // =============================
-  if (sub === "entrar") {
+// =============================
+// COMANDO ENTRAR
+// =============================
+if (sub === "entrar") {
 
-    if (message.channel.id !== CANAL_ENTRAR)
-      return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
+  if (message.channel.id !== CANAL_ENTRAR)
+    return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
 
-    if (data[userId].ativo)
-      return message.reply("❌ Você já iniciou seu ponto.");
+  if (data[userId]?.ativo)
+    return message.reply("❌ Você já iniciou seu ponto.");
 
-    data[userId].ativo = true;
-    data[userId].entrada = Date.now();
-    data[userId].notificado = false;
+  // Inicializa ponto
+  data[userId] = data[userId] || {};
+  data[userId].ativo = true;
+  data[userId].entrada = Date.now();
+  data[userId].respondeu = false;
+  saveData(data);
+
+  // Cria canal privado
+  const canal = await guild.channels.create({
+    name: `ponto-${message.author.username}`,
+    type: 0, // GUILD_TEXT
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: ["ViewChannel"] },
+      { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+    ]
+  });
+
+  data[userId].canal = canal.id;
+  saveData(data);
+
+  await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
+  await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+
+  // Contador tempo real
+  const intervaloTempo = setInterval(() => {
+    if (!data[userId]?.ativo) {
+      clearInterval(intervaloTempo);
+      clearInterval(intervaloLembrete);
+      return;
+    }
+
+    const tempoAtual = Date.now() - data[userId].entrada;
+    const horas = Math.floor(tempoAtual / 3600000);
+    const minutos = Math.floor((tempoAtual % 3600000) / 60000);
+    const segundos = Math.floor((tempoAtual % 60000) / 1000);
+
+    canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+  }, 1000);
+
+  // Lembrete a cada 20 min
+  const intervaloLembrete = setInterval(async () => {
+    if (!data[userId]?.ativo) {
+      clearInterval(intervaloLembrete);
+      return;
+    }
+
+    // Reset resposta
+    data[userId].respondeu = false;
     saveData(data);
 
-    // cria canal privado
-    const canal = await guild.channels.create({
-      name: `ponto-${message.author.username}`,
-      type: 0,
-      parent: categoriaId,
-      permissionOverwrites: [
-        { id: guild.id, deny: ["ViewChannel"] },
-        { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-      ]
-    });
+    await canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
 
-    data[userId].canal = canal.id;
-    saveData(data);
+    // Espera 5 minutos pela resposta
+    setTimeout(async () => {
+      if (!data[userId]?.ativo) return; // já encerrado
+      if (!data[userId].respondeu) {
+        // Usuário não respondeu, encerra o ponto
+        const tempoTotal = Date.now() - data[userId].entrada;
+        const horas = Math.floor(tempoTotal / 3600000);
+        const minutos = Math.floor((tempoTotal % 3600000) / 60000);
+        const segundos = Math.floor((tempoTotal % 60000) / 1000);
 
-    await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-    await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+        await canal.send(`❌ Você não respondeu ao lembrete. Ponto encerrado automaticamente. Tempo acumulado: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
 
-    // contador tempo real
-    const intervaloTempo = setInterval(() => {
-      if (!data[userId]?.ativo) {
+        data[userId].ativo = false;
+        saveData(data);
+
+        // Deleta canal
+        canal.delete().catch(() => {});
         clearInterval(intervaloTempo);
         clearInterval(intervaloLembrete);
-        return;
       }
-      const tempoAtual = Date.now() - data[userId].entrada;
-      const horas = Math.floor(tempoAtual / 3600000);
-      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
-      const segundos = Math.floor((tempoAtual % 60000) / 1000);
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    }, 1000);
-
-    // lembrete 20 em 20 min
-    const intervaloLembrete = setInterval(() => {
-      if (!data[userId]?.ativo) {
-        clearInterval(intervaloLembrete);
-        return;
-      }
-      canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
-    }, 20 * 60 * 1000);
-
-    return;
-  }
+    }, 5 * 60 * 1000); // 5 minutos
+  }, 20 * 60 * 1000); // 20 minutos
+}
 
   // =============================
   // SAIR
@@ -465,6 +494,17 @@ if (sub === "status") {
   const info = data[userId];
   if (!info) return message.reply("❌ Nenhum ponto ou coins registrado para você.");
 
+  // Só permite no canal privado do usuário
+  if (info.ativo && info.canal && message.channel.id !== info.canal) {
+    return message.reply("❌ Este comando só pode ser usado no seu canal de ponto privado.");
+  }
+
+  // Marca que respondeu ao lembrete
+  if (info.ativo) {
+    info.respondeu = true;
+    saveData(data);
+  }
+
   // Total de tempo = ponto + addtempo
   let total = info.total || 0;
   if (info.ativo && info.entrada) total += Date.now() - info.entrada;
@@ -496,16 +536,17 @@ if (sub === "status") {
 }
   
 // =============================
-// REGISTRO (Ranking Top 10)
+// REGISTRO (Ranking Completo)
 // =============================
 if (sub === "registro") {
   const ranking = Object.entries(data)
-    .sort((a, b) => (b[1].total || 0) - (a[1].total || 0))
-    .slice(0, 10);
+    .sort((a, b) => (b[1].total || 0) - (a[1].total || 0));
 
   if (ranking.length === 0) return message.reply("Nenhum registro encontrado.");
 
   let texto = "";
+  let contador = 1;
+
   for (const [uid, info] of ranking) {
     let total = info.total || 0;
     if (info.ativo && info.entrada) total += Date.now() - info.entrada;
@@ -519,10 +560,11 @@ if (sub === "registro") {
     const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
     const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-    texto += `<@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    texto += `${contador}. <@${uid}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
+    contador++;
   }
 
-  return message.reply(`📊 **Ranking de Atividade – Top 10**\n\n${texto}`);
+  return message.reply(`📊 **Ranking de Atividade – Todos os Usuários**\n\n${texto}`);
 }
   
   // =============================
