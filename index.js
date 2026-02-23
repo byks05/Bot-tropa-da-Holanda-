@@ -222,7 +222,7 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
   // =============================
   // REATIVAR PONTOS
   // =============================
-  await reativarPontosAtivos(pg, client, guildId);
+  async function reativarPontosAtivos(pg, client, guildId);
 });
 
 // =============================
