@@ -184,41 +184,22 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 
-// =============================
-// CLIENT READY (PAINEL DE PONTOS)
-// =============================
-client.once("clientReady", async () => {
-  console.log("Bot online!");
+// =====================
+// SELECT MENU FIXO
+// =====================
+const entrarMenu = new ActionRowBuilder().addComponents(
+  new StringSelectMenuBuilder()
+    .setCustomId("ponto_menu")
+    .setPlaceholder("Selecione uma ação")
+    .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
+);
 
-  const canalPainel = await client.channels.fetch("1474885764990107790").catch(() => null);
-  if (!canalPainel) return console.log("Canal do painel não encontrado.");
+// Exemplo: envia o painel de ponto
+message.reply({ content: "Selecione uma ação:", components: [entrarMenu] });
 
-  const entrarMenu = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId("ponto_menu")
-      .setPlaceholder("Selecione uma ação")
-      .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-  );
-
-  // Evita duplicar mensagem de painel
-  const mensagens = await canalPainel.messages.fetch({ limit: 10 });
-  const mensagemExistente = mensagens.find(
-    m => m.author.id === client.user.id && m.components.length > 0
-  );
-  if (mensagemExistente) return;
-
-  // Envia painel
-  await canalPainel.send({
-    content: "🟢 **Painel de pontos**\nSelecione uma ação:",
-    components: [entrarMenu]
-  });
-
-  console.log("Painel de pontos criado com sucesso.");
-});
-
-// =============================
+// =====================
 // INTERAÇÃO DO SELECT MENU
-// =============================
+// =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
   if (interaction.customId !== "ponto_menu") return;
@@ -226,9 +207,11 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.values[0] === "entrar") {
     const userId = interaction.user.id;
     const guild = interaction.guild;
-    const categoriaId = "1474413150441963615"; // categoria para canais de ponto
+    const categoriaId = "1474413150441963615"; // categoria para os canais do ponto
 
-    // Pega dados do usuário no Postgres
+    // =====================
+    // PEGANDO DADOS DO USUÁRIO NO POSTGRES
+    // =====================
     let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
     let userData = res.rows[0];
 
@@ -240,33 +223,29 @@ client.on("interactionCreate", async (interaction) => {
       userData = { ativo: false, entrada: null, canal: null };
     }
 
-    if (userData.ativo)
-      return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
+    if (userData.ativo) return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
 
     const now = Date.now();
     await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, userId]);
 
-    // Cria canal privado
+    // =====================
+    // CRIA CANAL PRIVADO
+    // =====================
     const canal = await guild.channels.create({
       name: `ponto-${interaction.user.username}`,
       type: ChannelType.GuildText,
       parent: categoriaId,
       permissionOverwrites: [
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        {
-          id: userId,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory
-          ],
-        },
+        { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
       ],
     });
 
     await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
 
-    // Botões do canal
+    // =====================
+    // BOTÕES DO CANAL
+    // =====================
     const botaoMenu = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("status")
@@ -280,7 +259,9 @@ client.on("interactionCreate", async (interaction) => {
 
     await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botaoMenu] });
 
-    // Contador tempo real no topic
+    // =====================
+    // CONTADOR TEMPO REAL
+    // =====================
     const intervaloTempo = setInterval(async () => {
       const check = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [userId]);
       if (!check.rows[0]?.ativo) {
@@ -294,15 +275,16 @@ client.on("interactionCreate", async (interaction) => {
       canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
     }, 1000);
 
-    // Interação com os botões
+    // =====================
+    // INTERAÇÃO COM OS BOTÕES
+    // =====================
     const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
     const collector = canal.createMessageComponentCollector({ filter, time: 86400000 });
 
     collector.on("collect", async i => {
       if (i.customId === "status") {
         const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
-        if (!status.rows[0]?.entrada)
-          return i.reply({ content: "❌ Nenhum ponto iniciado.", ephemeral: true });
+        if (!status.rows[0]?.entrada) return i.reply({ content: "❌ Nenhum ponto iniciado.", ephemeral: true });
 
         const tempoAtual = Date.now() - status.rows[0].entrada;
         const h = Math.floor(tempoAtual / 3600000);
@@ -320,7 +302,23 @@ client.on("interactionCreate", async (interaction) => {
       }
     });
 
-    await interaction.reply({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
+    // =====================
+    // RESET DO SELECT MENU PARA PODER CLICAR NOVAMENTE
+    // =====================
+    const resetMenu = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("ponto_menu")
+        .setPlaceholder("Selecione uma ação")
+        .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
+        .setDisabled(false)
+    );
+
+    await interaction.update({
+      content: interaction.message.content, // mantém o texto original
+      components: [resetMenu]
+    });
+
+    await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
   }
 });
 
