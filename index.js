@@ -770,47 +770,51 @@ const ALLOWED_REC = [
 // =============================
 // COMANDO ADDCOINS
 // =============================
-if (command === "addcoins") {
-  if (!message.member.roles.cache.some(r => ADM_IDS.includes(r.id)))
-    return message.reply("❌ Você não tem permissão.");
+else if (command === "addcoins") {
 
-  const user = message.mentions.members.first();
-  const coins = parseInt(args[1]);
-  if (!user || isNaN(coins)) return message.reply("❌ Use: thl!addcoins <@usuário> <quantidade>");
+  const membro = message.mentions.users.first();
+  if (!membro) return message.reply("Mencione um usuário.");
 
-  if (!data[user.id]) data[user.id] = { total: 0, coins: 0, ativo: false, entrada: null };
-  data[user.id].coins += coins;
-  saveData(data);
+  const valor = Number(args[1]);
+  if (isNaN(valor)) return message.reply("Informe um número válido.");
 
-  message.reply(`✅ Adicionados ${coins} coins para ${user}`);
+  await pool.query(
+    "UPDATE pontos SET total = total + $1 WHERE user_id = $2",
+    [valor, membro.id]
+  );
+
+  message.reply(`💰 ${valor} coins adicionadas para <@${membro.id}>.`);
 }
 
 // =============================
 // COMANDO ADDTEMPO
 // =============================
-if (command === "addtempo") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
+else if (command === "addtempo") {
 
-  const valor = args[1]; // Ex: 3h ou 45m
-  if (!valor) return message.reply("❌ Informe o tempo para adicionar (ex: 3h ou 45m).");
+  const membro = message.mentions.users.first();
+  if (!membro) return message.reply("Mencione um usuário.");
 
-  let milissegundos = 0;
-  if (valor.endsWith("h")) {
-    milissegundos = parseInt(valor) * 60 * 60 * 1000;
-  } else if (valor.endsWith("m")) {
-    milissegundos = parseInt(valor) * 60 * 1000;
-  } else {
-    return message.reply("❌ Formato inválido. Use h para horas ou m para minutos.");
-  }
+  const tempoArg = args[1];
+  if (!tempoArg) return message.reply("Informe o tempo. Ex: 3h, 30m, 10s");
 
-  const userId = user.id;
-  if (!data[userId]) data[userId] = { total: 0, coins: 0, ativo: false, entrada: null };
+  let ms = 0;
 
-  data[userId].total += milissegundos;
-  saveData(data);
+  const match = tempoArg.match(/^(\d+)(h|m|s)$/);
+  if (!match) return message.reply("Formato inválido. Use: 3h, 30m ou 10s");
 
-  message.reply(`✅ ${user} recebeu ${valor} de tempo.`);
+  const valor = Number(match[1]);
+  const tipo = match[2];
+
+  if (tipo === "h") ms = valor * 3600000;
+  if (tipo === "m") ms = valor * 60000;
+  if (tipo === "s") ms = valor * 1000;
+
+  await pool.query(
+    "UPDATE pontos SET total = total + $1 WHERE user_id = $2",
+    [ms, membro.id]
+  );
+
+  message.reply(`✅ Tempo adicionado para <@${membro.id}>.`);
 }
 
 // =============================
