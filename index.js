@@ -1151,27 +1151,48 @@ client.once("ready", async () => {
     const categoriaId = "1468715109722357782";
 
     // 🔥 BUSCA SESSÕES ATIVAS NO BANCO
-    const res = await pool.query("SELECT user_id FROM pontos WHERE ativo = true");
+    const res = await pool.query("SELECT user_id, canal FROM pontos WHERE ativo = true");
 
     for (const row of res.rows) {
       const userId = row.user_id;
 
       try {
+        // 🔎 Verifica se o usuário ainda está no servidor
+        const member = await guild.members.fetch(userId).catch(() => null);
+
+        if (!member) {
+          console.log(`Usuário ${userId} não está no servidor. Ignorando.`);
+          continue; // NÃO cria canal
+        }
+
+        // 🔎 Se já tem canal salvo e ele ainda existe, não recria
+        if (row.canal) {
+          const canalExistente = guild.channels.cache.get(row.canal);
+          if (canalExistente) {
+            console.log(`Canal já existe para ${member.user.tag}`);
+            continue;
+          }
+        }
+
+        // ✅ Cria o canal corretamente
         const canal = await guild.channels.create({
-          name: `ponto-recuperado`,
+          name: `ponto-${member.user.username}`,
           type: ChannelType.GuildText,
           parent: categoriaId,
           permissionOverwrites: [
-            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
             {
-              id: userId,
+              id: guild.roles.everyone.id,
+              deny: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+              id: member.id,
               allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory
-              ]
-            }
-          ]
+                PermissionFlagsBits.ReadMessageHistory,
+              ],
+            },
+          ],
         });
 
         // Atualiza canal no banco
@@ -1182,8 +1203,10 @@ client.once("ready", async () => {
 
         await canal.send("⚠️ Sessão recuperada após reinício do bot.");
 
+        console.log(`Canal recriado para ${member.user.tag}`);
+
       } catch (err) {
-        console.log("Erro ao recriar canal:", err);
+        console.log("Erro ao recriar canal:", err.message);
       }
     }
 
