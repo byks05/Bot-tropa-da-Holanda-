@@ -24,31 +24,102 @@ const pool = new Pool({
 });
 
 // =============================
-// CLIENT
+// CLIENT & DATABASE
 // =============================
-const client = new Client({ 
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ] 
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
+
+const pg = new Pool({
+  connectionString: process.env.DATABASE_URL, // coloque seu DATABASE_URL no .env
 });
 
 // =============================
-// PAINEL FIXO DE LOJA + REATIVAR PONTOS
+// FUNÇÃO REATIVAR PONTOS
+// =============================
+async function reativarPontosAtivos(pg, client, guildId) {
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return console.error("Guild não encontrada.");
+
+  const res = await pg.query('SELECT * FROM pontos WHERE ativo = TRUE AND canal_id IS NOT NULL');
+  const data = {};
+  res.rows.forEach(row => {
+    data[row.user_id] = {
+      total: row.total,
+      entrada: row.entrada ? new Date(row.entrada).getTime() : null,
+      ativo: row.ativo,
+      canal: row.canal_id
+    };
+  });
+
+  for (const [userId, info] of Object.entries(data)) {
+    const user = await guild.members.fetch(userId).catch(() => null);
+    const canal = guild.channels.cache.get(info.canal);
+    if (!user || !canal) continue;
+
+    const atualizarTempo = () => {
+      const total = (info.total || 0) + (info.entrada ? Date.now() - info.entrada : 0);
+      const horas = Math.floor(total / 3600000);
+      const minutos = Math.floor((total % 3600000) / 60000);
+      const segundos = Math.floor((total % 60000) / 1000);
+      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
+    };
+
+    const intervaloTempo = setInterval(() => {
+      if (!info.ativo) {
+        clearInterval(intervaloTempo);
+        return;
+      }
+      atualizarTempo();
+    }, 1000);
+
+    const intervaloLembrete = setInterval(async () => {
+      if (!info.ativo) {
+        clearInterval(intervaloLembrete);
+        return;
+      }
+
+      await canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`);
+
+      const filtro = m => m.author.id === userId && m.channel.id === canal.id;
+      try {
+        await canal.awaitMessages({ filter: filtro, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
+      } catch {
+        const tempoEncerrado = (info.total || 0) + (info.entrada ? Date.now() - info.entrada : 0);
+        info.total = tempoEncerrado;
+        info.ativo = false;
+        info.entrada = null;
+
+        await pg.query(
+          'UPDATE pontos SET total=$1, entrada=$2, ativo=$3 WHERE user_id=$4',
+          [info.total, null, info.ativo, userId]
+        );
+
+        await canal.send(`🔴 Nenhuma resposta recebida. Ponto encerrado automaticamente. Tempo total: ${Math.floor(tempoEncerrado/3600000)}h ${Math.floor((tempoEncerrado%3600000)/60000)}m ${Math.floor((tempoEncerrado%60000)/1000)}s`);
+        canal.delete().catch(() => {});
+
+        clearInterval(intervaloTempo);
+        clearInterval(intervaloLembrete);
+      }
+    }, 20 * 60 * 1000);
+
+    atualizarTempo();
+  }
+}
+
+// =============================
+// CLIENT READY
 // =============================
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guild = client.guilds.cache.get("1468007116936843359"); // Coloque o ID da sua guild
+  const guildId = "SEU_ID_DA_GUILD"; // coloque aqui o ID da sua guild
+  const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
-  // -----------------------------
+  // =============================
   // PAINEL FIXO DE LOJA
-  // -----------------------------
+  // =============================
   const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
-  if (!canalEmbed) console.error("Canal do painel fixo não encontrado.");
-  else {
+  if (canalEmbed) {
     const produtos = [
       { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
       { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
@@ -94,67 +165,10 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
     await mensagem.pin().catch(() => {});
   }
 
-  // -----------------------------
-  // REATIVAR CANAIS E INTERVALOS
-  // -----------------------------
-  for (const [userId, info] of Object.entries(data)) {
-    if (!info.ativo || !info.canal) continue; // só reativa ativos com canal
-
-    const user = await guild.members.fetch(userId).catch(() => null);
-    const canal = guild.channels.cache.get(info.canal);
-    if (!user || !canal) continue;
-
-    // Função para atualizar o tópico com o tempo atual
-    const atualizarTempo = () => {
-      const total = (info.total || 0) + (info.entrada ? Date.now() - info.entrada : 0);
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
-      canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-    };
-
-    // Contador em tempo real
-    const intervaloTempo = setInterval(() => {
-      if (!data[userId]?.ativo) {
-        clearInterval(intervaloTempo);
-        return;
-      }
-      atualizarTempo();
-    }, 1000);
-
-    // Lembrete de 20 minutos com encerramento automático
-    const intervaloLembrete = setInterval(async () => {
-      const infoAtual = data[userId];
-      if (!infoAtual?.ativo) {
-        clearInterval(intervaloLembrete);
-        return;
-      }
-
-      const msgLembrete = await canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`);
-
-      const filtro = m => m.author.id === userId && m.channel.id === canal.id;
-      try {
-        await canal.awaitMessages({ filter: filtro, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
-        // usuário respondeu, ponto continua normalmente
-      } catch {
-        // usuário não respondeu → encerra ponto
-        const infoFinal = data[userId];
-        const tempoEncerrado = (infoFinal.total || 0) + (infoFinal.entrada ? Date.now() - infoFinal.entrada : 0);
-        infoFinal.total = tempoEncerrado;
-        infoFinal.ativo = false;
-        infoFinal.entrada = null;
-        saveData(data);
-
-        await canal.send(`🔴 Nenhuma resposta recebida. Ponto encerrado automaticamente. Tempo total: ${Math.floor(tempoEncerrado/3600000)}h ${Math.floor((tempoEncerrado%3600000)/60000)}m ${Math.floor((tempoEncerrado%60000)/1000)}s`);
-
-        canal.delete().catch(() => {});
-        clearInterval(intervaloTempo);
-        clearInterval(intervaloLembrete);
-      }
-    }, 20 * 60 * 1000);
-
-    atualizarTempo(); // atualiza imediatamente
-  }
+  // =============================
+  // REATIVAR PONTOS
+  // =============================
+  await reativarPontosAtivos(pg, client, guildId);
 });
 
 // =============================
