@@ -122,6 +122,90 @@ client.once("clientReady", async () => {
     console.error("Erro ao enviar ou atualizar o painel:", err);
   }
 });
+// =============================
+// INTERAÇÃO DO SELECT MENU
+// =============================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "loja_select") return;
+
+  const produtos = [
+    { label: "Vip", value: "vip", description: "💰 6000 coins", categoriaId: "1474366472326222013" },
+    { label: "Robux", value: "robux", description: "💰 4000 coins", categoriaId: "1474366472326222013" },
+    { label: "Nitro", value: "nitro", description: "💰 2500 coins", categoriaId: "1474366472326222013" },
+    { label: "Ripa", value: "ripa", description: "💰 1700 coins", categoriaId: "1474366472326222013" },
+    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins", categoriaId: "1474366472326222013" },
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3", categoriaId: "1474885663425036470" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50", categoriaId: "1474885663425036470" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2", categoriaId: "1474885663425036470" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+  ];
+
+  const produtoValue = interaction.values[0];
+  const produtoSelecionado = produtos.find(p => p.value === produtoValue);
+
+  if (!produtoSelecionado) return;
+
+  const guild = interaction.guild;
+  const categoriaId = produtoSelecionado.categoriaId;
+  const ticketName = `ticket-${interaction.user.username}`;
+
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(
+    c => c.name === ticketName && c.parentId === categoriaId
+  );
+
+  if (existingChannel) {
+    await interaction.update({ components: interaction.message.components });
+    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+  }
+
+  // Cria canal de ticket
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+    ],
+  });
+
+  // Embed do ticket
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${produtoSelecionado.label}`)
+    .setDescription(`${interaction.user} abriu um ticket para comprar **${produtoSelecionado.label}** (${produtoSelecionado.description}).\n\nAdmins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`)
+    .setColor("Green")
+    .setTimestamp();
+
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+  await interaction.update({ components: interaction.message.components });
+  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+});
+
+// =============================
+// FECHAR TICKET
+// =============================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== "fechar_ticket") return;
+
+  if (!interaction.channel.name.startsWith("ticket-"))
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+  await interaction.channel.delete().catch(() => {});
+});
 // =====================
 // PAINEL DE ADMIN FIXO FINALIZADO COM LOCK
 // =====================
