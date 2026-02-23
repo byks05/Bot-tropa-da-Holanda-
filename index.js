@@ -74,28 +74,28 @@ client.once("clientReady", async () => {
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 Apenas para membros da equipe 
 > 🛒 **Vip 
--#COMPRA COM COINS**
+-# COMPRA COM COINS**
 > 🛒 **Robux (Maximo de 200 Robux ) 
--#COMPRA COM COINS**
+-# COMPRA COM COINS**
 > 🛒 **Nitro 
--#COMPRA COM COINS**
+-# COMPRA COM COINS**
 > 🛒 **Ripa 
--#COMPRA COM COINS**
+-# COMPRA COM COINS**
 > 🛒 **Roupa personalizada 
--#COMPRA COM COINS**
+-# COMPRA COM COINS**
 
 > 🛒 **Nitro mensal (1 mês/3 meses) 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 > 🛒 **Contas virgem +30 Dias 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 > 🛒 **Ativação do Nitro 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 > 🛒 **Spotify Premium 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 > 🛒 **Molduras com icon personalizado 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 > 🛒 **Youtube Premium 
--#COMPRA COM R$**
+-# COMPRA COM R$**
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
 `;
