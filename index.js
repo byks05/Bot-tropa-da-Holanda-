@@ -415,19 +415,37 @@ if (command === "ponto") {
   }
 
   const sub = args[0]?.toLowerCase();
-  // =============================
-// ENTRAR
+// =============================
+// COMANDO PONTO - ENTRAR
 // =============================
 if (sub === "entrar") {
+  const categoriaId = "1474413150441963615"; // Categoria dos canais de ponto
+  const CANAL_ENTRAR = "1474383177689731254"; // Canal onde usar 'entrar'
+  const userId = message.author.id;
+  const guild = message.guild;
+
+  // Apenas cargos permitidos podem usar ponto
+  const ALLOWED_PONTO = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468026315285205094"
+  ];
+
+  if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
 
   if (message.channel.id !== CANAL_ENTRAR)
     return message.reply("❌ Comandos de ponto só podem ser usados neste canal.");
 
-  // pega os dados do usuário no Postgres
-  let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
+  // Busca dados do usuário no PostgreSQL
+  let res = await pool.query(
+    "SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1",
+    [userId]
+  );
   let userData = res.rows[0];
 
-  // se não existe, cria
+  // Se não existe, cria o registro
   if (!userData) {
     await pool.query(
       "INSERT INTO pontos (user_id, ativo, total, entrada, canal) VALUES ($1, false, 0, NULL, NULL)",
@@ -436,19 +454,18 @@ if (sub === "entrar") {
     userData = { ativo: false, entrada: null, canal: null };
   }
 
-  if (userData.ativo)
-    return message.reply("❌ Você já iniciou seu ponto.");
+  if (userData.ativo) return message.reply("❌ Você já iniciou seu ponto.");
 
-  // atualiza ativo e entrada
+  // Atualiza ativo e entrada no banco
   await pool.query(
     "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
     [Date.now(), userId]
   );
 
-  // cria canal privado
+  // Cria canal privado
   const canal = await guild.channels.create({
     name: `ponto-${message.author.username}`,
-    type: ChannelType.GuildText, // tipo correto
+    type: ChannelType.GuildText,
     parent: categoriaId,
     permissionOverwrites: [
       { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -456,16 +473,19 @@ if (sub === "entrar") {
     ]
   });
 
-  // salva canal no banco
+  // Salva canal no banco
   await pool.query(
     "UPDATE pontos SET canal = $1 WHERE user_id = $2",
     [canal.id, userId]
   );
 
+  // Confirma pro usuário
   await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
   await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
-  // contador tempo real
+  // =============================
+  // CONTADOR DE TEMPO REAL
+  // =============================
   const intervaloTempo = setInterval(async () => {
     const check = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [userId]);
     if (!check.rows[0]?.ativo) {
@@ -480,7 +500,9 @@ if (sub === "entrar") {
     canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
   }, 1000);
 
-  // lembrete 20 em 20 min
+  // =============================
+  // LEMBRETE A CADA 20 MINUTOS
+  // =============================
   const intervaloLembrete = setInterval(async () => {
     const check = await pool.query("SELECT ativo FROM pontos WHERE user_id = $1", [userId]);
     if (!check.rows[0]?.ativo) {
@@ -489,10 +511,7 @@ if (sub === "entrar") {
     }
     canal.send(`⏰ <@${userId}> lembrete: use **thl!ponto status** para verificar seu tempo acumulado.`).catch(() => {});
   }, 20 * 60 * 1000);
-
-  return;
-}
-  
+}  
   // =============================
   // SAIR
   // =============================
