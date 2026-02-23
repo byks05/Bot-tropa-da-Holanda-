@@ -161,18 +161,24 @@ client.once("clientReady", async () => {
 
   try {
     const res = await pool.query(
-      "SELECT userid, canal FROM sessoes WHERE ativo = true"
+      "SELECT user_id, canal FROM pontos WHERE ativo = true"
     );
 
     for (const row of res.rows) {
-      const userId = row.userid;
+      const userId = row.user_id;
 
       try {
         const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) continue;
 
+        // Se já existe o canal, ignora
+        if (row.canal) {
+          const canalExistente = guild.channels.cache.get(row.canal);
+          if (canalExistente) continue;
+        }
+
         const canal = await guild.channels.create({
-          name: "ponto-recuperado",
+          name: `ponto-${member.user.username}`,
           type: ChannelType.GuildText,
           parent: categoriaId,
           permissionOverwrites: [
@@ -192,19 +198,20 @@ client.once("clientReady", async () => {
         });
 
         await pool.query(
-          "UPDATE sessoes SET canal = $1 WHERE userid = $2",
+          "UPDATE pontos SET canal = $1 WHERE user_id = $2",
           [canal.id, userId]
         );
 
         await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+        console.log(`Canal recriado para ${member.user.tag}`);
 
       } catch (err) {
-        console.log("Erro ao recriar canal:", err);
+        console.log("Erro ao recriar canal:", err.message);
       }
     }
 
   } catch (err) {
-    console.error("Erro ao buscar sessões no banco:", err);
+    console.error("Erro geral ao iniciar:", err);
   }
 });
 // =============================
@@ -1351,93 +1358,7 @@ if (command === "resettempo") {
 
 });
 
-// =============================
-// RECUPERA SESSÕES APÓS RESTART
-// =============================
-client.once("ready", async () => {
-  console.log(`🤖 Bot online como ${client.user.tag}`);
 
-  try {
-    // Criação da tabela PostgreSQL
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS pontos (
-        user_id TEXT PRIMARY KEY,
-        total BIGINT DEFAULT 0,
-        ativo BOOLEAN DEFAULT false,
-        entrada BIGINT,
-        canal TEXT
-      );
-    `);
-
-    const guild = client.guilds.cache.first();
-    if (!guild) return;
-
-    const categoriaId = "1474413150441963615";
-
-    // 🔥 BUSCA SESSÕES ATIVAS NO BANCO
-    const res = await pool.query("SELECT user_id, canal FROM pontos WHERE ativo = true");
-
-    for (const row of res.rows) {
-      const userId = row.user_id;
-
-      try {
-        // 🔎 Verifica se o usuário ainda está no servidor
-        const member = await guild.members.fetch(userId).catch(() => null);
-
-        if (!member) {
-          console.log(`Usuário ${userId} não está no servidor. Ignorando.`);
-          continue; // NÃO cria canal
-        }
-
-        // 🔎 Se já tem canal salvo e ele ainda existe, não recria
-        if (row.canal) {
-          const canalExistente = guild.channels.cache.get(row.canal);
-          if (canalExistente) {
-            console.log(`Canal já existe para ${member.user.tag}`);
-            continue;
-          }
-        }
-
-        // ✅ Cria o canal corretamente
-        const canal = await guild.channels.create({
-          name: `ponto-${member.user.username}`,
-          type: ChannelType.GuildText,
-          parent: categoriaId,
-          permissionOverwrites: [
-            {
-              id: guild.roles.everyone.id,
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: member.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-          ],
-        });
-
-        // Atualiza canal no banco
-        await pool.query(
-          "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-          [canal.id, userId]
-        );
-
-        await canal.send("⚠️ Sessão recuperada após reinício do bot.");
-
-        console.log(`Canal recriado para ${member.user.tag}`);
-
-      } catch (err) {
-        console.log("Erro ao recriar canal:", err.message);
-      }
-    }
-
-  } catch (err) {
-    console.error("Erro geral ao iniciar:", err);
-  }
-});
 // =============================
 // TICKET MENTION
 // =============================
