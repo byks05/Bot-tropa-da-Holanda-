@@ -206,6 +206,7 @@ client.on("interactionCreate", async (interaction) => {
 
   await interaction.channel.delete().catch(() => {});
 });
+
 // =====================
 // PAINEL DE ADMIN FIXO FINALIZADO COM LOCK
 // =====================
@@ -252,7 +253,7 @@ async function criarPainelAdmin(client) {
   }
 }
 
-client.once("clientReady", () => criarPainelAdmin(client));
+client.once("ready", () => criarPainelAdmin(client));
 
 client.on("messageDelete", async message => {
   if (message.id === painelMensagemId) {
@@ -271,7 +272,8 @@ client.on("interactionCreate", async interaction => {
   adminsAtivos.set(userId, true);
 
   async function processCollector(promptText, callback) {
-    const msgPrompt = await interaction.reply({ content: promptText, ephemeral: false });
+    await interaction.reply({ content: promptText, ephemeral: false });
+    const msgPrompt = await interaction.fetchReply();
     const filter = m => m.author.id === userId;
     const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
 
@@ -323,10 +325,10 @@ client.on("interactionCreate", async interaction => {
 
     case "resetUser":
       await processCollector("Use `@usuário` para resetar ponto, tempo e coins.", async m => {
-        const mention = m.mentions.users.first();
-        if (!mention) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
-        await pool.query("UPDATE pontos SET ativo=false, total=0, coins=0, canal=NULL WHERE user_id=$1", [mention.id]);
-        const confirm = await interaction.followUp({ content: `✅ Ponto de <@${mention.id}> resetado!`, ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        await pool.query("UPDATE pontos SET ativo=false, total=0, coins=0, canal=NULL WHERE user_id=$1", [id]);
+        const confirm = await interaction.followUp({ content: `✅ Ponto de <@${id}> resetado!`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
       });
       break;
@@ -340,10 +342,10 @@ client.on("interactionCreate", async interaction => {
 
     case "addCoins":
       await processCollector("Use `@usuário quantidade` para adicionar coins.", async m => {
-        const [mention, amount] = m.content.split(" ");
-        const id = mention.replace(/[<@!>]/g, "");
-        const coins = parseInt(amount);
-        if (!id || isNaN(coins)) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        const coins = parseInt(m.content.split(" ")[1]);
+        if (isNaN(coins)) return interaction.followUp({ content: "❌ Quantidade inválida.", ephemeral: false });
         await pool.query("UPDATE pontos SET coins=COALESCE(coins,0)+$1 WHERE user_id=$2", [coins, id]);
         const confirm = await interaction.followUp({ content: `✅ Adicionados ${coins} coins para <@${id}>`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
@@ -352,10 +354,10 @@ client.on("interactionCreate", async interaction => {
 
     case "removeCoins":
       await processCollector("Use `@usuário quantidade` para remover coins.", async m => {
-        const [mention, amount] = m.content.split(" ");
-        const id = mention.replace(/[<@!>]/g, "");
-        const coins = parseInt(amount);
-        if (!id || isNaN(coins)) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        const coins = parseInt(m.content.split(" ")[1]);
+        if (isNaN(coins)) return interaction.followUp({ content: "❌ Quantidade inválida.", ephemeral: false });
         await pool.query("UPDATE pontos SET coins=GREATEST(COALESCE(coins,0)-$1,0) WHERE user_id=$2", [coins, id]);
         const confirm = await interaction.followUp({ content: `✅ Removidos ${coins} coins de <@${id}>`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
@@ -364,19 +366,19 @@ client.on("interactionCreate", async interaction => {
 
     case "resetCoins":
       await processCollector("Use `@usuário` para resetar coins.", async m => {
-        const mention = m.mentions.users.first();
-        if (!mention) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
-        await pool.query("UPDATE pontos SET coins=0 WHERE user_id=$1", [mention.id]);
-        const confirm = await interaction.followUp({ content: `✅ Coins de <@${mention.id}> resetados!`, ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        await pool.query("UPDATE pontos SET coins=0 WHERE user_id=$1", [id]);
+        const confirm = await interaction.followUp({ content: `✅ Coins de <@${id}> resetados!`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
       });
       break;
 
     case "addTime":
       await processCollector("Use `@usuário quantidade[h/m/s]` para adicionar tempo.", async m => {
-        const [mention, amount] = m.content.split(" ");
-        const id = mention.replace(/[<@!>]/g, "");
-        if (!id || !amount) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        const amount = m.content.split(" ")[1];
         let time = 0;
         if (amount.endsWith("h")) time = parseFloat(amount) * 3600000;
         else if (amount.endsWith("m")) time = parseFloat(amount) * 60000;
@@ -391,9 +393,9 @@ client.on("interactionCreate", async interaction => {
 
     case "removeTime":
       await processCollector("Use `@usuário quantidade[h/m/s]` para remover tempo.", async m => {
-        const [mention, amount] = m.content.split(" ");
-        const id = mention.replace(/[<@!>]/g, "");
-        if (!id || !amount) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        const amount = m.content.split(" ")[1];
         let time = 0;
         if (amount.endsWith("h")) time = parseFloat(amount) * 3600000;
         else if (amount.endsWith("m")) time = parseFloat(amount) * 60000;
@@ -408,10 +410,10 @@ client.on("interactionCreate", async interaction => {
 
     case "resetTime":
       await processCollector("Use `@usuário` para resetar tempo.", async m => {
-        const mention = m.mentions.users.first();
-        if (!mention) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
-        await pool.query("UPDATE pontos SET total=0 WHERE user_id=$1", [mention.id]);
-        const confirm = await interaction.followUp({ content: `✅ Tempo de <@${mention.id}> resetado!`, ephemeral: false });
+        if (!m.mentions.users.size) return interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+        const id = m.mentions.users.first().id;
+        await pool.query("UPDATE pontos SET total=0 WHERE user_id=$1", [id]);
+        const confirm = await interaction.followUp({ content: `✅ Tempo de <@${id}> resetado!`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
       });
       break;
@@ -518,22 +520,22 @@ client.on("interactionCreate", async (interaction) => {
 
     await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
 
-    // =====================
-    // BOTÕES DO CANAL
-    // =====================
-    const botaoMenu = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("status")
-        .setLabel("📊 Status")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("sair")
-        .setLabel("🔴 Sair")
-        .setStyle(ButtonStyle.Danger)
-    );
+   // =====================
+// BOTÕES DO CANAL
+// =====================
+const botaoMenu = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId("status")
+    .setLabel("📊 Status")
+    .setStyle(ButtonStyle.Primary),
+  new ButtonBuilder()
+    .setCustomId("sair")
+    .setLabel("🔴 Sair")
+    .setStyle(ButtonStyle.Danger)
+);
 
-    await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botaoMenu] });
-
+// envia a mensagem com os botões
+const mensagemBotao = await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botaoMenu] });
     // =====================
     // CONTADOR TEMPO REAL
     // =====================
@@ -551,31 +553,35 @@ client.on("interactionCreate", async (interaction) => {
     }, 1000);
 
     // =====================
-    // INTERAÇÃO COM OS BOTÕES
-    // =====================
-    const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
-    const collector = canal.createMessageComponentCollector({ filter, time: 86400000 });
+// INTERAÇÃO COM OS BOTÕES
+// =====================
+const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
 
-    collector.on("collect", async i => {
-      if (i.customId === "status") {
-        const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
-        if (!status.rows[0]?.entrada) return i.reply({ content: "❌ Nenhum ponto iniciado.", ephemeral: true });
+// cria o collector **na mensagem**, não no canal
+const collector = mensagemBotao.createMessageComponentCollector({ filter, time: 86400000 });
 
-        const tempoAtual = Date.now() - status.rows[0].entrada;
-        const h = Math.floor(tempoAtual / 3600000);
-        const m = Math.floor((tempoAtual % 3600000) / 60000);
-        const s = Math.floor((tempoAtual % 60000) / 1000);
-        await i.reply({ content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s`, ephemeral: true });
-      } else if (i.customId === "sair") {
-        await pool.query(
-          "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL WHERE user_id = $2",
-          [Date.now() - now, userId]
-        );
-        clearInterval(intervaloTempo);
-        await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
-        canal.delete().catch(() => {});
-      }
-    });
+collector.on("collect", async i => {
+  if (i.customId === "status") {
+    const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
+    if (!status.rows[0]?.entrada) return i.reply({ content: "❌ Nenhum ponto iniciado.", ephemeral: true });
+
+    const tempoAtual = Date.now() - status.rows[0].entrada;
+    const h = Math.floor(tempoAtual / 3600000);
+    const m = Math.floor((tempoAtual % 3600000) / 60000);
+    const s = Math.floor((tempoAtual % 60000) / 1000);
+    await i.reply({ content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s`, ephemeral: true });
+  } else if (i.customId === "sair") {
+    // atualiza no banco e finaliza ponto
+    await pool.query(
+      "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL WHERE user_id = $2",
+      [Date.now() - now, userId]
+    );
+    clearInterval(intervaloTempo);
+    await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
+    collector.stop(); // para o collector
+    canal.delete().catch(() => {});
+  }
+});
 
     // =====================
     // RESET DO SELECT MENU PARA PODER CLICAR NOVAMENTE
