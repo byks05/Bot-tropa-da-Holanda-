@@ -194,6 +194,48 @@ const entrarMenu = new ActionRowBuilder().addComponents(
     .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
 );
 
+// ID do canal fixo
+const canalPainelId = "1474383177689731254";
+
+// =====================
+// FUNÇÃO PARA GARANTIR QUE O PAINEL EXISTE
+// =====================
+async function garantirPainel(client) {
+  const canalPainel = await client.channels.fetch(canalPainelId);
+
+  const mensagens = await canalPainel.messages.fetch({ limit: 50 });
+  const painelExistente = mensagens.find(msg =>
+    msg.components.some(row =>
+      row.components.some(c => c.customId === "ponto_menu")
+    )
+  );
+
+  if (!painelExistente) {
+    await canalPainel.send({ content: "Selecione uma ação:", components: [entrarMenu] });
+    console.log("Painel de ponto criado no canal fixo!");
+  } else {
+    console.log("Painel de ponto já existe.");
+  }
+}
+
+// =====================
+// QUANDO O BOT LIGA
+// =====================
+client.once("ready", async () => {
+  await garantirPainel(client);
+});
+
+// =====================
+// MONITORA SE ALGUÉM APAGOU A MENSAGEM
+// =====================
+client.on("messageDelete", async (message) => {
+  if (message.channel.id !== canalPainelId) return;
+  if (!message.components.some(row => row.components.some(c => c.customId === "ponto_menu"))) return;
+
+  // recria o painel se a mensagem for apagada
+  await garantirPainel(client);
+  console.log("Painel de ponto reapareceu após exclusão!");
+});
 
 // =====================
 // INTERAÇÃO DO SELECT MENU
@@ -221,7 +263,8 @@ client.on("interactionCreate", async (interaction) => {
       userData = { ativo: false, entrada: null, canal: null };
     }
 
-    if (userData.ativo) return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
+    if (userData.ativo)
+      return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
 
     const now = Date.now();
     await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, userId]);
@@ -311,7 +354,7 @@ client.on("interactionCreate", async (interaction) => {
     );
 
     await interaction.update({
-      content: "Selecione uma ação:", // mantém o texto original
+      content: "Selecione uma ação:", 
       components: [resetMenu]
     });
 
