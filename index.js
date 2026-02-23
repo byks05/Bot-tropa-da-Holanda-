@@ -139,20 +139,26 @@ client.on("ready", async () => {
 
     const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes.
+-# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 
-🛒 ** Nitro mensal (1 mês/3 mês) **
-🛒 **CONTA VIRGEM +30 Dias**
+> 🛒 ** Nitro mensal (1 mês/3 mês) **
+
+> 🛒 **CONTA VIRGEM +30 Dias**
 • Nunca tiverão Nitro  
 • Email confirmado  
 • Altere o email!  
 • Ótimas para ativar nitro  
 • Full acesso (pode trocar email & senha)
-🛒 **Ativação do nitro**  
+
+> 🛒 **Ativação do nitro**  
 Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
-🛒 **Spotify Premium**
-🛒 **Molduras com icon personalizado**
-🛒 **Youtube Premium**
+
+> 🛒 **Spotify Premium**
+
+> 🛒 **Molduras com icon personalizado**
+
+> 🛒 **Youtube Premium**
+
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
     // Apaga mensagens antigas do bot (opcional)
@@ -1014,7 +1020,42 @@ if (command === "recaliados") {
     console.error(err);
   }
 }
-});  
+// =============================
+// COMPRACONFIRMADA 
+// =============================
+  if (command === "compraConfirmada") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  const CARGO_COMPRADOR = "1475111107114041447"; // Substitua pelo ID do cargo
+
+  try {
+    // Dar o cargo se ainda não tiver
+    if (!user.roles.cache.has(CARGO_COMPRADOR)) {
+      await user.roles.add(CARGO_COMPRADOR);
+    }
+
+    // Buscar compras atuais
+    const res = await pg.query('SELECT compras FROM clientes WHERE user_id = $1', [user.id]);
+
+    let quantidade = 1;
+
+    if (res.rows.length === 0) {
+      // Inserir novo usuário
+      await pg.query('INSERT INTO clientes (user_id, compras) VALUES ($1, $2)', [user.id, quantidade]);
+    } else {
+      // Atualizar compras
+      quantidade = res.rows[0].compras + 1;
+      await pg.query('UPDATE clientes SET compras = $1 WHERE user_id = $2', [quantidade, user.id]);
+    }
+
+    return message.reply(`✅ Compra confirmada para ${user.user.tag}! Total de compras: **${quantidade}**`);
+  } catch (err) {
+    console.error(err);
+    return message.reply("❌ Ocorreu um erro ao registrar a compra.");
+  }
+  }
+});
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
