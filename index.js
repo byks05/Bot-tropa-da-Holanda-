@@ -151,29 +151,30 @@ client.on("ready", async () => {
     console.error("Erro ao buscar sessões no banco:", err);
   }
 });
-  // =============================
-  // PAINEL FIXO DE LOJA
-  // =============================
-  const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
-  if (canalEmbed) {
-    const produtos = [
-      { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
-      { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
-      { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
-      { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
-      { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
-      { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
-      { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
-    ];
+ // =============================
+// PAINEL FIXO DE LOJA
+// =============================
+const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
 
-    const row = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("loja_select")
-        .setPlaceholder("Selecione um produto...")
-        .addOptions(produtos)
-    );
+if (canalEmbed) {
+  const produtos = [
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
+  ];
 
-    const textoPainel = `
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("loja_select")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtos)
+  );
+
+  const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 
@@ -197,25 +198,26 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
-    // Apaga mensagens antigas do bot (opcional)
-   // Supondo que canalEmbed já esteja definido
-async function apagarMensagens() {
-  try {
-    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-    mensagens.forEach(msg => {
-      if (msg.author.id === client.user.id) msg.delete().catch(() => {});
-    });
-  } catch (err) {
-    console.error("Erro ao apagar mensagens:", err);
+  // Criamos uma função assíncrona para todo o processo
+  async function atualizarPainel() {
+    try {
+      // Apaga mensagens antigas do bot (opcional)
+      const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+      mensagens.forEach(msg => {
+        if (msg.author.id === client.user.id) msg.delete().catch(() => {});
+      });
+
+      // Envia e pin a nova mensagem
+      const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
+      await mensagem.pin().catch(() => {});
+    } catch (err) {
+      console.error("Erro ao atualizar o painel:", err);
+    }
   }
+
+  // Chama a função
+  atualizarPainel();
 }
-
-// Chama a função
-apagarMensagens();
-
-    const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
-    await mensagem.pin().catch(() => {});
-  }
 
   // =============================
   // REATIVAR PONTOS
