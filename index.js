@@ -185,6 +185,162 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =============================
+// PAINEL FIXO DE BATE-PONTO
+// =============================
+client.once("clientReady", async () => {
+  const canalPainel = await client.channels.fetch("1474383177689731254").catch(() => null);
+  if (!canalPainel) return console.log("Canal do painel não encontrado!");
+
+  const rowBatePonto = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("abrir_ponto")
+      .setLabel("🟢 Abrir Ponto")
+      .setStyle(ButtonStyle.Success)
+  );
+
+  // Evita criar o painel novamente se já existir
+  const mensagemExistente = (await canalPainel.messages.fetch({ limit: 10 }))
+    .find(m => m.author.id === client.user.id && m.components.length > 0);
+
+  if (mensagemExistente) return;
+
+  const painelMsg = await canalPainel.send({
+    content: "📌 **Painel de Bate-Ponto**\nClique em **Abrir Ponto** para iniciar seu turno.",
+    components: [rowBatePonto]
+  });
+
+  await painelMsg.pin().catch(() => {});
+  console.log("Painel de bate-ponto fixo criado com sucesso!");
+});
+
+
+// =============================
+// INTERAÇÕES DO BATE-PONTO
+// =============================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  const userId = interaction.user.id;
+
+  // Busca ou cria registro do usuário no banco
+  let res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+  let data = res.rows[0];
+  if (!data) {
+    await pool.query(
+      "INSERT INTO pontos (user_id, horas, coins, ativo, aberto) VALUES ($1, 0, 0, false, false)",
+      [userId]
+    );
+    res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+    data = res.rows[0];
+  }
+
+  // ===========================
+  // ABRIR PONTO
+  // ===========================
+  if (interaction.customId === "abrir_ponto") {
+    if (data.aberto) return interaction.reply({ content: "❌ Você já tem um ponto aberto!", ephemeral: true });
+
+    const guild = interaction.guild;
+    const canal = await guild.channels.create({
+      name: `ponto-${interaction.user.username}`,
+      type: ChannelType.GuildText,
+      parent: "1474413150441963615", // CATEGORIA DOS CANAIS PRIVADOS
+      permissionOverwrites: [
+        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+        { id: userId, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+      ],
+    });
+
+    const inicioTurno = Date.now();
+    await pool.query(
+      "UPDATE pontos SET ativo = true, aberto = true, canal_id = $1, inicio_timestamp = $2 WHERE user_id = $3",
+      [canal.id, inicioTurno, userId]
+    );
+
+    const rowUser = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("status_ponto_user")
+        .setLabel("ℹ️ Status")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("sair_ponto_user")
+        .setLabel("🔴 Encerrar")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await canal.send({
+      content: `${interaction.user}, seu turno começou! Clique nos botões abaixo para ver status ou encerrar.`,
+      components: [rowUser]
+    });
+
+    interaction.reply({ content: `✅ Canal de ponto criado: ${canal}`, ephemeral: true });
+
+    // ===========================
+    // LOOP DE VERIFICAÇÃO 20 MIN
+    // ===========================
+    const checkAtivo = async () => {
+      const resAtual = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+      const dataAtual = resAtual.rows[0];
+      if (!dataAtual.aberto) return; // turno já encerrado
+
+      const pergunta = await canal.send(`${interaction.user}, você ainda está ativo? Responda com **sim** em até 5 minutos para continuar.`);
+      const filter = m => m.author.id === userId && m.content.toLowerCase() === "sim";
+
+      try {
+        await canal.awaitMessages({ filter, max: 1, time: 5 * 60 * 1000, errors: ["time"] });
+        await canal.send("✅ Turno continua! Próxima verificação em 20 minutos.");
+        setTimeout(checkAtivo, 20 * 60 * 1000); // agenda próximo check
+      } catch (err) {
+        // Usuário não respondeu → encerra turno automaticamente
+        const fimTurno = Date.now();
+        const horasAdd = ((fimTurno - dataAtual.inicio_timestamp) / 1000 / 60 / 60).toFixed(2);
+        await pool.query(
+          "UPDATE pontos SET ativo = false, aberto = false, horas = horas + $1 WHERE user_id = $2",
+          [horasAdd, userId]
+        );
+
+        await canal.send(`⏰ Você não respondeu a tempo. Turno encerrado automaticamente! Horas salvas: ${horasAdd}h`);
+        await canal.setArchived(true).catch(() => {});
+      }
+    }
+
+    // inicia o primeiro check em 20 minutos
+    setTimeout(checkAtivo, 20 * 60 * 1000);
+  }
+
+  // ===========================
+  // STATUS DO USUÁRIO
+  // ===========================
+  if (interaction.customId === "status_ponto_user") {
+    const resAtual = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+    const dataAtual = resAtual.rows[0];
+
+    return interaction.reply({
+      content: `⏰ Horas: ${dataAtual.horas}h\n💰 Coins: ${dataAtual.coins}\n🔹 Ativo: ${dataAtual.ativo ? "Sim" : "Não"}`,
+      ephemeral: true
+    });
+  }
+
+  // ===========================
+  // ENCERRAR PONTO
+  // ===========================
+  if (interaction.customId === "sair_ponto_user") {
+    const resAtual = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+    const dataAtual = resAtual.rows[0];
+    if (!dataAtual.aberto) return interaction.reply({ content: "❌ Você não possui um ponto aberto.", ephemeral: true });
+
+    const canal = await client.channels.fetch(dataAtual.canal_id).catch(() => null);
+    if (canal) await canal.setArchived(true).catch(() => { });
+
+    const fimTurno = Date.now();
+    const horasAdd = ((fimTurno - dataAtual.inicio_timestamp) / 1000 / 60 / 60).toFixed(2);
+    await pool.query("UPDATE pontos SET ativo = false, aberto = false, horas = horas + $1 WHERE user_id = $2", [horasAdd, userId]);
+
+    return interaction.reply({ content: "✅ Turno encerrado e horas salvas!", ephemeral: true });
+  }
+});
+
+// =============================
 // CONFIG
 // =============================
 const PREFIX = "thl!";
