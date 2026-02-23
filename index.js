@@ -72,7 +72,8 @@ client.once("clientReady", async () => {
   const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
-Apenas para membros da equipe 
+
+***Apenas para membros da equipe***
 > 🛒 **Vip**
 -# **COMPRA COM COINS**
 > 🛒 **Robux (Maximo de 200 Robux )** 
@@ -83,7 +84,8 @@ Apenas para membros da equipe
 -# **COMPRA COM COINS**
 > 🛒 **Roupa personalizada** 
 -# **COMPRA COM COINS**
-Para Todos 
+
+***Para Todos***
 > 🛒 **Nitro mensal (1 mês/3 meses)** 
 -# **COMPRA COM R$**
 > 🛒 **Contas virgem +30 Dias** 
