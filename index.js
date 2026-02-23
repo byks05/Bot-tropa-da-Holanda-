@@ -150,7 +150,6 @@ client.on("ready", async () => {
   } catch (err) {
     console.error("Erro ao buscar sessões no banco:", err);
   }
-});
  // =============================
 // PAINEL FIXO DE LOJA
 // =============================
