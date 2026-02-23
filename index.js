@@ -1153,17 +1153,15 @@ if (message.content.startsWith("thl!")) {
   const args = message.content.slice(4).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  // Comando: thl!compraconfirmada
   if (command === "compraconfirmada") {
     const user = message.mentions.members.first();
     if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-    // Aqui você pode colocar IDs de cargos que podem usar esse comando
-    const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"]; // coloque o ID da role que pode usar
+    const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
     if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
       return message.reply("❌ Sem permissão para usar esse comando.");
 
-    const CARGO_COMPRADOR = "1475111107114041447"; // Substitua pelo ID do cargo comprador
+    const CARGO_COMPRADOR = "1475111107114041447";
 
     try {
       // Dar o cargo se ainda não tiver
@@ -1171,8 +1169,8 @@ if (message.content.startsWith("thl!")) {
         await user.roles.add(CARGO_COMPRADOR);
       }
 
-      // Registrar no PostgreSQL
-      const res = await pg.query(
+      // 🔥 REGISTRAR NO POSTGRES USANDO POOL
+      const res = await pool.query(
         'SELECT compras FROM clientes WHERE user_id = $1',
         [user.id]
       );
@@ -1180,15 +1178,14 @@ if (message.content.startsWith("thl!")) {
       let quantidade = 1;
 
       if (res.rows.length === 0) {
-        // Inserir novo usuário
-        await pg.query(
+        await pool.query(
           'INSERT INTO clientes (user_id, compras) VALUES ($1, $2)',
           [user.id, quantidade]
         );
       } else {
-        // Atualizar compras
-        quantidade = res.rows[0].compras + 1;
-        await pg.query(
+        quantidade = Number(res.rows[0].compras) + 1;
+
+        await pool.query(
           'UPDATE clientes SET compras = $1 WHERE user_id = $2',
           [quantidade, user.id]
         );
@@ -1197,12 +1194,13 @@ if (message.content.startsWith("thl!")) {
       return message.reply(
         `✅ Compra confirmada para ${user.user.tag}! Total de compras: **${quantidade}**`
       );
+
     } catch (err) {
       console.error("Erro ao registrar compra:", err);
       return message.reply("❌ Ocorreu um erro ao registrar a compra.");
     }
   }
-}});
+}
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
