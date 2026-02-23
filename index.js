@@ -587,17 +587,14 @@ if (command === "ponto") {
   // =============================
   if (sub === "entrar") {
 
-    if (message.channel.id !== CANAL_ENTRAR)
-      return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
+  if (message.channel.id !== CANAL_ENTRAR)
+    return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
 
-    if (userData.ativo)
-      return message.reply("❌ Você já iniciou seu ponto.");
+  if (userData.ativo)
+    return message.reply("❌ Você já iniciou seu ponto.");
 
-    await pool.query(
-      "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
-      [Date.now(), userId]
-    );
-
+  try {
+    // ✅ Cria o canal primeiro
     const canal = await guild.channels.create({
       name: `ponto-${message.author.username}`,
       type: ChannelType.GuildText,
@@ -618,15 +615,21 @@ if (command === "ponto") {
       ],
     });
 
+    // ✅ Atualiza banco de dados somente depois de criar o canal
     await pool.query(
-      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-      [canal.id, userId]
+      "UPDATE pontos SET ativo = true, entrada = $1, canal = $2 WHERE user_id = $3",
+      [Date.now(), canal.id, userId]
     );
 
+    // ✅ Mensagens de confirmação
     await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
     await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
 
+  } catch (err) {
+    console.error("Erro ao iniciar ponto:", err);
+    return message.reply("❌ Ocorreu um erro ao tentar iniciar o ponto.");
   }
+}
 
   // =============================
   // SAIR
@@ -1314,7 +1317,7 @@ if (command === "resetcoins") {
 
   try {
     await pool.query(
-      "UPDATE clientes SET coins = 0 WHERE user_id = $1",
+      "UPDATE pontos SET coins = 0 WHERE user_id = $1",
       [user.id]
     );
     return message.reply(`✅ Coins de ${user.user.tag} foram resetados para 0.`);
