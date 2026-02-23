@@ -198,10 +198,20 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
     // Apaga mensagens antigas do bot (opcional)
+   // Supondo que canalEmbed já esteja definido
+async function apagarMensagens() {
+  try {
     const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
     mensagens.forEach(msg => {
       if (msg.author.id === client.user.id) msg.delete().catch(() => {});
     });
+  } catch (err) {
+    console.error("Erro ao apagar mensagens:", err);
+  }
+}
+
+// Chama a função
+apagarMensagens();
 
     const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
     await mensagem.pin().catch(() => {});
