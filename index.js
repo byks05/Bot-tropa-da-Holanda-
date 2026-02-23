@@ -10,7 +10,8 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
-  PermissionsBitField
+  PermissionsBitField,
+  PermissionFlagsBits
 } = require("discord.js");
 require("dotenv").config();
 const fs = require("fs");
@@ -108,39 +109,48 @@ async function reativarPontosAtivos(pg, client, guildId) {
 // =============================
 // CLIENT READY
 // =============================
-client.on("ready", async () => {
+client.once("clientReady", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guildId = "1468007116936843359"; // ID da sua guild
+  const guildId = "1468007116936843359";
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
-  const categoriaId = "1468715109722357782"; // categoria dos canais
+  const categoriaId = "1468715109722357782";
 
   try {
     // Pega todas as sessões ativas do banco
-    const res = await pool.query("SELECT userid, canal FROM sessoes WHERE ativo = true");
+    const res = await pool.query(
+      "SELECT userid, canal FROM sessoes WHERE ativo = true"
+    );
 
     for (const row of res.rows) {
       const userId = row.userid;
 
       try {
-        // Cria o canal para o usuário
         const canal = await guild.channels.create({
-          name: `ponto-recuperado`,
-          type: 0, // tipo de texto
+          name: "ponto-recuperado",
+          type: ChannelType.GuildText,
           parent: categoriaId,
           permissionOverwrites: [
-            { id: guild.id, deny: ["ViewChannel"] },
-            { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            {
+              id: userId,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory
+              ]
+            }
           ]
         });
 
-        // Atualiza o canal no banco
-        await pool.query("UPDATE sessoes SET canal = $1 WHERE userid = $2", [canal.id, userId]);
+        await pool.query(
+          "UPDATE sessoes SET canal = $1 WHERE userid = $2",
+          [canal.id, userId]
+        );
 
-        // Envia mensagem no canal
-        canal.send("⚠️ Sessão recuperada após reinício do bot.");
+        await canal.send("⚠️ Sessão recuperada após reinício do bot.");
 
       } catch (err) {
         console.log("Erro ao recriar canal:", err);
@@ -454,16 +464,38 @@ client.on("messageCreate", async (message) => {
   }
 
   // =============================
-  // COMANDOS COM PREFIXO
-  // =============================
-  if (!message.content.startsWith(PREFIX)) return;
+// COMANDOS COM PREFIXO
+// =============================
+if (!message.content.startsWith(PREFIX)) return;
 
-  const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-  const command = args.shift().toLowerCase();
-  const userId = message.author.id;
-  const guild = message.guild;
-  const data = getData();
+const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+const command = args.shift().toLowerCase();
+const userId = message.author.id;
+const guild = message.guild;
 
+// Busca os dados do usuário no PostgreSQL
+let result = await pool.query(
+  "SELECT * FROM pontos WHERE user_id = $1",
+  [userId]
+);
+
+let data = result.rows[0];
+
+// Se o usuário não existir no banco, cria automaticamente
+if (!data) {
+  await pool.query(
+    "INSERT INTO pontos (user_id, total, ativo) VALUES ($1, 0, false)",
+    [userId]
+  );
+
+  result = await pool.query(
+    "SELECT * FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  data = result.rows[0];
+}
+  
 // =============================
 // COMANDO PONTO COMPLETO (POSTGRESQL)
 // =============================
