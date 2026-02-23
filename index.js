@@ -770,7 +770,7 @@ const ALLOWED_REC = [
 // =============================
 // COMANDO ADDCOINS
 // =============================
-else if (command === "addcoins") {
+if (command === "addcoins") {
 
   const membro = message.mentions.users.first();
   if (!membro) return message.reply("Mencione um usuário.");
@@ -789,7 +789,7 @@ else if (command === "addcoins") {
 // =============================
 // COMANDO ADDTEMPO
 // =============================
-else if (command === "addtempo") {
+if (command === "addtempo") {
 
   const membro = message.mentions.users.first();
   if (!membro) return message.reply("Mencione um usuário.");
