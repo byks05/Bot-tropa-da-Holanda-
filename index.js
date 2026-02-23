@@ -185,10 +185,11 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// PAINEL DE ADMIN AVANÇADO
+// PAINEL DE ADMIN FIXO AVANÇADO
 // =====================
 const adminChannelId = "1474384292015640626"; // Canal fixo do painel
 let painelMensagemId = null;
+const MESSAGE_LIFETIME = 15000; // 15 segundos
 
 async function criarPainelAdmin(client) {
   try {
@@ -233,11 +234,10 @@ client.on("interactionCreate", async (interaction) => {
   switch (interaction.customId) {
 
     case "registro":
-      // Puxa todos os usuários e ordena do que tem mais horas para o menos
       const res = await pool.query("SELECT user_id, ativo, total, coins FROM pontos ORDER BY total DESC");
-
       if (!res.rows.length) {
-        await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
+        const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
+        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
         return;
       }
 
@@ -251,16 +251,19 @@ client.on("interactionCreate", async (interaction) => {
           return `**${i + index + 1}** - <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ⏱ ${horas}h ${minutos}m ${segundos}s - 💰 ${u.coins || 0} coins`;
         }).join("\n");
 
-        if (i === 0) await interaction.reply({ content: lista, ephemeral: false });
-        else await interaction.followUp({ content: lista });
+        let msg;
+        if (i === 0) msg = await interaction.reply({ content: lista, ephemeral: false });
+        else msg = await interaction.followUp({ content: lista, ephemeral: false });
+
+        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
       }
       break;
 
     case "resetUser":
-      // Pega usuários existentes para criar o menu
       const usuarios = await pool.query("SELECT user_id FROM pontos WHERE total > 0 OR ativo = true");
       if (!usuarios.rows.length) {
-        await interaction.reply({ content: "Nenhum usuário para resetar.", ephemeral: false });
+        const msg = await interaction.reply({ content: "Nenhum usuário para resetar.", ephemeral: false });
+        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
         return;
       }
 
@@ -274,74 +277,66 @@ client.on("interactionCreate", async (interaction) => {
           })))
       );
 
-      await interaction.reply({ content: "Selecione um usuário para resetar:", components: [resetMenu], ephemeral: false });
+      const msgReset = await interaction.reply({ content: "Escolha o usuário para resetar:", components: [resetMenu], ephemeral: false });
+      setTimeout(() => msgReset.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
 
     case "resetAll":
       await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL");
-      await interaction.reply({ content: "✅ Todos os usuários resetados!", ephemeral: false });
+      const msgAll = await interaction.reply({ content: "✅ Todos os usuários foram resetados!", ephemeral: false });
+      setTimeout(() => msgAll.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
 
     case "addCoins":
-      // Menu para selecionar usuário
-      const usuariosCoins = await pool.query("SELECT user_id FROM pontos");
-      if (!usuariosCoins.rows.length) {
-        await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
-        return;
-      }
+      // Mensagem inicial
+      const msgCoins = await interaction.reply({ content: "Use: `@usuário quantidade` para adicionar coins.", ephemeral: false });
 
-      const coinsMenu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("addCoinsMenu")
-          .setPlaceholder("Selecione o usuário")
-          .addOptions(usuariosCoins.rows.map(u => ({ label: `<@${u.user_id}>`, value: u.user_id })))
-      );
+      // Cria um collector de mensagens do admin
+      const filterCoins = m => m.author.id === userId;
+      const collectorCoins = interaction.channel.createMessageCollector({ filter: filterCoins, max: 1, time: 60000 });
 
-      await interaction.reply({ content: "Selecione o usuário para adicionar coins:", components: [coinsMenu], ephemeral: false });
+      collectorCoins.on("collect", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const coins = parseInt(amount);
+
+        if (!id || isNaN(coins)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade`", ephemeral: false });
+          setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+          return;
+        }
+
+        await pool.query("UPDATE pontos SET coins = COALESCE(coins,0) + $1 WHERE user_id = $2", [coins, id]);
+        const confirm = await interaction.followUp({ content: `✅ Adicionados ${coins} coins para <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+        m.delete().catch(() => {}); // Apaga a mensagem do admin
+      });
+      setTimeout(() => msgCoins.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
 
     case "addTime":
-      const usuariosTime = await pool.query("SELECT user_id FROM pontos");
-      if (!usuariosTime.rows.length) {
-        await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
-        return;
-      }
+      const msgTime = await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", ephemeral: false });
+      const filterTime = m => m.author.id === userId;
+      const collectorTime = interaction.channel.createMessageCollector({ filter: filterTime, max: 1, time: 60000 });
 
-      const timeMenu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("addTimeMenu")
-          .setPlaceholder("Selecione o usuário")
-          .addOptions(usuariosTime.rows.map(u => ({ label: `<@${u.user_id}>`, value: u.user_id })))
-      );
+      collectorTime.on("collect", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const time = parseInt(amount);
 
-      await interaction.reply({ content: "Selecione o usuário para adicionar tempo:", components: [timeMenu], ephemeral: false });
+        if (!id || isNaN(time)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade_em_ms`", ephemeral: false });
+          setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+          return;
+        }
+
+        await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
+        const confirm = await interaction.followUp({ content: `✅ Adicionados ${Math.floor(time/3600000)}h para <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+        m.delete().catch(() => {}); // Apaga a mensagem do admin
+      });
+      setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
-  }
-});
-
-// =====================
-// INTERAÇÕES DOS SELECT MENUS
-// =====================
-client.on("interactionCreate", async (interaction) => {
-  if (!interaction.isStringSelectMenu()) return;
-
-  const userId = interaction.user.id;
-
-  if (interaction.customId === "resetUserMenu") {
-    const alvoId = interaction.values[0];
-    await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL WHERE user_id = $1", [alvoId]);
-    await interaction.update({ content: `✅ Usuário <@${alvoId}> resetado!`, components: [] });
-  }
-
-  if (interaction.customId === "addCoinsMenu") {
-    const alvoId = interaction.values[0];
-    // aqui você processa a quantidade depois via chat ou prompt
-    await interaction.update({ content: `Selecione a quantidade de coins para <@${alvoId}> via comando no chat`, components: [] });
-  }
-
-  if (interaction.customId === "addTimeMenu") {
-    const alvoId = interaction.values[0];
-    await interaction.update({ content: `Selecione a quantidade de tempo para <@${alvoId}> via comando no chat`, components: [] });
   }
 });
 // =====================
