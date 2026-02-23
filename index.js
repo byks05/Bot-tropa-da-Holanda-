@@ -37,13 +37,13 @@ const client = new Client({
 });
 
 // =============================
-// CLIENT READY (PAINEL DE COINS)
+// BLOCO 1 - PAINEL COINS
 // =============================
 client.once("clientReady", async () => {
-  const canalEmbed = await client.channels.fetch("1474934788233236671").catch(() => null);
-  if (!canalEmbed) return;
+  const canalCoins = await client.channels.fetch("1474934788233236671").catch(() => null);
+  if (!canalCoins) return;
 
-  const produtos = [
+  const produtosCoins = [
     { label: "Vip", value: "vip", description: "💰 6000 coins" },
     { label: "Robux", value: "robux", description: "💰 4000 coins" },
     { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
@@ -51,14 +51,14 @@ client.once("clientReady", async () => {
     { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
   ];
 
-  const row = new ActionRowBuilder().addComponents(
+  const rowCoins = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId("loja_select_coins") // <- customId único
+      .setCustomId("loja_select_coins")
       .setPlaceholder("Selecione um produto...")
-      .addOptions(produtos)
+      .addOptions(produtosCoins)
   );
 
-  const textoPainel = `
+  const textoPainelCoins = `
 # Produtos Coins | Tropa da Holanda 🇳🇱
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 
@@ -71,83 +71,30 @@ client.once("clientReady", async () => {
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
   try {
-    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+    const mensagens = await canalCoins.messages.fetch({ limit: 10 });
     const mensagemExistente = mensagens.find(
       m => m.author.id === client.user.id && m.components.length > 0
     );
+
     if (mensagemExistente) return;
 
-    const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
+    const mensagem = await canalCoins.send({ content: textoPainelCoins, components: [rowCoins] });
     await mensagem.pin().catch(() => {});
     console.log("Painel Coins criado com sucesso.");
   } catch (err) {
-    console.error("Erro ao atualizar o painel Coins:", err);
+    console.error("Erro painel Coins:", err);
   }
 });
 
-// =============================
-// CLIENT READY (PAINEL DE SERVIÇOS)
-// =============================
-client.once("clientReady", async () => {
-  const canalEmbed = await client.channels.fetch("1474885764990107790").catch(() => null);
-  if (!canalEmbed) return;
-
-  const produtos = [
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50" },
-    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6" },
-  ];
-
-  const row = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId("loja_select_servicos") // <- customId único
-      .setPlaceholder("Selecione um produto...")
-      .addOptions(produtos)
-  );
-
-  const textoPainel = `
-# Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
-
-> 🛒 **Nitro mensal (1 mês/3 mês)**
-> 🛒 **CONTA VIRGEM +30 Dias**
-> 🛒 **Ativação do nitro**
-> 🛒 **Spotify Premium**
-> 🛒 **Molduras com icon personalizado**
-> 🛒 **Youtube Premium**
-
--# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
-
-  try {
-    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-    const mensagemExistente = mensagens.find(
-      m => m.author.id === client.user.id && m.components.length > 0
-    );
-    if (mensagemExistente) return;
-
-    const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
-    await mensagem.pin().catch(() => {});
-    console.log("Painel Serviços criado com sucesso.");
-  } catch (err) {
-    console.error("Erro ao atualizar o painel Serviços:", err);
-  }
-});
-
-// =============================
-// INTERAÇÃO DO SELECT MENU (Coins)
-// =============================
+// Interação do select menu Coins
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
   if (interaction.customId !== "loja_select_coins") return;
 
   const produto = interaction.values[0];
   const guild = interaction.guild;
-  const categoriaId = "1474366472326222013"; // categoria do painel Coins
-  const ticketName = `ticket-${interaction.user.username}`;
+  const categoriaId = "1474366472326222013"; // Categoria correta para Coins
+  const ticketName = `ticket-coins-${interaction.user.username}`;
 
   const existingChannel = guild.channels.cache.find(
     c => c.name === ticketName && c.parentId === categoriaId
@@ -174,6 +121,7 @@ client.on("interactionCreate", async (interaction) => {
     ripa: { nome: "Ripa", valor: "1700 coins" },
     roupa: { nome: "Roupa personalizada", valor: "1400 coins" },
   };
+
   const prodSelecionado = produtosInfo[produto];
 
   const ticketEmbed = new EmbedBuilder()
@@ -193,16 +141,58 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =============================
-// INTERAÇÃO DO SELECT MENU (Serviços)
+// BLOCO 2 - PAINEL SERVIÇOS
 // =============================
+client.once("clientReady", async () => {
+  const canalServicos = await client.channels.fetch("1474885764990107790").catch(() => null);
+  if (!canalServicos) return;
+
+  const produtosServicos = [
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6" },
+  ];
+
+  const rowServicos = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("loja_select_servicos")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtosServicos)
+  );
+
+  const textoPainelServicos = `
+# Produtos | Tropa da Holanda 🇳🇱
+-# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨`;
+
+  try {
+    const mensagens = await canalServicos.messages.fetch({ limit: 10 });
+    const mensagemExistente = mensagens.find(
+      m => m.author.id === client.user.id && m.components.length > 0
+    );
+
+    if (mensagemExistente) return;
+
+    const mensagem = await canalServicos.send({ content: textoPainelServicos, components: [rowServicos] });
+    await mensagem.pin().catch(() => {});
+    console.log("Painel Serviços criado com sucesso.");
+  } catch (err) {
+    console.error("Erro painel Serviços:", err);
+  }
+});
+
+// Interação do select menu Serviços
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isStringSelectMenu()) return;
   if (interaction.customId !== "loja_select_servicos") return;
 
   const produto = interaction.values[0];
   const guild = interaction.guild;
-  const categoriaId = "1474885663425036470"; // categoria do painel Serviços
-  const ticketName = `ticket-${interaction.user.username}`;
+  const categoriaId = "1474885663425036470"; // Categoria correta para Serviços
+  const ticketName = `ticket-servicos-${interaction.user.username}`;
 
   const existingChannel = guild.channels.cache.find(
     c => c.name === ticketName && c.parentId === categoriaId
@@ -231,6 +221,7 @@ client.on("interactionCreate", async (interaction) => {
     moldura: { nome: "Molduras com icon personalizado", valor: "R$ 2" },
     youtube: { nome: "Y0utub3 Premium", valor: "R$ 6" },
   };
+
   const prodSelecionado = produtosInfo[produto];
 
   const ticketEmbed = new EmbedBuilder()
@@ -250,7 +241,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =============================
-// BOTÃO DE FECHAR TICKET (funciona para ambos)
+// BLOCO 3 - FECHAR TICKET
 // =============================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
