@@ -1147,31 +1147,29 @@ if (command === "recaliados") {
   }
 }
 // =============================
-// COMPRACONFIRMADA - POSTGRESQL
-// =============================
-if (message.content.startsWith("thl!")) {
-  const args = message.content.slice(4).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
-
+  // COMPRACONFIRMADA
+  // =============================
   if (command === "compraconfirmada") {
+
     const user = message.mentions.members.first();
-    if (!user) return message.reply("❌ Mencione um usuário válido.");
+    if (!user)
+      return message.reply("❌ Mencione um usuário válido.");
 
     const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+
     if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
       return message.reply("❌ Sem permissão para usar esse comando.");
 
     const CARGO_COMPRADOR = "1475111107114041447";
 
     try {
-      // Dar o cargo se ainda não tiver
+
       if (!user.roles.cache.has(CARGO_COMPRADOR)) {
         await user.roles.add(CARGO_COMPRADOR);
       }
 
-      // 🔥 REGISTRAR NO POSTGRES USANDO POOL
       const res = await pool.query(
-        'SELECT compras FROM clientes WHERE user_id = $1',
+        "SELECT compras FROM clientes WHERE user_id = $1",
         [user.id]
       );
 
@@ -1179,14 +1177,14 @@ if (message.content.startsWith("thl!")) {
 
       if (res.rows.length === 0) {
         await pool.query(
-          'INSERT INTO clientes (user_id, compras) VALUES ($1, $2)',
+          "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
           [user.id, quantidade]
         );
       } else {
         quantidade = Number(res.rows[0].compras) + 1;
 
         await pool.query(
-          'UPDATE clientes SET compras = $1 WHERE user_id = $2',
+          "UPDATE clientes SET compras = $1 WHERE user_id = $2",
           [quantidade, user.id]
         );
       }
@@ -1200,7 +1198,8 @@ if (message.content.startsWith("thl!")) {
       return message.reply("❌ Ocorreu um erro ao registrar a compra.");
     }
   }
-}
+
+});
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
