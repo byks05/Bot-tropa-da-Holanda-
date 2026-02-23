@@ -39,7 +39,7 @@ async function reativarPontosAtivos(pg, client, guildId) {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
-  const res = await pg.query('SELECT * FROM pontos WHERE ativo = TRUE AND canal_id IS NOT NULL');
+  const res = await pg.query('SELECT * FROM pontos WHERE ativo = TRUE AND canal IS NOT NULL');
   const data = {};
   res.rows.forEach(row => {
     data[row.user_id] = {
