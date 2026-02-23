@@ -40,7 +40,7 @@ const client = new Client({
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guild = client.guilds.cache.get("ID_DA_GUILD"); // Coloque o ID da sua guild
+  const guild = client.guilds.cache.get("1468007116936843359"); // Coloque o ID da sua guild
   if (!guild) return console.error("Guild não encontrada.");
 
   // -----------------------------
