@@ -194,8 +194,9 @@ const entrarMenu = new ActionRowBuilder().addComponents(
     .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
 );
 
-// Exemplo: envia o painel de ponto
-message.reply({ content: "Selecione uma ação:", components: [entrarMenu] });
+// Substitua message.reply por interaction.reply
+// Exemplo: envia o painel de ponto (supondo que você esteja dentro de um comando de barra)
+await interaction.reply({ content: "Selecione uma ação:", components: [entrarMenu], ephemeral: true });
 
 // =====================
 // INTERAÇÃO DO SELECT MENU
@@ -310,11 +311,10 @@ client.on("interactionCreate", async (interaction) => {
         .setCustomId("ponto_menu")
         .setPlaceholder("Selecione uma ação")
         .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-        .setDisabled(false)
     );
 
     await interaction.update({
-      content: interaction.message.content, // mantém o texto original
+      content: "Selecione uma ação:", // mantém o texto original
       components: [resetMenu]
     });
 
