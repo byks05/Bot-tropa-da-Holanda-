@@ -184,131 +184,149 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 
-    // =====================
-    // SELECT MENU FIXO
-    // =====================
-    const entrarMenu = new ActionRowBuilder()
-      .addComponents(
+// =============================
+// CLIENT READY (SELECT MENU FIXO DE PONTO)
+// =============================
+client.once('ready', async () => {
+  const canalEmbed = await client.channels.fetch('1474383177689731254').catch(() => null);
+  if (!canalEmbed) return;
+
+  const entrarMenu = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('ponto_menu')
+      .setPlaceholder('Selecione uma ação...')
+      .addOptions([{ label: 'Entrar', value: 'entrar', description: 'Iniciar ponto' }])
+  );
+
+  const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+  const mensagemExistente = mensagens.find(
+    m => m.author.id === client.user.id && m.components.length > 0
+  );
+  if (mensagemExistente) return;
+
+  const mensagem = await canalEmbed.send({ content: '🟢 Painel de ponto | Selecione uma ação:', components: [entrarMenu] });
+  await mensagem.pin().catch(() => {});
+  console.log('Painel de ponto criado com sucesso.');
+});
+
+// =============================
+// INTERAÇÃO COM SELECT MENU
+// =============================
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isStringSelectMenu()) return;
+
+  // =====================
+  // MENU PRINCIPAL DE PONTO
+  // =====================
+  if (interaction.customId === 'ponto_menu') {
+    const escolha = interaction.values[0];
+    const guild = interaction.guild;
+    const categoriaId = '1474413150441963615'; // categoria de canais de ponto
+    const ticketName = `ponto-${interaction.user.username}`;
+
+    // Evita canal duplicado
+    const existingChannel = guild.channels.cache.find(
+      c => c.name === ticketName && c.parentId === categoriaId
+    );
+    if (existingChannel) {
+      await interaction.update({ components: interaction.message.components });
+      return interaction.followUp({ content: `❌ Você já possui um ponto ativo: ${existingChannel}`, ephemeral: true });
+    }
+
+    if (escolha === 'entrar') {
+      // =====================
+      // PEGANDO DADOS NO POSTGRES
+      // =====================
+      let res = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [interaction.user.id]);
+      let userData = res.rows[0];
+
+      if (!userData) {
+        await pool.query("INSERT INTO pontos (user_id, ativo, total, entrada, canal) VALUES ($1, false, 0, NULL, NULL)", [interaction.user.id]);
+        userData = { ativo: false, entrada: null };
+      }
+
+      if (userData.ativo) {
+        await interaction.update({ components: interaction.message.components });
+        return interaction.followUp({ content: '❌ Você já iniciou seu ponto.', ephemeral: true });
+      }
+
+      const now = Date.now();
+      await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, interaction.user.id]);
+
+      // =====================
+      // CRIA CANAL PRIVADO DE PONTO
+      // =====================
+      const canal = await guild.channels.create({
+        name: ticketName,
+        type: ChannelType.GuildText,
+        parent: categoriaId,
+        permissionOverwrites: [
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+        ]
+      });
+
+      await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, interaction.user.id]);
+
+      // =====================
+      // SELECT MENU DO CANAL
+      // =====================
+      const userMenu = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId('ponto_menu')
+          .setCustomId('user_ponto_menu')
           .setPlaceholder('Selecione uma ação')
           .addOptions([
-            { label: 'Entrar', value: 'entrar', description: 'Iniciar ponto' }
+            { label: 'Status', value: 'status', description: 'Ver tempo acumulado' },
+            { label: 'Sair', value: 'sair', description: 'Finalizar ponto' }
           ])
       );
 
-    await message.reply({ content: "Selecione uma ação:", components: [entrarMenu] });
+      await canal.send({ content: `🟢 Ponto iniciado! <@${interaction.user.id}>`, components: [userMenu] });
+      await interaction.update({ components: interaction.message.components });
+      await interaction.followUp({ content: `✅ Ponto iniciado! Verifique o canal ${canal}`, ephemeral: true });
 
-    // =====================
-    // INTERAÇÃO COM O SELECT MENU
-    // =====================
-    const filter = i => i.customId === 'ponto_menu' && i.user.id === message.author.id;
-    const collector = message.channel.createMessageComponentCollector({ filter, time: 60000 });
-
-    collector.on('collect', async i => {
-      if (i.values[0] === 'entrar') {
-        // =====================
-        // PEGANDO DADOS DO USUÁRIO NO POSTGRES
-        // =====================
-        let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
-        let userData = res.rows[0];
-
-        if (!userData) {
-          await pool.query(
-            "INSERT INTO pontos (user_id, ativo, total, entrada, canal) VALUES ($1, false, 0, NULL, NULL)",
-            [userId]
-          );
-          userData = { ativo: false, entrada: null, canal: null };
+      // =====================
+      // CONTADOR TEMPO REAL
+      // =====================
+      const intervaloTempo = setInterval(async () => {
+        const check = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [interaction.user.id]);
+        if (!check.rows[0]?.ativo) {
+          clearInterval(intervaloTempo);
+          return;
         }
+        const tempoAtual = Date.now() - check.rows[0].entrada;
+        const h = Math.floor(tempoAtual / 3600000);
+        const m = Math.floor((tempoAtual % 3600000) / 60000);
+        const s = Math.floor((tempoAtual % 60000) / 1000);
+        canal.setTopic(`⏱ Tempo ativo: ${h}h ${m}m ${s}s`).catch(() => {});
+      }, 1000);
+    }
+  }
 
-        if (userData.ativo) return i.reply("❌ Você já iniciou seu ponto.");
+  // =====================
+  // MENU DENTRO DO CANAL DO USUÁRIO
+  // =====================
+  if (interaction.customId === 'user_ponto_menu') {
+    const escolha = interaction.values[0];
+    const canal = interaction.channel;
+    const userId = interaction.user.id;
+    const now = Date.now();
 
-        const now = Date.now();
-        await pool.query(
-          "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
-          [now, userId]
-        );
-
-        // =====================
-        // CRIA CANAL PRIVADO
-        // =====================
-        const canal = await guild.channels.create({
-          name: `ponto-${message.author.username}`,
-          type: ChannelType.GuildText,
-          parent: categoriaId,
-          permissionOverwrites: [
-            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-            { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
-          ]
-        });
-
-        await pool.query(
-          "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-          [canal.id, userId]
-        );
-
-        // =====================
-        // SELECT MENU DO CANAL DO USUÁRIO
-        // =====================
-        const userMenu = new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId('user_ponto_menu')
-            .setPlaceholder('Selecione uma ação')
-            .addOptions([
-              { label: 'Status', value: 'status', description: 'Ver tempo acumulado' },
-              { label: 'Sair', value: 'sair', description: 'Finalizar ponto' }
-            ])
-        );
-
-        await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [userMenu] });
-
-        // =====================
-        // CONTADOR TEMPO REAL
-        // =====================
-        const intervaloTempo = setInterval(async () => {
-          const check = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [userId]);
-          if (!check.rows[0]?.ativo) {
-            clearInterval(intervaloTempo);
-            return;
-          }
-          const tempoAtual = Date.now() - check.rows[0].entrada;
-          const horas = Math.floor(tempoAtual / 3600000);
-          const minutos = Math.floor((tempoAtual % 3600000) / 60000);
-          const segundos = Math.floor((tempoAtual % 60000) / 1000);
-          canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
-        }, 1000);
-
-        // =====================
-        // COLETOR DE MENU DO CANAL DO USUÁRIO
-        // =====================
-        const userFilter = m => m.customId === 'user_ponto_menu' && m.user.id === message.author.id;
-        const userCollector = canal.createMessageComponentCollector({ filter: userFilter, time: 86400000 });
-
-        userCollector.on('collect', async inter => {
-          const escolha = inter.values[0];
-          if (escolha === 'status') {
-            const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
-            if (!status.rows[0]?.entrada) return inter.reply("❌ Nenhum ponto iniciado.");
-            const tempoAtual = Date.now() - status.rows[0].entrada;
-            const h = Math.floor(tempoAtual / 3600000);
-            const m = Math.floor((tempoAtual % 3600000) / 60000);
-            const s = Math.floor((tempoAtual % 60000) / 1000);
-            await inter.reply(`⏱ Tempo acumulado: ${h}h ${m}m ${s}s`);
-          } else if (escolha === 'sair') {
-            await pool.query("UPDATE pontos SET ativo = false, total = total + $1, canal = NULL WHERE user_id = $2",
-              [Date.now() - now, userId]
-            );
-            await inter.reply("🔴 Ponto finalizado!");
-            clearInterval(intervaloTempo);
-            canal.delete().catch(() => {});
-          }
-        });
-
-        await i.reply("✅ Ponto iniciado com sucesso!");
-      }
-    });
-  })();
-      }
+    if (escolha === 'status') {
+      const status = await pool.query("SELECT entrada FROM pontos WHERE user_id = $1", [userId]);
+      if (!status.rows[0]?.entrada) return interaction.reply({ content: '❌ Nenhum ponto iniciado.', ephemeral: true });
+      const tempoAtual = Date.now() - status.rows[0].entrada;
+      const h = Math.floor(tempoAtual / 3600000);
+      const m = Math.floor((tempoAtual % 3600000) / 60000);
+      const s = Math.floor((tempoAtual % 60000) / 1000);
+      await interaction.reply({ content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s`, ephemeral: true });
+    } else if (escolha === 'sair') {
+      await pool.query("UPDATE pontos SET ativo = false, total = total + $1, canal = NULL WHERE user_id = $2", [Date.now() - now, userId]);
+      await interaction.reply({ content: '🔴 Ponto finalizado!', ephemeral: true });
+      canal.delete().catch(() => {});
+    }
+  }
+});
 // =============================
 // CONFIG
 // =============================
