@@ -897,6 +897,44 @@ Novo saldo: ${saldoFinal} 💰`
   );
 }   
 
+  // =============================
+// COMANDO FECHAR TODOS PONTOS
+// =============================
+if (command === "fechartodos") {
+
+  // Roles que podem usar
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+    return message.reply("❌ Sem permissão para usar este comando.");
+
+  // Coloque aqui o ID da categoria dos canais de ponto
+  const CATEGORIA_PONTOS = "1474413150441963615";
+
+  try {
+    // Pega todos os canais de texto dentro da categoria
+    const canais = message.guild.channels.cache.filter(
+      c => c.parentId === CATEGORIA_PONTOS && c.isTextBased()
+    );
+
+    if (canais.size === 0)
+      return message.reply("❌ Nenhum canal de ponto ativo encontrado.");
+
+    let fechados = 0;
+
+    // Deleta cada canal, ignora erro se já estiver fechado ou não puder deletar
+    for (const canal of canais.values()) {
+      await canal.delete().catch(() => {});
+      fechados++;
+    }
+
+    return message.reply(`✅ ${fechados} canais de ponto foram fechados com sucesso.`);
+
+  } catch (err) {
+    console.error("Erro ao fechar pontos:", err);
+    return message.reply("❌ Ocorreu um erro ao tentar fechar os canais de ponto.");
+  }
+}
+
  // =============================
 // COMANDO LOJA - LISTA DE PRODUTOS
 // =============================
