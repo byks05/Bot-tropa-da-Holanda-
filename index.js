@@ -272,32 +272,48 @@ const IDS = {
 };
 
 // =============================
-// SISTEMA BATE PONTO
+// SISTEMA BATE PONTO COM POSTGRESQL
 // =============================
-const DATA_FILE = path.join(__dirname, "pontos.json");
+const { Pool } = require("pg");
 
-// Garante que o arquivo exista
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({}));
-}
+const pg = new Pool({
+  connectionString: process.env.DATABASE_URL, // seu DATABASE_URL no .env
+});
 
-// Função para ler dados de forma segura
-function getData() {
+// Função para registrar ponto
+async function registrarPonto(userId) {
   try {
-    const raw = fs.readFileSync(DATA_FILE, "utf-8");
-    return JSON.parse(raw);
+    // Buscar pontos atuais
+    const res = await pg.query('SELECT pontos FROM pontos WHERE user_id = $1', [userId]);
+
+    let pontos = 1;
+
+    if (res.rows.length === 0) {
+      // Inserir novo usuário
+      await pg.query('INSERT INTO pontos (user_id, pontos) VALUES ($1, $2)', [userId, pontos]);
+    } else {
+      // Atualizar pontos
+      pontos = res.rows[0].pontos + 1;
+      await pg.query('UPDATE pontos SET pontos = $1 WHERE user_id = $2', [pontos, userId]);
+    }
+
+    return pontos; // Retorna total de pontos após registro
   } catch (err) {
-    console.error("Erro ao ler pontos.json:", err);
-    return {};
+    console.error("Erro ao registrar ponto:", err);
+    throw err;
   }
 }
 
-// Função para salvar dados
-function saveData(data) {
+// Exemplo de uso no messageCreate
+if (command === "bataponto") {
+  const user = message.mentions.members.first();
+  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error("Erro ao salvar pontos.json:", err);
+    const total = await registrarPonto(user.id);
+    return message.reply(`✅ Ponto registrado para ${user.user.tag}. Total de pontos: **${total}**`);
+  } catch {
+    return message.reply("❌ Ocorreu um erro ao registrar o ponto.");
   }
 }
 
@@ -1021,47 +1037,62 @@ if (command === "recaliados") {
   }
 }
 // =============================
-// COMPRACONFIRMADA
+// COMPRACONFIRMADA - POSTGRESQL
 // =============================
-if (command === "compraconfirmada") {
-  const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
+if (message.content.startsWith("thl!")) {
+  const args = message.content.slice(4).trim().split(/ +/);
+  const command = args.shift().toLowerCase();
 
-  const CARGO_COMPRADOR = "1475111107114041447"; // Substitua pelo ID do cargo
+  // Comando: thl!compraconfirmada
+  if (command === "compraconfirmada") {
+    const user = message.mentions.members.first();
+    if (!user) return message.reply("❌ Mencione um usuário válido.");
 
-  // Só quem pode confirmar compras (opcional)
-  const ALLOWED_ROLES = ["1468017578747105390", "1468069638935150635"]; // Coloque aqui IDs de cargos que podem usar o comando
-  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id))) {
-    return message.reply("❌ Você não tem permissão para usar este comando.");
-  }
+    // Aqui você pode colocar IDs de cargos que podem usar esse comando
+    const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"]; // coloque o ID da role que pode usar
+    if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+      return message.reply("❌ Sem permissão para usar esse comando.");
 
-  try {
-    // Dar o cargo se ainda não tiver
-    if (!user.roles.cache.has(CARGO_COMPRADOR)) {
-      await user.roles.add(CARGO_COMPRADOR);
+    const CARGO_COMPRADOR = "1475111107114041447"; // Substitua pelo ID do cargo comprador
+
+    try {
+      // Dar o cargo se ainda não tiver
+      if (!user.roles.cache.has(CARGO_COMPRADOR)) {
+        await user.roles.add(CARGO_COMPRADOR);
+      }
+
+      // Registrar no PostgreSQL
+      const res = await pg.query(
+        'SELECT compras FROM clientes WHERE user_id = $1',
+        [user.id]
+      );
+
+      let quantidade = 1;
+
+      if (res.rows.length === 0) {
+        // Inserir novo usuário
+        await pg.query(
+          'INSERT INTO clientes (user_id, compras) VALUES ($1, $2)',
+          [user.id, quantidade]
+        );
+      } else {
+        // Atualizar compras
+        quantidade = res.rows[0].compras + 1;
+        await pg.query(
+          'UPDATE clientes SET compras = $1 WHERE user_id = $2',
+          [quantidade, user.id]
+        );
+      }
+
+      return message.reply(
+        `✅ Compra confirmada para ${user.user.tag}! Total de compras: **${quantidade}**`
+      );
+    } catch (err) {
+      console.error("Erro ao registrar compra:", err);
+      return message.reply("❌ Ocorreu um erro ao registrar a compra.");
     }
-
-    // Buscar compras atuais
-    const res = await pg.query('SELECT compras FROM clientes WHERE user_id = $1', [user.id]);
-
-    let quantidade = 1;
-
-    if (res.rows.length === 0) {
-      // Inserir novo usuário
-      await pg.query('INSERT INTO clientes (user_id, compras) VALUES ($1, $2)', [user.id, quantidade]);
-    } else {
-      // Atualizar compras
-      quantidade = res.rows[0].compras + 1;
-      await pg.query('UPDATE clientes SET compras = $1 WHERE user_id = $2', [quantidade, user.id]);
-    }
-
-    return message.reply(`✅ Compra confirmada para ${user.user.tag}! Total de compras: **${quantidade}**`);
-  } catch (err) {
-    console.error(err);
-    return message.reply("❌ Ocorreu um erro ao registrar a compra.");
   }
-}
-});
+}});
 
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
