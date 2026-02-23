@@ -185,7 +185,7 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// PAINEL DE ADMIN FIXO AVANÇADO - COMPLETO
+// PAINEL DE ADMIN FIXO FINAL
 // =====================
 const adminChannelId = "1474384292015640626"; // Canal fixo do painel
 let painelMensagemId = null;
@@ -193,17 +193,19 @@ const MESSAGE_LIFETIME = 15000; // 15 segundos
 
 async function criarPainelAdmin(client) {
   try {
-    if (!client.isReady()) await new Promise(resolve => client.once("ready", resolve));
-
     const canal = await client.channels.fetch(adminChannelId);
-    if (!canal || !canal.isTextBased()) return console.log("❌ Canal de administração não encontrado ou não é texto.");
+    if (!canal) return console.log("Canal de administração não encontrado.");
 
-    const botoesAdmin = new ActionRowBuilder().addComponents(
+    // ===================== BOTÕES (2 LINHAS) =====================
+    const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("resetAll").setLabel("🗑 Reset Todos").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("addCoins").setLabel("💰 Adicionar Coins").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger)
+    );
+
+    const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("resetCoins").setLabel("💳 Reset Coins").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("addTime").setLabel("⏱ Adicionar Tempo").setStyle(ButtonStyle.Success),
       new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger),
@@ -212,229 +214,184 @@ async function criarPainelAdmin(client) {
 
     const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
 
-    // Atualiza mensagem existente se houver
+    // ===================== Atualiza painel se já existe =====================
     if (painelMensagemId) {
       const mensagem = await canal.messages.fetch(painelMensagemId).catch(() => null);
       if (mensagem) {
-        await mensagem.edit({ content: conteudo, components: [botoesAdmin] });
+        await mensagem.edit({ content: conteudo, components: [botoesAdminLinha1, botoesAdminLinha2] });
         return;
       }
     }
 
-    // Cria nova mensagem do painel
-    const mensagemNova = await canal.send({ content: conteudo, components: [botoesAdmin] });
+    // ===================== Cria nova mensagem =====================
+    const mensagemNova = await canal.send({ content: conteudo, components: [botoesAdminLinha1, botoesAdminLinha2] });
     painelMensagemId = mensagemNova.id;
-    console.log("✅ Painel de administração criado com sucesso!");
+
   } catch (err) {
-    console.log("❌ Erro ao criar painel de admin:", err);
+    console.log("Erro ao criar painel de admin:", err);
   }
 }
 
-client.once("ready", () => criarPainelAdmin(client));
+client.once("clientReady", () => criarPainelAdmin(client));
 
-// =====================
-// INTERAÇÕES COM BOTÕES
-// =====================
+// ===================== INTERAÇÕES =====================
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isButton()) return;
   const userId = interaction.user.id;
 
-  const temporario = async (msg) => setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
+  async function processCollector(promptText, callback) {
+    const msgPrompt = await interaction.reply({ content: promptText, ephemeral: false });
+    const filter = m => m.author.id === userId;
+    const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
+
+    collector.on("collect", async m => {
+      await callback(m);
+      m.delete().catch(() => {});
+      msgPrompt.delete().catch(() => {});
+    });
+  }
 
   switch (interaction.customId) {
 
-    // ================= Registro =================
-    case "registro":
+    // ------------------- REGISTRO -------------------
+    case "registro": {
       const res = await pool.query("SELECT user_id, ativo, total, coins FROM pontos ORDER BY total DESC");
       if (!res.rows.length) {
         const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
-        return temporario(msg);
+        return setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
       }
 
-      const chunkSize = 20; // limita quantidade de linhas por mensagem
-      for (let i = 0; i < res.rows.length; i += chunkSize) {
-        const chunk = res.rows.slice(i, i + chunkSize);
-        const lista = chunk.map((u, index) => {
-          const horas = Math.floor(u.total / 3600000);
-          const minutos = Math.floor((u.total % 3600000) / 60000);
-          const segundos = Math.floor((u.total % 60000) / 1000);
-          return `**${i + index + 1}** - <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ⏱ ${horas}h ${minutos}m ${segundos}s - 💰 ${u.coins || 0} coins`;
-        }).join("\n");
+      let allMessages = [];
+      let currentMessage = "";
+      res.rows.forEach((u, index) => {
+        const horas = Math.floor(u.total / 3600000);
+        const minutos = Math.floor((u.total % 3600000) / 60000);
+        const segundos = Math.floor((u.total % 60000) / 1000);
+        const linha = `**${index + 1}** - <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ⏱ ${horas}h ${minutos}m ${segundos}s - 💰 ${u.coins || 0} coins\n`;
+        if (currentMessage.length + linha.length > 1900) {
+          allMessages.push(currentMessage);
+          currentMessage = linha;
+        } else {
+          currentMessage += linha;
+        }
+      });
+      if (currentMessage) allMessages.push(currentMessage);
 
-        let msg;
-        if (i === 0) msg = await interaction.reply({ content: lista, ephemeral: false });
-        else msg = await interaction.followUp({ content: lista, ephemeral: false });
-        temporario(msg);
+      for (const msgContent of allMessages) {
+        const msg = await interaction.reply({ content: msgContent, ephemeral: false });
+        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
       }
       break;
+    }
 
-    // ================= Reset Usuário =================
+    // ------------------- RESET USUÁRIO -------------------
     case "resetUser":
-      {
-        const msg = await interaction.reply({ content: "Mencione o usuário que deseja resetar (horas e coins).", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const mention = m.mentions.users.first();
-          if (!mention) {
-            const erro = await interaction.followUp({ content: "❌ Usuário inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET ativo = false, total = 0, coins = 0, canal = NULL WHERE user_id = $1", [mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Usuário <@${mention.id}> resetado.`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário` para resetar o ponto.", async m => {
+        const mention = m.mentions.users.first();
+        if (!mention) {
+          const erro = await interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL WHERE user_id = $1", [mention.id]);
+        const confirm = await interaction.followUp({ content: `✅ Ponto de <@${mention.id}> resetado!`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Reset Todos =================
-    case "resetAll":
-      await pool.query("UPDATE pontos SET ativo = false, total = 0, coins = 0, canal = NULL");
+    // ------------------- RESET ALL -------------------
+    case "resetAll": {
+      await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL");
       const msgAll = await interaction.reply({ content: "✅ Todos os usuários foram resetados!", ephemeral: false });
-      temporario(msgAll);
+      setTimeout(() => msgAll.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
+    }
 
-    // ================= Add Coins =================
+    // ------------------- ADD/REMOVE COINS -------------------
     case "addCoins":
-      {
-        const msg = await interaction.reply({ content: "Use: `@usuário quantidade` para adicionar coins.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const [mentionStr, amountStr] = m.content.split(" ");
-          const mention = m.mentions.users.first();
-          const amount = parseInt(amountStr);
-          if (!mention || isNaN(amount)) {
-            const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET coins = COALESCE(coins,0)+$1 WHERE user_id = $2", [amount, mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Adicionados ${amount} coins para <@${mention.id}>`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário quantidade` para adicionar coins.", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const coins = parseInt(amount);
+        if (!id || isNaN(coins)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET coins = COALESCE(coins,0) + $1 WHERE user_id = $2", [coins, id]);
+        const confirm = await interaction.followUp({ content: `✅ Adicionados ${coins} coins para <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Remove Coins =================
     case "removeCoins":
-      {
-        const msg = await interaction.reply({ content: "Use: `@usuário quantidade` para remover coins.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const [mentionStr, amountStr] = m.content.split(" ");
-          const mention = m.mentions.users.first();
-          const amount = parseInt(amountStr);
-          if (!mention || isNaN(amount)) {
-            const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET coins = GREATEST(COALESCE(coins,0)-$1,0) WHERE user_id = $2", [amount, mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Removidos ${amount} coins de <@${mention.id}>`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário quantidade` para remover coins.", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const coins = parseInt(amount);
+        if (!id || isNaN(coins)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET coins = GREATEST(COALESCE(coins,0)-$1,0) WHERE user_id = $2", [coins, id]);
+        const confirm = await interaction.followUp({ content: `✅ Removidos ${coins} coins de <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Reset Coins =================
     case "resetCoins":
-      {
-        const msg = await interaction.reply({ content: "Mencione o usuário que deseja resetar os coins.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const mention = m.mentions.users.first();
-          if (!mention) {
-            const erro = await interaction.followUp({ content: "❌ Usuário inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET coins = 0 WHERE user_id = $1", [mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Coins de <@${mention.id}> resetados.`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário` para resetar os coins.", async m => {
+        const mention = m.mentions.users.first();
+        if (!mention) {
+          const erro = await interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET coins = 0 WHERE user_id = $1", [mention.id]);
+        const confirm = await interaction.followUp({ content: `✅ Coins de <@${mention.id}> resetados!`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Add Time =================
+    // ------------------- ADD/REMOVE TEMPO -------------------
     case "addTime":
-      {
-        const msg = await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const [mentionStr, amountStr] = m.content.split(" ");
-          const mention = m.mentions.users.first();
-          const amount = parseInt(amountStr);
-          if (!mention || isNaN(amount)) {
-            const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [amount, mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Adicionados ${Math.floor(amount/3600000)}h para <@${mention.id}>`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário quantidade_em_ms` para adicionar tempo.", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const time = parseInt(amount);
+        if (!id || isNaN(time)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
+        const confirm = await interaction.followUp({ content: `✅ Adicionados ${Math.floor(time/3600000)}h para <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Remove Time =================
     case "removeTime":
-      {
-        const msg = await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para remover tempo.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const [mentionStr, amountStr] = m.content.split(" ");
-          const mention = m.mentions.users.first();
-          const amount = parseInt(amountStr);
-          if (!mention || isNaN(amount)) {
-            const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET total = GREATEST(total - $1,0) WHERE user_id = $2", [amount, mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Removidos ${Math.floor(amount/3600000)}h de <@${mention.id}>`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário quantidade_em_ms` para remover tempo.", async m => {
+        const [mention, amount] = m.content.split(" ");
+        const id = mention.replace(/[<@!>]/g, "");
+        const time = parseInt(amount);
+        if (!id || isNaN(time)) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET total = GREATEST(total-$1,0) WHERE user_id=$2", [time, id]);
+        const confirm = await interaction.followUp({ content: `✅ Removidos ${Math.floor(time/3600000)}h de <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
 
-    // ================= Reset Time =================
     case "resetTime":
-      {
-        const msg = await interaction.reply({ content: "Mencione o usuário que deseja resetar o tempo.", ephemeral: false });
-        const filter = m => m.author.id === userId;
-        const collector = interaction.channel.createMessageCollector({ filter, max: 1, time: 60000 });
-        collector.on("collect", async m => {
-          const mention = m.mentions.users.first();
-          if (!mention) {
-            const erro = await interaction.followUp({ content: "❌ Usuário inválido.", ephemeral: false });
-            temporario(erro);
-            return;
-          }
-          await pool.query("UPDATE pontos SET total = 0 WHERE user_id = $1", [mention.id]);
-          const confirm = await interaction.followUp({ content: `✅ Tempo de <@${mention.id}> resetado.`, ephemeral: false });
-          temporario(confirm);
-          m.delete().catch(() => {});
-        });
-        temporario(msg);
-      }
+      await processCollector("Use: `@usuário` para resetar o tempo.", async m => {
+        const mention = m.mentions.users.first();
+        if (!mention) {
+          const erro = await interaction.followUp({ content: "❌ Usuário não mencionado.", ephemeral: false });
+          return setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+        }
+        await pool.query("UPDATE pontos SET total = 0 WHERE user_id=$1", [mention.id]);
+        const confirm = await interaction.followUp({ content: `✅ Tempo de <@${mention.id}> resetado!`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+      });
       break;
   }
 });
