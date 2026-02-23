@@ -111,10 +111,46 @@ async function reativarPontosAtivos(pg, client, guildId) {
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
-  const guildId = "1468007116936843359"; // coloque aqui o ID da sua guild
+  const guildId = "1468007116936843359"; // ID da sua guild
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
+  const categoriaId = "1468715109722357782"; // categoria dos canais
+
+  try {
+    // Pega todas as sessões ativas do banco
+    const res = await pool.query("SELECT userid, canal FROM sessoes WHERE ativo = true");
+
+    for (const row of res.rows) {
+      const userId = row.userid;
+
+      try {
+        // Cria o canal para o usuário
+        const canal = await guild.channels.create({
+          name: `ponto-recuperado`,
+          type: 0, // tipo de texto
+          parent: categoriaId,
+          permissionOverwrites: [
+            { id: guild.id, deny: ["ViewChannel"] },
+            { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
+          ]
+        });
+
+        // Atualiza o canal no banco
+        await pool.query("UPDATE sessoes SET canal = $1 WHERE userid = $2", [canal.id, userId]);
+
+        // Envia mensagem no canal
+        canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
+      } catch (err) {
+        console.log("Erro ao recriar canal:", err);
+      }
+    }
+
+  } catch (err) {
+    console.error("Erro ao buscar sessões no banco:", err);
+  }
+});
   // =============================
   // PAINEL FIXO DE LOJA
   // =============================
@@ -1077,36 +1113,35 @@ if (message.content.startsWith("thl!")) {
 // =============================
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
-client.on("ready", async () => {
-  const data = getData();
+client.on("clientReady", async () => {
+  console.log(`${client.user.tag} está online!`);
+
+  const data = await getData();
   const guild = client.guilds.cache.first();
   if (!guild) return;
 
   const categoriaId = "1468715109722357782";
 
   for (const userId in data) {
-    if (data[userId].ativo) {
-      try {
-        const canal = await guild.channels.create({
-          name: `ponto-recuperado`,
-          type: 0,
-          parent: categoriaId,
-          permissionOverwrites: [
-            { id: guild.id, deny: ["ViewChannel"] },
-            { id: userId, allow: ["ViewChannel", "SendMessages", "ReadMessageHistory"] }
-          ]
-        });
+    try {
+      const canal = await guild.channels.create({
+        name: `ponto-recuperado`,
+        type: ChannelType.GuildText,
+        parent: categoriaId,
+        permissionOverwrites: [
+          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+        ]
+      });
 
-        data[userId].canal = canal.id;
-        saveData(data);
+      await saveData(userId, canal.id);
 
-        canal.send("⚠️ Sessão recuperada após reinício do bot.");
-
-      } catch (err) {
-        console.log("Erro ao recriar canal:", err);
-      }
+      await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+    } catch (err) {
+      console.log("Erro ao recriar canal:", err);
     }
   }
+});
 
   console.log(`Bot online como ${client.user.tag}`);
 
