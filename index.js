@@ -220,6 +220,13 @@ client.once("clientReady", async () => {
 
 > 🛒 ** Nitro mensal (1 mês/3 mês) **
 > 🛒 **CONTA VIRGEM +30 Dias**
+
+• Nunca tiverão nitro
+• Email confirmado
+• Altere o email!
+• Ótimas para ativar nitro
+• Full acesso (pode trocar email & senha)**
+
 > 🛒 **Ativação do nitro**
 > 🛒 **Spotify Premium**
 > 🛒 **Molduras com icon personalizado**
@@ -821,52 +828,73 @@ if (command === "addtempo") {
 // COMANDO CONVERTER TEMPO EM COINS
 // =============================
 if (command === "converter") {
+
   const userId = message.author.id;
-  const info = data[userId];
-  if (!info) return message.reply("❌ Você não tem tempo registrado para converter.");
 
-  if (!args[0]) return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
+  if (!args[0])
+    return message.reply("❌ Use: thl!converter <quantidade>h/m (ex: 2h ou 30m)");
 
-  // Parse de horas ou minutos
+  // Buscar dados no banco
+  const res = await pool.query(
+    "SELECT total, ativo, entrada, coins FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  if (res.rows.length === 0)
+    return message.reply("❌ Você não tem tempo registrado.");
+
+  let { total, ativo, entrada, coins } = res.rows[0];
+
+  total = Number(total) || 0;
+  coins = Number(coins) || 0;
+
+  if (ativo && entrada)
+    total += Date.now() - Number(entrada);
+
+  const totalMinutos = Math.floor(total / 60000);
+
+  // Parse entrada
   const input = args[0].toLowerCase();
   let minutos = 0;
+
   if (input.endsWith("h")) {
     const h = parseFloat(input.replace("h", ""));
     if (isNaN(h) || h <= 0) return message.reply("❌ Quantidade inválida.");
     minutos = h * 60;
-  } else if (input.endsWith("m")) {
+  }
+  else if (input.endsWith("m")) {
     const m = parseFloat(input.replace("m", ""));
     if (isNaN(m) || m <= 0) return message.reply("❌ Quantidade inválida.");
     minutos = m;
-  } else {
+  }
+  else {
     return message.reply("❌ Formato inválido. Use h ou m (ex: 2h ou 30m)");
   }
 
-  // Calcula tempo total disponível (ponto + addtempo)
-  let total = info.total || 0;
-  if (info.ativo && info.entrada) total += Date.now() - info.entrada;
-  const totalMinutos = Math.floor(total / 60000);
+  if (minutos > totalMinutos)
+    return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
 
-  if (minutos > totalMinutos) return message.reply(`❌ Você só tem ${totalMinutos} minutos disponíveis.`);
-
-  // Subtrai tempo do total
   const minutosEmMs = minutos * 60000;
-  info.total -= minutosEmMs;
 
-  // Calcula coins (1h = 100 coins → 1m ≈ 1,6667 coins)
-  const coins = Math.floor(minutos * (100 / 60));
-  info.coins = (info.coins || 0) + coins;
+  const novosCoins = Math.floor(minutos * (100 / 60));
+  const novoTotal = total - minutosEmMs;
+  const saldoFinal = coins + novosCoins;
 
-  saveData(data);
+  // Atualiza banco
+  await pool.query(
+    "UPDATE pontos SET total = $1, coins = $2 WHERE user_id = $3",
+    [novoTotal, saldoFinal, userId]
+  );
 
-  // Formata horas e minutos convertidos
   const horasConvertidas = Math.floor(minutos / 60);
   const minutosConvertidos = Math.floor(minutos % 60);
 
-  return message.reply(`✅ Conversão realizada com sucesso!
+  return message.reply(
+`✅ Conversão realizada com sucesso!
 Tempo convertido: ${horasConvertidas}h ${minutosConvertidos}m
-Coins recebidos: ${coins} 💰
-Novo saldo de coins: ${info.coins} 💰`);
+Coins recebidos: ${novosCoins} 💰
+Novo saldo: ${saldoFinal} 💰`
+  );
 }   
 
  // =============================
@@ -914,24 +942,40 @@ if (command === "comprar") {
   if (!produto) return message.reply("❌ Produto inválido.");
 
   const userId = message.author.id;
-  if (!data[userId]) data[userId] = { coins: 0 };
-  const info = data[userId];
+
+  // 🔥 BUSCA COINS NO BANCO
+  const res = await pool.query(
+    "SELECT coins FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  if (res.rows.length === 0)
+    return message.reply("❌ Você não possui registro no sistema.");
+
+  const coins = Number(res.rows[0].coins) || 0;
 
   // Checa saldo
-  if ((info.coins || 0) < produto.preco) {
+  if (coins < produto.preco) {
     return message.reply(`❌ Você não tem coins suficientes para comprar **${produto.nome}**.`);
   }
 
-  // Subtrai coins
-  info.coins -= produto.preco;
-  saveData(data);
+  // 🔥 SUBTRAI COINS NO BANCO
+  const novoSaldo = coins - produto.preco;
+
+  await pool.query(
+    "UPDATE pontos SET coins = $1 WHERE user_id = $2",
+    [novoSaldo, userId]
+  );
 
   const guild = message.guild;
   const categoriaId = "1474366472326222013"; // Categoria de tickets
+
   const existingChannel = guild.channels.cache.find(c => 
     c.name === `ticket-${message.author.username}` && c.parentId === categoriaId
   );
-  if (existingChannel) return message.reply(`❌ Você já possui um ticket aberto: ${existingChannel}`);
+
+  if (existingChannel)
+    return message.reply(`❌ Você já possui um ticket aberto: ${existingChannel}`);
 
   // Cria canal de ticket
   const channel = await guild.channels.create({
@@ -954,7 +998,6 @@ if (command === "comprar") {
     .setColor("Green")
     .setTimestamp();
 
-  // Botão de fechar ticket
   const fecharButton = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("fechar_ticket")
@@ -962,10 +1005,15 @@ if (command === "comprar") {
       .setStyle(ButtonStyle.Danger)
   );
 
-  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+  await channel.send({
+    content: `<@&1472589662144040960> <@&1468017578747105390>`,
+    embeds: [ticketEmbed],
+    components: [fecharButton]
+  });
 
   message.reply(`✅ Ticket criado com sucesso! Verifique o canal ${channel} para finalizar sua compra.`);
 }
+
 
 // =============================
 // FECHAR TICKET
