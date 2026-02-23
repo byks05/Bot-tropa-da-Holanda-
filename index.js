@@ -35,78 +35,76 @@ const client = new Client({
 });
 
 // =============================
-// PAINEL FIXO DE LOJA
+// PAINEL FIXO DE LOJA + REATIVAR PONTOS
 // =============================
 client.on("ready", async () => {
   console.log(`${client.user.tag} está online!`);
 
+  const guild = client.guilds.cache.get("ID_DA_GUILD"); // Coloque o ID da sua guild
+  if (!guild) return console.error("Guild não encontrada.");
+
+  // -----------------------------
+  // PAINEL FIXO DE LOJA
+  // -----------------------------
   const canalEmbed = client.channels.cache.get("1474885764990107790"); // Canal do painel fixo
-  if (!canalEmbed) return console.error("Canal do painel fixo não encontrado.");
+  if (!canalEmbed) console.error("Canal do painel fixo não encontrado.");
+  else {
+    const produtos = [
+      { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
+      { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
+      { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
+      { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
+      { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
+      { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
+      { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
+    ];
 
-  const produtos = [
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 3 R$" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 6 R$" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 5 R$" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 1,50 R$" },
-    { label: "Spotify Premium", value: "spotify", description: "💰 5 R$" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 2 R$" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💰 6 R$" },
-  ];
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("loja_select")
+        .setPlaceholder("Selecione um produto...")
+        .addOptions(produtos)
+    );
 
-  const row = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder()
-      .setCustomId("loja_select")
-      .setPlaceholder("Selecione um produto...")
-      .addOptions(produtos)
-  );
-
-  const textoPainel = `
+    const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes.
 
 🛒 ** Nitro mensal (1 mês/3 mês) **
-
 🛒 **CONTA VIRGEM +30 Dias**
 • Nunca tiverão Nitro  
 • Email confirmado  
 • Altere o email!  
 • Ótimas para ativar nitro  
 • Full acesso (pode trocar email & senha)
-
 🛒 **Ativação do nitro**  
 Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós mesmo ativamos.
-
 🛒 **Spotify Premium**
-
 🛒 **Molduras com icon personalizado**
-
 🛒 **Youtube Premium**
-
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
-  // Apaga mensagens antigas do bot (opcional)
-  const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-  mensagens.forEach(msg => {
-    if (msg.author.id === client.user.id) msg.delete().catch(() => {});
-  });
+    // Apaga mensagens antigas do bot (opcional)
+    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+    mensagens.forEach(msg => {
+      if (msg.author.id === client.user.id) msg.delete().catch(() => {});
+    });
 
-  const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
-  await mensagem.pin().catch(() => {});
-});
+    const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
+    await mensagem.pin().catch(() => {});
+  }
 
-// =============================
-// REATIVAR CANAIS E INTERVALOS AO LIGAR
-// =============================
-async function reativarPontosAtivos() {
+  // -----------------------------
+  // REATIVAR CANAIS E INTERVALOS
+  // -----------------------------
   for (const [userId, info] of Object.entries(data)) {
     if (!info.ativo || !info.canal) continue; // só reativa ativos com canal
 
     const user = await guild.members.fetch(userId).catch(() => null);
     const canal = guild.channels.cache.get(info.canal);
-
     if (!user || !canal) continue;
 
-    // Atualiza o tópico com o tempo atual
+    // Função para atualizar o tópico com o tempo atual
     const atualizarTempo = () => {
       const total = (info.total || 0) + (info.entrada ? Date.now() - info.entrada : 0);
       const horas = Math.floor(total / 3600000);
@@ -124,7 +122,7 @@ async function reativarPontosAtivos() {
       atualizarTempo();
     }, 1000);
 
-    // Lembrete de 20 minutos e fechamento automático
+    // Lembrete de 20 minutos com encerramento automático
     const intervaloLembrete = setInterval(async () => {
       const infoAtual = data[userId];
       if (!infoAtual?.ativo) {
@@ -137,7 +135,7 @@ async function reativarPontosAtivos() {
       const filtro = m => m.author.id === userId && m.channel.id === canal.id;
       try {
         await canal.awaitMessages({ filter: filtro, max: 1, time: 5 * 60 * 1000, errors: ['time'] });
-        // usuário respondeu, nada muda
+        // usuário respondeu, ponto continua normalmente
       } catch {
         // usuário não respondeu → encerra ponto
         const infoFinal = data[userId];
@@ -155,15 +153,8 @@ async function reativarPontosAtivos() {
       }
     }, 20 * 60 * 1000);
 
-    // Atualiza o tempo imediatamente
-    atualizarTempo();
+    atualizarTempo(); // atualiza imediatamente
   }
-}
-
-// Chame essa função quando o bot estiver pronto
-client.on('ready', async () => {
-  console.log(`${client.user.tag} está online!`);
-  await reativarPontosAtivos();
 });
 
 // =============================
