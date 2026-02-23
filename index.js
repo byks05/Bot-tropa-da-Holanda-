@@ -151,68 +151,71 @@ async function reativarPontosAtivos(client, guildId) {
 // CLIENT READY
 // =============================
 client.once("clientReady", async () => {
-  console.log(`${client.user.tag} está online!`);
+    console.log(`${client.user.tag} está online!`);
 
-  const guildId = "1468007116936843359";
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) return console.error("Guild não encontrada.");
+    const guildId = "1468007116936843359";
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return console.error("Guild não encontrada.");
 
-  const categoriaId = "1474413150441963615";
+    const categoriaId = "1474413150441963615";
 
-  try {
-    const res = await pool.query(
-      "SELECT user_id, canal FROM pontos WHERE ativo = true"
-    );
-
-    for (const row of res.rows) {
-      const userId = row.user_id;
-
-      try {
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (!member) continue;
-
-        // Se já existe o canal, ignora
-        if (row.canal) {
-          const canalExistente = guild.channels.cache.get(row.canal);
-          if (canalExistente) continue;
-        }
-
-        const canal = await guild.channels.create({
-          name: `ponto-${member.user.username}`,
-          type: ChannelType.GuildText,
-          parent: categoriaId,
-          permissionOverwrites: [
-            {
-              id: guild.roles.everyone.id,
-              deny: [PermissionFlagsBits.ViewChannel],
-            },
-            {
-              id: member.id,
-              allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-              ],
-            },
-          ],
-        });
-
-        await pool.query(
-          "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-          [canal.id, userId]
+    try {
+        const res = await pool.query(
+            "SELECT user_id, canal FROM pontos WHERE ativo = true"
         );
 
-        await canal.send("⚠️ Sessão recuperada após reinício do bot.");
-        console.log(`Canal recriado para ${member.user.tag}`);
+        for (const row of res.rows) {
+            const userId = row.user_id;
 
-      } catch (err) {
-        console.log("Erro ao recriar canal:", err.message);
-      }
+            try {
+                const member = await guild.members.fetch(userId).catch(() => null);
+                if (!member) continue;
+
+                // Verifica se já existe o canal
+                if (row.canal) {
+                    const canalExistente = guild.channels.cache.get(row.canal);
+                    if (canalExistente) continue; // já existe
+                }
+
+                // Cria o canal para sessão antiga
+                const canal = await guild.channels.create({
+                    name: `ponto-${member.user.username}`,
+                    type: ChannelType.GuildText,
+                    parent: categoriaId,
+                    permissionOverwrites: [
+                        {
+                            id: guild.roles.everyone.id,
+                            deny: [PermissionFlagsBits.ViewChannel],
+                        },
+                        {
+                            id: member.id,
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.ReadMessageHistory,
+                            ],
+                        },
+                    ],
+                });
+
+                // Atualiza o canal no banco
+                await pool.query(
+                    "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+                    [canal.id, userId]
+                );
+
+                // Mensagem de sessão recuperada
+                await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
+                console.log(`Canal recriado para ${member.user.tag}`);
+
+            } catch (err) {
+                console.log("Erro ao recriar canal:", err.message);
+            }
+        }
+    } catch (err) {
+        console.error("Erro geral ao iniciar:", err);
     }
-
-  } catch (err) {
-    console.error("Erro geral ao iniciar:", err);
-  }
 });
 // =============================
 // CLIENT READY (PAINEL FIXO DE LOJA)
@@ -593,48 +596,49 @@ if (command === "ponto") {
   // ENTRAR
   // =============================
   if (sub === "entrar") {
-  if (message.channel.id !== CANAL_ENTRAR)
-    return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
 
-  if (userData.ativo)
-    return message.reply("❌ Você já iniciou seu ponto.");
+    if (message.channel.id !== CANAL_ENTRAR)
+        return message.reply(`❌ Use este comando no canal <#${CANAL_ENTRAR}>`);
 
-  // Marca como ativo no banco
-  await pool.query(
-    "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
-    [Date.now(), userId]
-  );
+    if (userData.ativo)
+        return message.reply("❌ Você já iniciou seu ponto.");
 
-  // Cria o canal de ponto
-  const canal = await guild.channels.create({
-    name: `ponto-${message.author.username}`,
-    type: ChannelType.GuildText,
-    parent: categoriaId,
-    permissionOverwrites: [
-      {
-        id: guild.roles.everyone.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      },
-      {
-        id: userId,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
+    // Marca o ponto como ativo no banco
+    await pool.query(
+        "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
+        [Date.now(), userId]
+    );
+
+    // Cria o canal do usuário
+    const canal = await guild.channels.create({
+        name: `ponto-${message.author.username}`,
+        type: ChannelType.GuildText,
+        parent: categoriaId,
+        permissionOverwrites: [
+            {
+                id: guild.roles.everyone.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+            },
+            {
+                id: userId,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                ],
+            },
         ],
-      },
-    ],
-  });
+    });
 
-  // Atualiza canal no banco
-  await pool.query(
-    "UPDATE pontos SET canal = $1 WHERE user_id = $2",
-    [canal.id, userId]
-  );
+    // Salva o canal no banco
+    await pool.query(
+        "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+        [canal.id, userId]
+    );
 
-  // Mensagens normais sem "sessão recuperada"
-  await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
-  await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+    // Mensagem de canal novo
+    await canal.send(`🟢 Ponto iniciado! <@${userId}>`);
+    await message.reply(`🟢 Ponto iniciado! Canal criado: <#${canal.id}>`);
 }
 
   // =============================
