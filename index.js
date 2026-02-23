@@ -1121,53 +1121,66 @@ if (message.content.startsWith("thl!")) {
 // RECUPERA SESSÕES APÓS RESTART
 // =============================
 client.once("ready", async () => {
-  console.log(`Bot online como ${client.user.tag}`);
+  console.log(`🤖 Bot online como ${client.user.tag}`);
 
-  // Criação da tabela PostgreSQL
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS pontos (
-      user_id TEXT PRIMARY KEY,
-      total BIGINT DEFAULT 0,
-      ativo BOOLEAN DEFAULT false,
-      entrada BIGINT,
-      canal TEXT
-    );
-  `);
+  try {
+    // Criação da tabela PostgreSQL
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pontos (
+        user_id TEXT PRIMARY KEY,
+        total BIGINT DEFAULT 0,
+        ativo BOOLEAN DEFAULT false,
+        entrada BIGINT,
+        canal TEXT
+      );
+    `);
 
-  const data = await getData();
-  const guild = client.guilds.cache.first();
-  if (!guild) return;
+    const guild = client.guilds.cache.first();
+    if (!guild) return;
 
-  const categoriaId = "1468715109722357782";
+    const categoriaId = "1468715109722357782";
 
-  for (const userId in data) {
-    try {
-      const canal = await guild.channels.create({
-        name: `ponto-recuperado`,
-        type: ChannelType.GuildText,
-        parent: categoriaId,
-        permissionOverwrites: [
-          { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-          {
-            id: userId,
-            allow: [
-              PermissionFlagsBits.ViewChannel,
-              PermissionFlagsBits.SendMessages,
-              PermissionFlagsBits.ReadMessageHistory
-            ]
-          }
-        ]
-      });
+    // 🔥 BUSCA SESSÕES ATIVAS NO BANCO
+    const res = await pool.query("SELECT user_id FROM pontos WHERE ativo = true");
 
-      await saveData(userId, canal.id);
-      await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+    for (const row of res.rows) {
+      const userId = row.user_id;
 
-    } catch (err) {
-      console.log("Erro ao recriar canal:", err);
+      try {
+        const canal = await guild.channels.create({
+          name: `ponto-recuperado`,
+          type: ChannelType.GuildText,
+          parent: categoriaId,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            {
+              id: userId,
+              allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory
+              ]
+            }
+          ]
+        });
+
+        // Atualiza canal no banco
+        await pool.query(
+          "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+          [canal.id, userId]
+        );
+
+        await canal.send("⚠️ Sessão recuperada após reinício do bot.");
+
+      } catch (err) {
+        console.log("Erro ao recriar canal:", err);
+      }
     }
+
+  } catch (err) {
+    console.error("Erro geral ao iniciar:", err);
   }
 });
-
 // =============================
 // TICKET MENTION
 // =============================
