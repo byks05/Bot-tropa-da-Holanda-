@@ -219,10 +219,6 @@ Obs: após a compra do nitro receberá um link que terá que ser ativado, e nós
   atualizarPainel();
 }
 
-  // =============================
-  // REATIVAR PONTOS
-  // =============================
-  async function reativarPontosAtivos(pg, client, guildId);
 });
 
 // =============================
