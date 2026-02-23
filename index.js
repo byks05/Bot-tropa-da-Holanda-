@@ -139,7 +139,7 @@ client.once("clientReady", async () => {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return console.error("Guild não encontrada.");
 
-  const categoriaId = "1468715109722357782";
+  const categoriaId = "1474413150441963615";
 
   try {
     const res = await pool.query(
