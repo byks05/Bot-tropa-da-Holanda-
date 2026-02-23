@@ -185,177 +185,123 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =============================
-// PAINEL FIXO DE BATE-PONTO
+// COMANDO PONTO
 // =============================
-client.once("clientReady", async () => {
-  const painelChannel = await client.channels.fetch("1474383177689731254").catch(() => null);
-  if (!painelChannel) return;
+if (command === "ponto") {
+  const userId = message.author.id;
+  const guild = message.guild;
+  const categoriaId = "1474413150441963615"; // categoria dos canais de ponto
+  const CANAL_ENTRAR = "1474383177689731254"; // canal fixo de entrada
 
-  // Evita recriar painel se já existir
-  const mensagens = await painelChannel.messages.fetch({ limit: 10 });
-  const painelExistente = mensagens.find(
-    m => m.author.id === client.user.id && m.components.length > 0
-  );
-  if (painelExistente) return;
+  // Apenas cargos permitidos
+  const ALLOWED_PONTO = [
+    "1468017578747105390",
+    "1468069638935150635",
+    "1468026315285205094"
+  ];
+  if (!message.member.roles.cache.some(r => ALLOWED_PONTO.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("bateponto_abrir")
-      .setLabel("🟢 Abrir")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId("bateponto_status")
-      .setLabel("📊 Status")
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId("bateponto_encerrar")
-      .setLabel("🔴 Encerrar")
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  const embed = new EmbedBuilder()
-    .setTitle("📌 Bate-Ponto | Tropa da Holanda")
-    .setDescription("Clique nos botões abaixo para abrir seu ponto, verificar status ou encerrar.")
-    .setColor("Green")
-    .setTimestamp();
-
-  const msg = await painelChannel.send({ embeds: [embed], components: [row] });
-  await msg.pin().catch(() => {});
-  console.log("Painel de bate-ponto fixo criado com sucesso!");
-});
-
-// =============================
-// INTERAÇÕES DO BATE-PONTO
-// =============================
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isButton()) return;
-  const guild = interaction.guild;
-  const user = interaction.user;
-
-  // ================================
-  // ABRIR PONTO
-  // ================================
-  if (interaction.customId === "bateponto_abrir") {
-    // Evita duplicar canal
-    const existingChannel = guild.channels.cache.find(
-      c => c.name === `ponto-${user.username}` && c.parentId === "1474413150441963615"
-    );
-    if (existingChannel) {
-      await interaction.reply({ content: `❌ Você já tem um ponto aberto: ${existingChannel}`, ephemeral: true });
-      return;
-    }
-
-    // Cria canal exclusivo
-    const canal = await guild.channels.create({
-      name: `ponto-${user.username}`,
-      type: ChannelType.GuildText,
-      parent: "1474413150441963615",
-      permissionOverwrites: [
-        { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-        { id: user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-      ],
-    });
-
-    // Salva canal e entrada no banco
-    await pool.query(
-      `INSERT INTO pontos (user_id, canal, guild_id, ativo, entrada, notificado, total, coins)
-       VALUES ($1, $2, $3, true, NOW(), false, 0, 0)
-       ON CONFLICT (user_id) DO UPDATE SET canal = $2, ativo = true, entrada = NOW()`,
-      [user.id, canal.id, guild.id]
+  // =============================
+  // Canal fixo de entrada
+  // =============================
+  if (message.channel.id === CANAL_ENTRAR) {
+    const entrarMenu = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`ponto_entrar_${userId}`)
+        .setPlaceholder("Clique para entrar no ponto")
+        .addOptions([{ label: "Entrar no ponto", value: "entrar" }])
     );
 
-    // Botões no canal do usuário
-    const rowUser = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("bateponto_status_user")
-        .setLabel("📊 Status")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId("bateponto_encerrar_user")
-        .setLabel("🔴 Encerrar")
-        .setStyle(ButtonStyle.Danger)
-    );
+    const sent = await message.reply({ content: "Selecione uma ação:", components: [entrarMenu] });
 
-    await canal.send({ content: `📌 ${user} seu ponto foi aberto!`, components: [rowUser] });
+    const collector = sent.createMessageComponentCollector({ componentType: 3, time: 5 * 60 * 1000 });
+    collector.on("collect", async interaction => {
+      if (interaction.user.id !== userId)
+        return interaction.reply({ content: "❌ Apenas você pode usar este menu.", ephemeral: true });
 
-    await interaction.reply({ content: `✅ Ponto aberto! Verifique o canal ${canal}`, ephemeral: true });
-
-    // Loop de 20 minutos para perguntar se está ativo
-    const checkAtivo = async () => {
-      const ponto = (await pool.query("SELECT * FROM pontos WHERE user_id = $1", [user.id])).rows[0];
-      if (!ponto || !ponto.ativo) return;
-
-      const canalUser = guild.channels.cache.get(ponto.canal);
-      if (!canalUser) return;
-
-      const msgPergunta = await canalUser.send(`${user}, você está ativo? Responda **sim** para continuar.`);
-      await pool.query("UPDATE pontos SET notificado = true WHERE user_id = $1", [user.id]);
-
-      const filter = m => m.author.id === user.id && m.content.toLowerCase() === "sim";
-      const collector = canalUser.createMessageCollector({ filter, time: 19 * 60 * 1000, max: 1 });
-
-      collector.on("end", async collected => {
-        if (collected.size === 0) {
-          // Encerrar ponto automaticamente
-          const entrada = ponto.entrada;
-          const agora = new Date();
-          const tempoMinutos = Math.floor((agora - entrada) / 60000);
-
+      if (interaction.values[0] === "entrar") {
+        let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
+        let userData = res.rows[0];
+        if (!userData) {
           await pool.query(
-            "UPDATE pontos SET total = total + $1, ativo = false WHERE user_id = $2",
-            [tempoMinutos, user.id]
+            "INSERT INTO pontos (user_id, ativo, total, entrada, canal) VALUES ($1, false, 0, NULL, NULL)",
+            [userId]
           );
-          await canalUser.send(`⏰ Você não respondeu, ponto encerrado automaticamente. Tempo registrado: ${tempoMinutos} minutos.`);
-          await canalUser.delete().catch(()=>{});
-        } else {
-          // Se respondeu, reinicia o loop
-          setTimeout(checkAtivo, 20 * 60 * 1000);
+          userData = { ativo: false, entrada: null, canal: null };
         }
-      });
-    };
+        if (userData.ativo) return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
 
-    setTimeout(checkAtivo, 20 * 60 * 1000);
-  }
+        await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [Date.now(), userId]);
 
-  // ================================
-  // STATUS DO USUÁRIO
-  // ================================
-  if (interaction.customId === "bateponto_status_user") {
-    const ponto = (await pool.query("SELECT * FROM pontos WHERE user_id = $1", [user.id])).rows[0];
-    if (!ponto) {
-      await interaction.reply({ content: "❌ Você não tem ponto aberto.", ephemeral: true });
-      return;
-    }
-    await interaction.reply({
-      content: `📊 **Status do Ponto**\n- Tempo acumulado: ${ponto.total} minutos\n- Coins: ${ponto.coins}\n- Ativo: ${ponto.ativo ? "Sim" : "Não"}`,
-      ephemeral: true
+        const canal = await guild.channels.create({
+          name: `ponto-${interaction.user.username}`,
+          type: ChannelType.GuildText,
+          parent: categoriaId,
+          permissionOverwrites: [
+            { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+            { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }
+          ]
+        });
+
+        await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
+
+        // menu nos canais privados
+        const userMenu = new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId(`ponto_user_${userId}`)
+            .setPlaceholder("Selecione uma ação")
+            .addOptions([
+              { label: "Ver status", value: "status" },
+              { label: "Sair do ponto", value: "sair" }
+            ])
+        );
+        await canal.send({ content: `🟢 <@${userId}> entrou no ponto. Use o menu abaixo:`, components: [userMenu] });
+
+        return interaction.reply({ content: `🟢 Ponto iniciado! Canal criado: <#${canal.id}>`, ephemeral: false });
+      }
     });
+    return;
   }
 
-  // ================================
-  // ENCERRAR PONTO
-  // ================================
-  if (interaction.customId === "bateponto_encerrar_user") {
-    const ponto = (await pool.query("SELECT * FROM pontos WHERE user_id = $1", [user.id])).rows[0];
-    if (!ponto) {
-      await interaction.reply({ content: "❌ Você não tem ponto aberto.", ephemeral: true });
-      return;
+  // =============================
+  // Interações nos canais privados
+  // =============================
+  const menuCollector = message.createMessageComponentCollector({ componentType: 3, time: 30 * 60 * 1000 });
+  menuCollector.on("collect", async interaction => {
+    if (interaction.user.id !== userId) return;
+
+    const sub = interaction.values[0];
+    let res = await pool.query("SELECT ativo, entrada, canal FROM pontos WHERE user_id = $1", [userId]);
+    let userData = res.rows[0];
+    if (!userData || !userData.ativo) {
+      return interaction.reply({ content: "❌ Você não iniciou nenhum ponto.", ephemeral: true });
     }
 
-    const canalUser = guild.channels.cache.get(ponto.canal);
-    if (!canalUser) return;
+    if (sub === "status") {
+      const tempoAtual = Date.now() - userData.entrada;
+      const horas = Math.floor(tempoAtual / 3600000);
+      const minutos = Math.floor((tempoAtual % 3600000) / 60000);
+      const segundos = Math.floor((tempoAtual % 60000) / 1000);
+      return interaction.reply({ content: `🟢 Você está ativo há: ${horas}h ${minutos}m ${segundos}s`, ephemeral: true });
+    }
 
-    const entrada = ponto.entrada;
-    const agora = new Date();
-    const tempoMinutos = Math.floor((agora - entrada) / 60000);
+    if (sub === "sair") {
+      await pool.query("UPDATE pontos SET ativo = false, canal = NULL WHERE user_id = $1", [userId]);
 
-    await pool.query("UPDATE pontos SET total = total + $1, ativo = false WHERE user_id = $2", [tempoMinutos, user.id]);
-    await canalUser.send(`⏰ Ponto encerrado manualmente. Tempo registrado: ${tempoMinutos} minutos.`);
-    await canalUser.delete().catch(()=>{});
-    await interaction.reply({ content: "✅ Seu ponto foi encerrado.", ephemeral: true });
-  }
-});
+      const canal = guild.channels.cache.get(userData.canal);
+      if (canal) await canal.delete().catch(() => {});
 
+      const tempoFinal = Date.now() - userData.entrada;
+      const horas = Math.floor(tempoFinal / 3600000);
+      const minutos = Math.floor((tempoFinal % 3600000) / 60000);
+      const segundos = Math.floor((tempoFinal % 60000) / 1000);
+
+      return interaction.reply({ content: `🔴 Ponto finalizado! Você ficou ativo por ${horas}h ${minutos}m ${segundos}s`, ephemeral: false });
+    }
+  });
+}
 // =============================
 // CONFIG
 // =============================
