@@ -1198,6 +1198,41 @@ if (command === "recaliados") {
       return message.reply("❌ Ocorreu um erro ao registrar a compra.");
     }
   }
+  // =============================
+// LISTA CLIENTES - REGISTRO CONTÍNUO
+// =============================
+if (command === "listaclientes") {
+
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+    return message.reply("❌ Sem permissão para usar este comando.");
+
+  try {
+
+    const res = await pool.query(
+      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
+    );
+
+    if (res.rows.length === 0)
+      return message.reply("❌ Nenhum cliente registrado.");
+
+    let texto = "📋 **REGISTRO DE CLIENTES**\n\n";
+
+    for (const row of res.rows) {
+      texto += `👤 <@${row.user_id}> — 🛒 ${row.compras} compras\n`;
+    }
+
+    // Quebrar em partes se ultrapassar 2000 caracteres
+    const limite = 1900;
+    for (let i = 0; i < texto.length; i += limite) {
+      await message.channel.send(texto.slice(i, i + limite));
+    }
+
+  } catch (err) {
+    console.error("Erro ao listar clientes:", err);
+    return message.reply("❌ Ocorreu um erro ao buscar os clientes.");
+  }
+ }
 
 });
 
