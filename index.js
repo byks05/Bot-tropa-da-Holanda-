@@ -31,10 +31,22 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds, 
     GatewayIntentBits.GuildMessages, 
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMembers // ⚠️ necessário para detectar saídas de membros
   ] 
 });
 
+// =============================
+// REMOVE USUÁRIO DO BANCO AO SAIR
+// =============================
+client.on("guildMemberRemove", async (member) => {
+  try {
+    await pool.query("DELETE FROM pontos WHERE user_id = $1", [member.id]);
+    console.log(`Usuário ${member.user.tag} removido do banco de dados.`);
+  } catch (err) {
+    console.error(`Erro ao remover usuário ${member.user.tag} do banco:`, err);
+  }
+});
 // =============================
 // FUNÇÃO REATIVAR PONTOS
 // =============================
