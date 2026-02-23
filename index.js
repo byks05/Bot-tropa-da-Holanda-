@@ -37,23 +37,6 @@ const client = new Client({
 });
 
 // =============================
-// REMOVE USUÁRIO DO BANCO AO SAIR
-// =============================
-client.on("guildMemberRemove", async (member) => {
-  try {
-    // Remove do banco de pontos
-    await pool.query("DELETE FROM pontos WHERE user_id = $1", [member.id]);
-    
-    // Se tiver outras tabelas como "clientes" ou "sessoes", remova também
-    await pool.query("DELETE FROM clientes WHERE user_id = $1", [member.id]);
-    await pool.query("DELETE FROM sessoes WHERE userid = $1", [member.id]);
-
-    console.log(`✅ Usuário ${member.user.tag} removido do banco.`);
-  } catch (err) {
-    console.error("❌ Erro ao remover usuário do banco:", err);
-  }
-});
-// =============================
 // CLIENT READY (PAINEL FIXO DE LOJA)
 // =============================
 client.once("clientReady", async () => {
@@ -212,41 +195,6 @@ const IDS = {
   TICKET_CATEGORY: "1468014890500489447",
   RECRUITMENT_ROLE: "1468024687031484530",
 };
-
-// =============================
-// FUNÇÃO REGISTRAR PONTO
-// =============================
-async function registrarPonto(userId) {
-  try {
-    // Buscar pontos atuais
-    const res = await pool.query(
-      'SELECT pontos FROM pontos WHERE user_id = $1',
-      [userId]
-    );
-
-    let pontos = 1;
-
-    if (res.rows.length === 0) {
-      // Inserir novo usuário
-      await pool.query(
-        'INSERT INTO pontos (user_id, pontos) VALUES ($1, $2)',
-        [userId, pontos]
-      );
-    } else {
-      // Atualizar pontos
-      pontos = res.rows[0].pontos + 1;
-      await pool.query(
-        'UPDATE pontos SET pontos = $1 WHERE user_id = $2',
-        [pontos, userId]
-      );
-    }
-
-    return pontos;
-  } catch (err) {
-    console.error("Erro ao registrar ponto:", err);
-    throw err;
-  }
-}
   
 // =============================
 // UTILS
