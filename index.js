@@ -1021,13 +1021,19 @@ if (command === "recaliados") {
   }
 }
 // =============================
-// COMPRACONFIRMADA 
+// COMPRACONFIRMADA
 // =============================
-  if (command === "compraConfirmada") {
+if (command === "compraconfirmada") {
   const user = message.mentions.members.first();
   if (!user) return message.reply("❌ Mencione um usuário válido.");
 
   const CARGO_COMPRADOR = "1475111107114041447"; // Substitua pelo ID do cargo
+
+  // Só quem pode confirmar compras (opcional)
+  const ALLOWED_ROLES = ["1468017578747105390", "1468069638935150635"]; // Coloque aqui IDs de cargos que podem usar o comando
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id))) {
+    return message.reply("❌ Você não tem permissão para usar este comando.");
+  }
 
   try {
     // Dar o cargo se ainda não tiver
@@ -1054,7 +1060,7 @@ if (command === "recaliados") {
     console.error(err);
     return message.reply("❌ Ocorreu um erro ao registrar a compra.");
   }
-  }
+}
 });
 
 // =============================
