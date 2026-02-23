@@ -73,18 +73,29 @@ client.once("clientReady", async () => {
 # Produtos | Tropa da Holanda 🇳🇱
 -# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
 Apenas para membros da equipe 
-> 🛒 **Vip -#COMPRA COM COINS**
-> 🛒 **Robux (Maximo de 200 Robux ) -#COMPRA COM COINS**
-> 🛒 **Nitro -#COMPRA COM COINS**
-> 🛒 **Ripa -#COMPRA COM COINS**
-> 🛒 **Roupa personalizada -#COMPRA COM COINS**
+> 🛒 **Vip 
+-#COMPRA COM COINS**
+> 🛒 **Robux (Maximo de 200 Robux ) 
+-#COMPRA COM COINS**
+> 🛒 **Nitro 
+-#COMPRA COM COINS**
+> 🛒 **Ripa 
+-#COMPRA COM COINS**
+> 🛒 **Roupa personalizada 
+-#COMPRA COM COINS**
 
-> 🛒 **Nitro mensal (1 mês/3 meses) -#COMPRA COM R$**
-> 🛒 **Contas virgem +30 Dias -#COMPRA COM R$**
-> 🛒 **Ativação do Nitro -#COMPRA COM R$**
-> 🛒 **Spotify Premium -#COMPRA COM R$**
-> 🛒 **Molduras com icon personalizado -#COMPRA COM R$**
-> 🛒 **Youtube Premium -#COMPRA COM R$**
+> 🛒 **Nitro mensal (1 mês/3 meses) 
+-#COMPRA COM R$**
+> 🛒 **Contas virgem +30 Dias 
+-#COMPRA COM R$**
+> 🛒 **Ativação do Nitro 
+-#COMPRA COM R$**
+> 🛒 **Spotify Premium 
+-#COMPRA COM R$**
+> 🛒 **Molduras com icon personalizado 
+-#COMPRA COM R$**
+> 🛒 **Youtube Premium 
+-#COMPRA COM R$**
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
 `;
