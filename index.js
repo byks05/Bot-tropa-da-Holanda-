@@ -41,6 +41,142 @@ const client = new Client({
 // =============================
 client.once("clientReady", async () => {
 
+  const canalEmbed = await client.channels.fetch("1474934788233236671").catch(() => null);
+  if (!canalEmbed) return;
+
+  const produtos = [
+    { label: "Vip", value: "vip", description: "💰 6000 coins" },
+    { label: "Robux", value: "robux", description: "💰 4000 coins" },
+    { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
+    { label: "Ripa", value: "ripa", description: "💰 1700 coins" },
+    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
+  ];
+
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("loja_select")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtos)
+  );
+
+  const textoPainel = `
+# Produtos Coins | Tropa da Holanda 🇳🇱
+-# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
+
+> 🛒 **Vip**
+> 🛒 **Robux**
+> 🛒 **Nitro**
+> 🛒 **Ripa**
+> 🛒 **Roupa personalizada**
+
+-# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
+
+  try {
+    // 🔥 Evita recriar se já existir mensagem do bot fixada
+    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+    const mensagemExistente = mensagens.find(
+      m => m.author.id === client.user.id && m.components.length > 0
+    );
+
+    if (mensagemExistente) return; // Já existe painel, não recria
+
+    const mensagem = awit canalEmbed.send({
+      content: textoPainel,
+      components: [row]
+    });
+
+    await mensagem.pin().catch(() => {});
+    console.log("Painel da loja criado com sucesso.");
+
+  } catch (err) {
+    console.error("Erro ao atualizar o painel:", err);
+  }
+});
+// =============================
+// INTERAÇÃO DO SELECT MENU
+// =============================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "loja_select") return;
+
+  const produto = interaction.values[0];
+  const guild = interaction.guild;
+  const categoriaId = "1474366472326222013";
+  const ticketName = `ticket-${interaction.user.username}`;
+
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(
+    c => c.name === ticketName && c.parentId === categoriaId
+  );
+  if (existingChannel) {
+    // Reset do select menu para poder clicar de novo
+    await interaction.update({ components: interaction.message.components });
+    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+  }
+
+  // Cria canal de ticket
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+    ],
+  });
+
+  // Produtos com valores
+  const produtosInfo = {
+    vip: { nome: "Vip", valor: "6000 coins" },
+    robux: { nome: "Robux", valor: "4000 coins" },
+    nitro: { nome: "Nitro", valor: "2500 coins" },
+    ripa: { nome: "Ripa", valor: "1700 coins" },
+    roupa: { nome: "Roupa personalizada", valor: "1400 coins" },
+  };
+
+  const prodSelecionado = produtosInfo[produto];
+
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${prodSelecionado.nome}`)
+    .setDescription(
+      `${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\n\n` +
+      `Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`
+    )
+    .setColor("Green")
+    .setTimestamp();
+
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+  // Reset do select menu para permitir nova compra
+  await interaction.update({ components: interaction.message.components });
+  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
+});
+
+// =============================
+// FECHAR TICKET
+// =============================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== "fechar_ticket") return;
+
+  if (!interaction.channel.name.startsWith("ticket-"))
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+
+  await interaction.channel.delete().catch(() => {});
+});
+
+// =============================
+// CLIENT READY (PAINEL FIXO DE LOJA)
+// =============================
+client.once("clientReady", async () => {
+
   const canalEmbed = await client.channels.fetch("1474885764990107790").catch(() => null);
   if (!canalEmbed) return;
 
@@ -185,11 +321,12 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 // =====================
-// PAINEL DE ADMIN FIXO FINALIZADO
+// PAINEL DE ADMIN FIXO FINALIZADO COM LOCK
 // =====================
 const adminChannelId = "1474384292015640626";
 let painelMensagemId = null;
 const MESSAGE_LIFETIME = 15000; // 15 segundos
+const adminsAtivos = new Map(); // previne coletores duplicados
 
 async function criarPainelAdmin(client) {
   try {
@@ -231,9 +368,21 @@ async function criarPainelAdmin(client) {
 
 client.once("clientReady", () => criarPainelAdmin(client));
 
-client.on("interactionCreate", async (interaction) => {
+client.on("messageDelete", async message => {
+  if (message.id === painelMensagemId) {
+    painelMensagemId = null;
+    criarPainelAdmin(client);
+  }
+});
+
+client.on("interactionCreate", async interaction => {
   if (!interaction.isButton()) return;
   const userId = interaction.user.id;
+
+  if (adminsAtivos.get(userId)) {
+    return interaction.reply({ content: "⚠️ Você já está interagindo com o painel, aguarde terminar.", ephemeral: true });
+  }
+  adminsAtivos.set(userId, true);
 
   async function processCollector(promptText, callback) {
     const msgPrompt = await interaction.reply({ content: promptText, ephemeral: false });
@@ -244,17 +393,22 @@ client.on("interactionCreate", async (interaction) => {
       await callback(m);
       m.delete().catch(() => {});
       msgPrompt.delete().catch(() => {});
+      adminsAtivos.delete(userId);
+    });
+
+    collector.on("end", () => {
+      adminsAtivos.delete(userId);
     });
   }
 
   switch (interaction.customId) {
-
-    // ------------------- REGISTRO -------------------
     case "registro": {
       const res = await pool.query("SELECT user_id, ativo, total, coins FROM pontos ORDER BY total DESC");
       if (!res.rows.length) {
         const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
-        return setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
+        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
+        adminsAtivos.delete(userId);
+        return;
       }
 
       let mensagens = [];
@@ -277,10 +431,10 @@ client.on("interactionCreate", async (interaction) => {
         const msg = await interaction.reply({ content: msgText, ephemeral: false });
         setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
       }
+      adminsAtivos.delete(userId);
       break;
     }
 
-    // ------------------- RESET USUÁRIO -------------------
     case "resetUser":
       await processCollector("Use `@usuário` para resetar ponto, tempo e coins.", async m => {
         const mention = m.mentions.users.first();
@@ -291,14 +445,13 @@ client.on("interactionCreate", async (interaction) => {
       });
       break;
 
-    // ------------------- RESET ALL -------------------
     case "resetAll":
       await pool.query("UPDATE pontos SET ativo=false, total=0, coins=0, canal=NULL");
       const msgAll = await interaction.reply({ content: "✅ Todos os usuários foram resetados!", ephemeral: false });
       setTimeout(() => msgAll.delete().catch(() => {}), MESSAGE_LIFETIME);
+      adminsAtivos.delete(userId);
       break;
 
-    // ------------------- ADD / REMOVE COINS -------------------
     case "addCoins":
       await processCollector("Use `@usuário quantidade` para adicionar coins.", async m => {
         const [mention, amount] = m.content.split(" ");
@@ -333,22 +486,17 @@ client.on("interactionCreate", async (interaction) => {
       });
       break;
 
-    // ------------------- ADD / REMOVE TEMPO -------------------
     case "addTime":
       await processCollector("Use `@usuário quantidade[h/m/s]` para adicionar tempo.", async m => {
         const [mention, amount] = m.content.split(" ");
         const id = mention.replace(/[<@!>]/g, "");
         if (!id || !amount) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-
-        // converte para ms
         let time = 0;
         if (amount.endsWith("h")) time = parseFloat(amount) * 3600000;
         else if (amount.endsWith("m")) time = parseFloat(amount) * 60000;
         else if (amount.endsWith("s")) time = parseFloat(amount) * 1000;
-        else time = parseInt(amount); // se só número, assume ms
-
+        else time = parseInt(amount);
         if (isNaN(time)) return interaction.followUp({ content: "❌ Quantidade inválida.", ephemeral: false });
-
         await pool.query("UPDATE pontos SET total=total+$1 WHERE user_id=$2", [time, id]);
         const confirm = await interaction.followUp({ content: `✅ Adicionados ${Math.floor(time/3600000)}h para <@${id}>`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
@@ -360,15 +508,12 @@ client.on("interactionCreate", async (interaction) => {
         const [mention, amount] = m.content.split(" ");
         const id = mention.replace(/[<@!>]/g, "");
         if (!id || !amount) return interaction.followUp({ content: "❌ Formato inválido.", ephemeral: false });
-
         let time = 0;
         if (amount.endsWith("h")) time = parseFloat(amount) * 3600000;
         else if (amount.endsWith("m")) time = parseFloat(amount) * 60000;
         else if (amount.endsWith("s")) time = parseFloat(amount) * 1000;
         else time = parseInt(amount);
-
         if (isNaN(time)) return interaction.followUp({ content: "❌ Quantidade inválida.", ephemeral: false });
-
         await pool.query("UPDATE pontos SET total=GREATEST(total-$1,0) WHERE user_id=$2", [time, id]);
         const confirm = await interaction.followUp({ content: `✅ Removidos ${Math.floor(time/3600000)}h de <@${id}>`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
@@ -384,9 +529,9 @@ client.on("interactionCreate", async (interaction) => {
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
       });
       break;
-
   }
 });
+
 // =====================
 // SELECT MENU FIXO PONTO
 // =====================
