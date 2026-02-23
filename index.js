@@ -663,53 +663,78 @@ if (command === "ponto") {
     );
   }
 
-  // =============================
-  // REGISTRO
-  // =============================
-  else if (sub === "registro") {
+// =============================
+// REGISTRO
+// =============================
+else if (sub === "registro") {
 
-    const res = await pool.query("SELECT * FROM pontos");
-    const ranking = res.rows;
+  const res = await pool.query("SELECT * FROM pontos");
+  const ranking = res.rows;
 
-    if (ranking.length === 0)
-      return message.reply("Nenhum registro encontrado.");
+  if (ranking.length === 0)
+    return message.reply("Nenhum registro encontrado.");
 
-    ranking.sort((a, b) => {
-      const totalA = Number(a.total) + (a.ativo && a.entrada ? Date.now() - Number(a.entrada) : 0);
-      const totalB = Number(b.total) + (b.ativo && b.entrada ? Date.now() - Number(b.entrada) : 0);
-      return totalB - totalA;
-    });
+  // 🔥 Ordena pelo tempo total (incluindo ativo)
+  ranking.sort((a, b) => {
+    const totalA = Number(a.total) + (a.ativo && a.entrada ? Date.now() - Number(a.entrada) : 0);
+    const totalB = Number(b.total) + (b.ativo && b.entrada ? Date.now() - Number(b.entrada) : 0);
+    return totalB - totalA;
+  });
 
-    let texto = "";
-    let contador = 1;
+  let linhas = [];
+  let contador = 1;
 
-    for (const info of ranking) {
+  for (const info of ranking) {
 
-      let total = Number(info.total);
-      if (info.ativo && info.entrada)
-        total += Date.now() - Number(info.entrada);
+    let total = Number(info.total);
+    if (info.ativo && info.entrada)
+      total += Date.now() - Number(info.entrada);
 
-      const horas = Math.floor(total / 3600000);
-      const minutos = Math.floor((total % 3600000) / 60000);
-      const segundos = Math.floor((total % 60000) / 1000);
+    const horas = Math.floor(total / 3600000);
+    const minutos = Math.floor((total % 3600000) / 60000);
+    const segundos = Math.floor((total % 60000) / 1000);
 
-      const member = await guild.members.fetch(info.user_id).catch(() => null);
+    const member = await guild.members.fetch(info.user_id).catch(() => null);
 
-      const encontrado = member
-        ? CARGOS.find(c => member.roles.cache.has(c.id))
-        : null;
+    const encontrado = member
+      ? CARGOS.find(c => member.roles.cache.has(c.id))
+      : null;
 
-      const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
-      const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
+    const cargoAtual = encontrado ? `<@&${encontrado.id}>` : "Nenhum";
+    const status = info.ativo ? "🟢 Ativo" : "🔴 Inativo";
 
-      texto += `${contador}. <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}\n`;
-      contador++;
-    }
-
-    return message.reply(
-      `📊 **Ranking de Atividade – Todos os Usuários**\n\n${texto}`
+    linhas.push(
+      `${contador}. <@${info.user_id}> → ${horas}h ${minutos}m ${segundos}s | ${status} | ${cargoAtual}`
     );
+
+    contador++;
   }
+
+  // 🔥 MONTA TEXTO COMPLETO
+  const header = `📊 **Ranking de Atividade – Todos os Usuários**\n\n`;
+  const MAX = 1900; // margem de segurança
+  let mensagens = [];
+  let atual = header;
+
+  for (const linha of linhas) {
+    if ((atual + linha + "\n").length > MAX) {
+      mensagens.push(atual);
+      atual = "";
+    }
+    atual += linha + "\n";
+  }
+
+  if (atual.length > 0) mensagens.push(atual);
+
+  // 🔥 ENVIA SEM CRASHAR
+  for (let i = 0; i < mensagens.length; i++) {
+    if (i === 0) {
+      await message.reply(mensagens[i]);
+    } else {
+      await message.channel.send(mensagens[i]);
+    }
+  }
+}
 
   // =============================
   // RESET
