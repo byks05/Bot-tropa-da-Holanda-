@@ -36,159 +36,159 @@ const client = new Client({
   ] 
 });
 // =============================
-// CLIENT READY (PAINEL FIXO DE LOJA)
+// CLIENT READY - PAINEL UNICO
 // =============================
 client.once("clientReady", async () => {
 
-const canalEmbed = await client.channels.fetch("1474885764990107790").catch(() => null);
-if (!canalEmbed) return;
+  const canalEmbed = await client.channels.fetch("1474934788233236671").catch(() => null); // Canal do painel
+  if (!canalEmbed) return;
 
-const produtos = [
-{ label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3" },
-{ label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6" },
-{ label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5" },
-{ label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50" },
-{ label: "Spotify Premium", value: "spotify", description: "💰 R$ 5" },
-{ label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2" },
-{ label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6" },
-];
+  const produtos = [
+    // Categoria 1
+    { label: "Vip", value: "vip", description: "💰 6000 coins", categoriaId: "1474366472326222013" },
+    { label: "Robux", value: "robux", description: "💰 4000 coins", categoriaId: "1474366472326222013" },
+    { label: "Nitro", value: "nitro", description: "💰 2500 coins", categoriaId: "1474366472326222013" },
+    { label: "Ripa", value: "ripa", description: "💰 1700 coins", categoriaId: "1474366472326222013" },
+    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins", categoriaId: "1474366472326222013" },
 
-const row = new ActionRowBuilder().addComponents(
-new StringSelectMenuBuilder()
-.setCustomId("loja_select")
-.setPlaceholder("Selecione um produto...")
-.addOptions(produtos)
-);
+    // Categoria 2
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3", categoriaId: "1474885663425036470" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50", categoriaId: "1474885663425036470" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2", categoriaId: "1474885663425036470" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+  ];
 
-const textoPainel = `
+  const row = new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId("loja_select")
+      .setPlaceholder("Selecione um produto...")
+      .addOptions(produtos)
+  );
 
-Produtos | Tropa da Holanda 🇳🇱
+  const textoPainel = `
+# Produtos | Tropa da Holanda 🇳🇱
+-# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408> ou atendentes 🚨
 
--# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
+Somente membros da equipe 
+> 🛒 **Vip -#COMPRA COM COINS **
+> 🛒 **Robux (Maximo de 200 Robux )-#COMPRA COM COINS **
+> 🛒 **Nitro -#COMPRA COM COINS **
+> 🛒 **Ripa -#COMPRA COM COINS **
+> 🛒 **Roupa personalizada -#COMPRA COM COINS **
 
-> 🛒 ** Nitro mensal (1 mês/3 mês) **
-🛒 CONTA VIRGEM +30 Dias
-
-
-
-• Nunca tiverão nitro
-• Email confirmado
-• Altere o email!
-• Ótimas para ativar nitro
-• Full acesso (pode trocar email & senha)**
-
-> 🛒 Ativação do nitro
-🛒 Spotify Premium
-🛒 Molduras com icon personalizado
-🛒 Youtube Premium
-
-
+Qualquer um pode conprar 
+> 🛒 **Nitro mensal (1 mês/3 meses) -#COMPRA COM DINHEIRO REAL**
+> 🛒 **Contas virgem +30 dias -#COMPRA COM DINHEIRO REAL**
+> 🛒 **Ativação Nitro -#COMPRA COM DINHEIRO REAL**
+> 🛒 **Spotify Premium -#COMPRA COM DINHEIRO REAL**
+> 🛒 **Molduras com icon personalizado -#COMPRA COM DINHEIRO REAL**
+> 🛒 **Youtube Premium -#COMPRA COM DINHEIRO REAL**
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨`;
 
-try {
-// 🔥 Evita recriar se já existir mensagem do bot fixada
-const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
-const mensagemExistente = mensagens.find(
-m => m.author.id === client.user.id && m.components.length > 0
-);
+  try {
+    const mensagens = await canalEmbed.messages.fetch({ limit: 10 });
+    const mensagemExistente = mensagens.find(
+      m => m.author.id === client.user.id && m.components.length > 0
+    );
 
-if (mensagemExistente) return; // Já existe painel, não recria  
+    if (mensagemExistente) return;
 
-const mensagem = await canalEmbed.send({  
-  content: textoPainel,  
-  components: [row]  
-});  
-
-await mensagem.pin().catch(() => {});  
-console.log("Painel da loja criado com sucesso.");
-
-} catch (err) {
-console.error("Erro ao atualizar o painel:", err);
-}
+    const mensagem = await canalEmbed.send({ content: textoPainel, components: [row] });
+    await mensagem.pin().catch(() => {});
+    console.log("Painel da loja criado com sucesso.");
+  } catch (err) {
+    console.error("Erro ao atualizar o painel:", err);
+  }
 });
+
 // =============================
 // INTERAÇÃO DO SELECT MENU
 // =============================
 client.on("interactionCreate", async (interaction) => {
-if (!interaction.isStringSelectMenu()) return;
-if (interaction.customId !== "loja_select") return;
+  if (!interaction.isStringSelectMenu()) return;
+  if (interaction.customId !== "loja_select") return;
 
-const produto = interaction.values[0];
-const guild = interaction.guild;
-const categoriaId = "1474885663425036470";
-const ticketName = ticket-${interaction.user.username};
+  const produtos = [
+    { label: "Vip", value: "vip", description: "💰 6000 coins", categoriaId: "1474366472326222013" },
+    { label: "Robux", value: "robux", description: "💰 4000 coins", categoriaId: "1474366472326222013" },
+    { label: "Nitro", value: "nitro", description: "💰 2500 coins", categoriaId: "1474366472326222013" },
+    { label: "Ripa", value: "ripa", description: "💰 1700 coins", categoriaId: "1474366472326222013" },
+    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins", categoriaId: "1474366472326222013" },
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3", categoriaId: "1474885663425036470" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50", categoriaId: "1474885663425036470" },
+    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2", categoriaId: "1474885663425036470" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
+  ];
 
-// Evita ticket duplicado
-const existingChannel = guild.channels.cache.find(
-c => c.name === ticketName && c.parentId === categoriaId
-);
-if (existingChannel) {
-// Reset do select menu para poder clicar de novo
-await interaction.update({ components: interaction.message.components });
-return interaction.followUp({ content: ❌ Você já possui um ticket aberto: ${existingChannel}, ephemeral: true });
-}
+  const produtoValue = interaction.values[0];
+  const produtoSelecionado = produtos.find(p => p.value === produtoValue);
 
-// Cria canal de ticket
-const channel = await guild.channels.create({
-name: ticketName,
-type: ChannelType.GuildText,
-parent: categoriaId,
-permissionOverwrites: [
-{ id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-{ id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
-],
-});
+  if (!produtoSelecionado) return;
 
-// Produtos com valores
-const produtosInfo = {
-nitro_1: { nome: "Nitro 1 mês", valor: "R$ 3" },
-nitro_3: { nome: "Nitro 3 meses", valor: "R$ 6" },
-conta_virgem: { nome: "Contas virgem +30 dias", valor: "R$ 5" },
-ativacao_nitro: { nome: "Ativação Nitro", valor: "R$ 1,50" },
-spotify: { nome: "Spotify Premium", valor: "R$ 5" },
-moldura: { nome: "Molduras com icon personalizado", valor: "R$ 2" },
-youtube: { nome: "Y0utub3 Premium", valor: "R$ 6" },
-};
+  const guild = interaction.guild;
+  const categoriaId = produtoSelecionado.categoriaId;
+  const ticketName = `ticket-${interaction.user.username}`;
 
-const prodSelecionado = produtosInfo[produto];
+  // Evita ticket duplicado
+  const existingChannel = guild.channels.cache.find(
+    c => c.name === ticketName && c.parentId === categoriaId
+  );
 
-const ticketEmbed = new EmbedBuilder()
-.setTitle(🛒 Ticket de Compra - ${prodSelecionado.nome})
-.setDescription(
-${interaction.user} abriu um ticket para comprar **${prodSelecionado.nome}** (${prodSelecionado.valor}).\n\n +
-Admins responsáveis: <@&1472589662144040960> <@&1468017578747105390>
-)
-.setColor("Green")
-.setTimestamp();
+  if (existingChannel) {
+    await interaction.update({ components: interaction.message.components });
+    return interaction.followUp({ content: `❌ Você já possui um ticket aberto: ${existingChannel}`, ephemeral: true });
+  }
 
-const fecharButton = new ActionRowBuilder().addComponents(
-new ButtonBuilder()
-.setCustomId("fechar_ticket")
-.setLabel("🔒 Fechar Ticket")
-.setStyle(ButtonStyle.Danger)
-);
+  // Cria canal de ticket
+  const channel = await guild.channels.create({
+    name: ticketName,
+    type: ChannelType.GuildText,
+    parent: categoriaId,
+    permissionOverwrites: [
+      { id: guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] },
+    ],
+  });
 
-await channel.send({ content: <@&1472589662144040960> <@&1468017578747105390>, embeds: [ticketEmbed], components: [fecharButton] });
+  // Embed do ticket
+  const ticketEmbed = new EmbedBuilder()
+    .setTitle(`🛒 Ticket de Compra - ${produtoSelecionado.label}`)
+    .setDescription(`${interaction.user} abriu um ticket para comprar **${produtoSelecionado.label}** (${produtoSelecionado.description}).\n\nAdmins responsáveis: <@&1472589662144040960> <@&1468017578747105390>`)
+    .setColor("Green")
+    .setTimestamp();
 
-// Reset do select menu para permitir nova compra
-await interaction.update({ components: interaction.message.components });
-await interaction.followUp({ content: ✅ Ticket criado! Verifique o canal ${channel}, ephemeral: true });
+  const fecharButton = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("fechar_ticket")
+      .setLabel("🔒 Fechar Ticket")
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  await channel.send({ content: `<@&1472589662144040960> <@&1468017578747105390>`, embeds: [ticketEmbed], components: [fecharButton] });
+
+  await interaction.update({ components: interaction.message.components });
+  await interaction.followUp({ content: `✅ Ticket criado! Verifique o canal ${channel}`, ephemeral: true });
 });
 
 // =============================
 // FECHAR TICKET
 // =============================
 client.on("interactionCreate", async (interaction) => {
-if (!interaction.isButton()) return;
-if (interaction.customId !== "fechar_ticket") return;
+  if (!interaction.isButton()) return;
+  if (interaction.customId !== "fechar_ticket") return;
 
-if (!interaction.channel.name.startsWith("ticket-"))
-return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
+  if (!interaction.channel.name.startsWith("ticket-"))
+    return interaction.reply({ content: "❌ Este botão só pode ser usado dentro de um ticket.", ephemeral: true });
 
-await interaction.channel.delete().catch(() => {});
+  await interaction.channel.delete().catch(() => {});
 });
-
 // =====================
 // PAINEL DE ADMIN FIXO FINALIZADO COM LOCK
 // =====================
