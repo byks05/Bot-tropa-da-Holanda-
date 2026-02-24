@@ -132,11 +132,13 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId !== "loja_select") return;
 
   const produtos = [
-    { label: "Vip", value: "vip", description: "💰 6000 coins", categoriaId: "1474366472326222013" },
-    { label: "Robux", value: "robux", description: "💰 4000 coins", categoriaId: "1474366472326222013" },
-    { label: "Nitro", value: "nitro", description: "💰 2500 coins", categoriaId: "1474366472326222013" },
-    { label: "Ripa", value: "ripa", description: "💰 1700 coins", categoriaId: "1474366472326222013" },
-    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins", categoriaId: "1474366472326222013" },
+    { label: "Moeda Do Servidor 👇🏾", value: "", description: "👇🏾" },
+    { label: "Vip", value: "vip", description: "💰 6000 coins" },
+    { label: "Robux", value: "robux", description: "💰 4000 coins" },
+    { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
+    { label: "Ripa", value: "ripa", description: "💰 1700 coins" },
+    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
+    { label: "Dinheiro Real 👇🏾", value: "", description: "👇🏾" },
     { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3", categoriaId: "1474885663425036470" },
     { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6", categoriaId: "1474885663425036470" },
     { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5", categoriaId: "1474885663425036470" },
