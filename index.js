@@ -678,26 +678,25 @@ if (interaction.isButton() && interaction.customId === "converter_horas") {
 
   let tempoTotal = parseInt(userData.total, 10) || 0;
   if (tempoTotal < 1800000) 
-    return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
+    return interaction.reply({ content: "❌ Você precisa ter pelo menos 0.5 hora para converter.", ephemeral: true });
 
-  // Pergunta quantos minutos deseja converter
-  await interaction.reply({ content: "Quantos minutos deseja converter em coins? (Ex: 60 = 1h, 30 = 30m)", ephemeral: true });
+  // Pergunta quantas horas deseja converter
+  await interaction.reply({ content: "Quantas horas deseja converter em coins? (Ex: 1 = 1h, 0.5 = 30min)", ephemeral: true });
 
   const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
   collector.on("collect", async m => {
-    const minutos = parseInt(m.content, 10);
-    if (isNaN(minutos) || minutos < 30) {
+    const horas = parseFloat(m.content.replace(",", "."));
+    if (isNaN(horas) || horas < 0.5) {
       m.delete().catch(() => {});
-      return interaction.followUp({ content: "❌ Valor inválido. Mínimo 30 minutos.", ephemeral: true });
+      return interaction.followUp({ content: "❌ Valor inválido. Mínimo 0.5 hora.", ephemeral: true });
     }
 
-    const msParaConverter = minutos * 60000;
+    const msParaConverter = horas * 3600000; // converte horas em ms
     if (msParaConverter > tempoTotal) 
       return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
 
     // Calcula coins
-    const coins = Math.floor((minutos / 60) * 100);
-    const coinsFinal = minutos === 30 ? 50 : coins;
+    const coinsFinal = horas === 0.5 ? 50 : Math.floor(horas * 100);
 
     // Atualiza banco
     await pool.query(
@@ -715,7 +714,7 @@ if (interaction.isButton() && interaction.customId === "converter_horas") {
     const s = Math.floor((userData.total % 60000) / 1000);
 
     await interaction.followUp({ 
-      content: `✅ Convertido ${minutos} minutos em ${coinsFinal} coins!\n⏱ Tempo restante: ${h}h ${mAtual}m ${s}s\n💰 Total de coins: ${userData.coins}`, 
+      content: `✅ Convertido ${horas} horas em ${coinsFinal} coins!\n⏱ Tempo restante: ${h}h ${mAtual}m ${s}s\n💰 Total de coins: ${userData.coins}`, 
       ephemeral: true 
     });
 
