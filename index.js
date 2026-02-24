@@ -243,7 +243,7 @@ const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("fecharTodos").setLabel("🔒 Fechar Todos Pontos").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("ver_status_user").setLabel("📊 Ver Status Usuário").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("verStatusUser").setLabel("📊 Ver Status Usuário").setStyle(ButtonStyle.Primary)
     );
 
     const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
