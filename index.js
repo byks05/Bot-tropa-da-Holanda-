@@ -691,6 +691,48 @@ collector.on("collect", async i => {
 
     await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
   }
+  // --------------- BOTÃO CONVERTER HORAS ---------------
+  if (interaction.isButton() && interaction.customId === "converter_horas") {
+    // Pega usuário e dados
+    const userId = interaction.user.id;
+    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
+    const userData = status.rows[0];
+    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+
+    // Checa se usuário está ativo
+    if (userData.ativo) return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
+
+    let tempoTotal = parseInt(userData.total, 10) || 0;
+    if (tempoTotal < 1800000) return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
+
+    // Pergunta quantas horas deseja converter
+    await interaction.reply({ content: "Quantos minutos deseja converter em coins? (Ex: 60 = 1h, 30 = 30m)", ephemeral: true });
+
+    const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
+    collector.on("collect", async m => {
+      const minutos = parseInt(m.content, 10);
+      if (isNaN(minutos) || minutos < 30) {
+        m.delete().catch(() => {});
+        return interaction.followUp({ content: "❌ Valor inválido. Mínimo 30 minutos.", ephemeral: true });
+      }
+
+      const msParaConverter = minutos * 60000;
+      if (msParaConverter > tempoTotal) return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
+
+      // Calcula coins
+      const coins = Math.floor((minutos / 60) * 100);
+      const coinsFinal = minutos === 30 ? 50 : coins;
+
+      // Atualiza banco
+      await pool.query(
+        "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
+        [msParaConverter, coinsFinal, userId]
+      );
+
+      await interaction.followUp({ content: `✅ Convertido ${minutos} minutos em ${coinsFinal} coins!`, ephemeral: true });
+      m.delete().catch(() => {});
+    });
+  }
 });
 
 // =============================
