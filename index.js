@@ -668,7 +668,7 @@ async function garantirPainel(client) {
     );
 
     await canalPainel.send({
-      content: "Selecione uma ação:",
+      content: "Selecione para iniciar o ponto 👇🏾",
       components: [entrarMenu, botoesPainel]
     });
 
