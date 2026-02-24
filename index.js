@@ -860,7 +860,14 @@ if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
 await interaction.update({
   content: "Selecione uma ação:",
   components: [
-    entrarMenu,
+    new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("ponto_menu")
+        .setPlaceholder("Selecione uma ação")
+        .addOptions([
+          { label: "Entrar", value: "entrar", description: "Iniciar ponto" }
+        ])
+    ),
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("converter_horas")
