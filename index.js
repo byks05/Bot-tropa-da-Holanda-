@@ -592,7 +592,10 @@ client.on("interactionCreate", async (interaction) => {
       const categoriaId = "1474413150441963615"; // categoria para canais do ponto
 
       // Pega dados do usuário
-      let res = await pool.query("SELECT ativo, entrada, canal, total, coins FROM pontos WHERE user_id = $1", [userId]);
+      let res = await pool.query(
+        "SELECT ativo, entrada, canal, total, coins FROM pontos WHERE user_id = $1",
+        [userId]
+      );
       let userData = res.rows[0];
 
       if (!userData) {
@@ -607,7 +610,10 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: "❌ Você já iniciou seu ponto.", ephemeral: true });
 
       const now = Date.now();
-      await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, userId]);
+      await pool.query(
+        "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
+        [now, userId]
+      );
 
       // Cria canal privado
       const canal = await guild.channels.create({
@@ -616,7 +622,14 @@ client.on("interactionCreate", async (interaction) => {
         parent: categoriaId,
         permissionOverwrites: [
           { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+          {
+            id: userId,
+            allow: [
+              PermissionFlagsBits.ViewChannel,
+              PermissionFlagsBits.SendMessages,
+              PermissionFlagsBits.ReadMessageHistory,
+            ],
+          },
         ],
       });
 
@@ -634,7 +647,10 @@ client.on("interactionCreate", async (interaction) => {
           .setStyle(ButtonStyle.Danger)
       );
 
-      const mensagemBotao = await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botaoMenu] });
+      const mensagemBotao = await canal.send({
+        content: `🟢 Ponto iniciado! <@${userId}>`,
+        components: [botaoMenu],
+      });
 
       // Contador de tempo real
       const intervaloTempo = setInterval(async () => {
@@ -651,11 +667,14 @@ client.on("interactionCreate", async (interaction) => {
       }, 1000);
 
       // Collector dos botões do canal privado
-      const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
+      const filter = (i) => i.user.id === userId && ["status", "sair"].includes(i.customId);
       const collector = mensagemBotao.createMessageComponentCollector({ filter, time: 86400000 });
 
-      collector.on("collect", async i => {
-        const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
+      collector.on("collect", async (i) => {
+        const status = await pool.query(
+          "SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1",
+          [userId]
+        );
         const userData = status.rows[0];
         if (!userData) return i.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
 
@@ -670,9 +689,8 @@ client.on("interactionCreate", async (interaction) => {
 
           await i.reply({
             content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
-            ephemeral: true
+            ephemeral: true,
           });
-
         } else if (i.customId === "sair") {
           let tempoParaAdicionar = 0;
           if (userData.ativo && userData.entrada) {
@@ -691,95 +709,131 @@ client.on("interactionCreate", async (interaction) => {
         }
       });
 
-// =====================
-// RESET DO SELECT MENU MANTENDO BOTÕES
-// =====================
-const resetMenu = new ActionRowBuilder().addComponents(
-  new StringSelectMenuBuilder()
-    .setCustomId("ponto_menu")
-    .setPlaceholder("Selecione uma ação")
-    .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-);
-
-const botoesPainel = new ActionRowBuilder().addComponents(
-  new ButtonBuilder()
-    .setCustomId("converter_horas")
-    .setLabel("💸 Converter Horas")
-    .setStyle(ButtonStyle.Success),
-  new ButtonBuilder()
-    .setCustomId("consultar_saldo")
-    .setLabel("💳 Consultar Saldo")
-    .setStyle(ButtonStyle.Primary)
-);
-
-// Substitui o interaction.update antigo pelo correto:
-await interaction.update({
-  content: "Selecione uma ação:",
-  components: [resetMenu, botoesPainel] // ✅ Inclui os botões aqui
-});
-await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
-      
-  // ----------------- BOTÃO CONVERTER HORAS -----------------
-  if (interaction.isButton() && interaction.customId === "converter_horas") {
-    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-    const userData = status.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
-    if (userData.ativo) return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
-
-    let tempoTotal = parseInt(userData.total, 10) || 0;
-    if (tempoTotal < 1800000) return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
-
-    await interaction.reply({ content: "Quantas horas deseja converter? (Ex: 1 = 1h, 0.5 = 30m)", ephemeral: true });
-
-    const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
-    collector.on("collect", async m => {
-      const horas = parseFloat(m.content.replace(",", "."));
-      if (isNaN(horas) || horas < 0.5) {
-        m.delete().catch(() => {});
-        return interaction.followUp({ content: "❌ Valor inválido. Mínimo 0.5h (30m).", ephemeral: true });
-      }
-
-      const msParaConverter = horas * 3600000;
-      if (msParaConverter > tempoTotal) return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
-
-      const coins = Math.floor(horas * 100);
-      const coinsFinal = horas === 0.5 ? 50 : coins;
-
-      await pool.query(
-        "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
-        [msParaConverter, coinsFinal, userId]
+      // Reseta o menu principal com os botões do painel
+      const resetMenu = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("ponto_menu")
+          .setPlaceholder("Selecione uma ação")
+          .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
       );
 
-      // Atualiza tempo total para mostrar
-      const novoStatus = await pool.query("SELECT total, coins FROM pontos WHERE user_id = $1", [userId]);
-      const novoUser = novoStatus.rows[0];
-      const totalH = Math.floor(novoUser.total / 3600000);
-      const totalM = Math.floor((novoUser.total % 3600000) / 60000);
+      const botoesPainel = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("converter_horas")
+          .setLabel("💸 Converter Horas")
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId("consultar_saldo")
+          .setLabel("💳 Consultar Saldo")
+          .setStyle(ButtonStyle.Primary)
+      );
 
-      await interaction.followUp({ content: `✅ Convertido ${horas}h em ${coinsFinal} coins!\n⏱ Novo total: ${totalH}h ${totalM}m\n💰 Coins: ${novoUser.coins}`, ephemeral: true });
-      m.delete().catch(() => {});
-    });
+      await interaction.update({
+        content: "Selecione uma ação:",
+        components: [resetMenu, botoesPainel],
+      });
+
+      return interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
+    }
   }
 
-  // ----------------- BOTÃO CONSULTAR SALDO -----------------
-  if (interaction.isButton() && interaction.customId === "consultar_saldo") {
-    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-    const userData = status.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+  // ----------------- BOTÕES PRINCIPAIS -----------------
+  if (interaction.isButton()) {
+    // Converter horas
+    if (interaction.customId === "converter_horas") {
+      const status = await pool.query(
+        "SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1",
+        [userId]
+      );
+      const userData = status.rows[0];
+      if (!userData)
+        return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+      if (userData.ativo)
+        return interaction.reply({
+          content: "❌ Você precisa finalizar o ponto antes de converter horas.",
+          ephemeral: true,
+        });
 
-    let tempoAtual = parseInt(userData.total, 10) || 0;
-    if (userData.ativo && userData.entrada) {
-      tempoAtual += Date.now() - parseInt(userData.entrada, 10);
+      let tempoTotal = parseInt(userData.total, 10) || 0;
+      if (tempoTotal < 1800000)
+        return interaction.reply({
+          content: "❌ Você precisa ter pelo menos 30 minutos para converter.",
+          ephemeral: true,
+        });
+
+      await interaction.reply({
+        content: "Quantas horas deseja converter? (Ex: 1 = 1h, 0.5 = 30m)",
+        ephemeral: true,
+      });
+
+      const collector = interaction.channel.createMessageCollector({
+        filter: (m) => m.author.id === userId,
+        max: 1,
+        time: 60000,
+      });
+
+      collector.on("collect", async (m) => {
+        const horas = parseFloat(m.content.replace(",", "."));
+        if (isNaN(horas) || horas < 0.5) {
+          m.delete().catch(() => {});
+          return interaction.followUp({
+            content: "❌ Valor inválido. Mínimo 0.5h (30m).",
+            ephemeral: true,
+          });
+        }
+
+        const msParaConverter = horas * 3600000;
+        if (msParaConverter > tempoTotal)
+          return interaction.followUp({
+            content: "❌ Você não tem esse tempo disponível.",
+            ephemeral: true,
+          });
+
+        const coins = Math.floor(horas * 100);
+        const coinsFinal = horas === 0.5 ? 50 : coins;
+
+        await pool.query(
+          "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
+          [msParaConverter, coinsFinal, userId]
+        );
+
+        const novoStatus = await pool.query("SELECT total, coins FROM pontos WHERE user_id = $1", [userId]);
+        const novoUser = novoStatus.rows[0];
+        const totalH = Math.floor(novoUser.total / 3600000);
+        const totalM = Math.floor((novoUser.total % 3600000) / 60000);
+
+        await interaction.followUp({
+          content: `✅ Convertido ${horas}h em ${coinsFinal} coins!\n⏱ Novo total: ${totalH}h ${totalM}m\n💰 Coins: ${novoUser.coins}`,
+          ephemeral: true,
+        });
+        m.delete().catch(() => {});
+      });
     }
 
-    const h = Math.floor(tempoAtual / 3600000);
-    const m = Math.floor((tempoAtual % 3600000) / 60000);
-    const s = Math.floor((tempoAtual % 60000) / 1000);
+    // Consultar saldo
+    if (interaction.customId === "consultar_saldo") {
+      const status = await pool.query(
+        "SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1",
+        [userId]
+      );
+      const userData = status.rows[0];
+      if (!userData)
+        return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
 
-    await interaction.reply({
-      content: `💳 **Seu saldo atual:**\n⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
-      ephemeral: true
-    });
+      let tempoAtual = parseInt(userData.total, 10) || 0;
+      if (userData.ativo && userData.entrada) {
+        tempoAtual += Date.now() - parseInt(userData.entrada, 10);
+      }
+
+      const h = Math.floor(tempoAtual / 3600000);
+      const m = Math.floor((tempoAtual % 3600000) / 60000);
+      const s = Math.floor((tempoAtual % 60000) / 1000);
+
+      await interaction.reply({
+        content: `💳 **Seu saldo atual:**\n⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
+        ephemeral: true,
+      });
+    }
   }
 });
 // =============================
