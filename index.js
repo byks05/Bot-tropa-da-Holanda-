@@ -858,7 +858,7 @@ if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
 
   // 🔥 Resetar o select menu (sem deixar marcado)
 await interaction.update({
-  content: "Selecione uma ação:",
+  content: "Selecione para iniciar o ponto 👇🏾",
   components: [
     new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
