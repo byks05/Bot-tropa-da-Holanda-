@@ -47,19 +47,21 @@ client.once("clientReady", async () => {
 
   const produtos = [
     // Primeiro grupo
+    { label: "Moeda Do Servidor 👇🏾", value: "", description: "👇🏾" },
     { label: "Vip", value: "vip", description: "💰 6000 coins" },
     { label: "Robux", value: "robux", description: "💰 4000 coins" },
     { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
     { label: "Ripa", value: "ripa", description: "💰 1700 coins" },
     { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
+    { label: "Dinheiro Real 👇🏾", value: "", description: "👇🏾" },
     // Segundo grupo
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💰 R$ 3" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💰 R$ 6" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💰 R$ 5" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💰 R$ 1,50" },
-    { label: "Spotify Premium", value: "spotify", description: "💰 R$ 5" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💰 R$ 2" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💰 R$ 6" },
+    { label: "Nitro 1 mês", value: "nitro_1", description: "💵 R$ 3" },
+    { label: "Nitro 3 meses", value: "nitro_3", description: "💵 R$ 6" },
+    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💵 R$ 5" },
+    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💵 R$ 1,50" },
+    { label: "Spotify Premium", value: "spotify", description: "💵 R$ 5" },
+    { label: "Molduras com icon personalizado", value: "moldura", description: "💵 R$ 2" },
+    { label: "Y0utub3 Premium", value: "youtube", description: "💵 R$ 6" },
   ];
 
   const row = new ActionRowBuilder().addComponents(
