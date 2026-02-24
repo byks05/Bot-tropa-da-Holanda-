@@ -93,7 +93,7 @@ client.once("clientReady", async () => {
 > 🛒 **Ativação do Nitro** 
 -# **COMPRA COM R$ 💵**
 > 🛒 **Spotify Premium**
--# COMPRA COM R$ 💵**
+-# **COMPRA COM R$ 💵**
 > 🛒 **Molduras com icon personalizado** 
 -# **COMPRA COM R$ 💵**
 > 🛒 **Youtube Premium** 
