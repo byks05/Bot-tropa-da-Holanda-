@@ -635,50 +635,44 @@ const filter = i => i.user.id === userId && ["status", "sair"].includes(i.custom
 const collector = mensagemBotao.createMessageComponentCollector({ filter, time: 86400000 });
 
 collector.on("collect", async i => {
+  const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
+  const userData = status.rows[0];
+  if (!userData) return i.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+
   if (i.customId === "status") {
-  // pega total, entrada e coins do banco
-  const status = await pool.query("SELECT entrada, total, coins, ativo FROM pontos WHERE user_id = $1", [userId]);
-  if (!status.rows[0]) return i.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+    // Calcula o tempo acumulado corretamente
+    let tempoAtual = parseInt(userData.total, 10) || 0;
+    if (userData.ativo && userData.entrada) {
+      // Somar o tempo desde a entrada atual
+      tempoAtual += Date.now() - parseInt(userData.entrada, 10);
+    }
 
-  let tempoAtual = status.rows[0].total || 0;
+    const h = Math.floor(tempoAtual / 3600000);
+    const m = Math.floor((tempoAtual % 3600000) / 60000);
+    const s = Math.floor((tempoAtual % 60000) / 1000);
 
-  // se o ponto estiver ativo, adiciona o tempo do ponto atual
-  if (status.rows[0].ativo && status.rows[0].entrada) {
-    tempoAtual += Date.now() - status.rows[0].entrada;
+    await i.reply({
+      content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
+      ephemeral: true
+    });
+
+  } else if (i.customId === "sair") {
+    // Atualiza total com o tempo da sessão atual, zera ativo e remove canal
+    let tempoParaAdicionar = 0;
+    if (userData.ativo && userData.entrada) {
+      tempoParaAdicionar = Date.now() - parseInt(userData.entrada, 10);
+    }
+
+    await pool.query(
+      "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL, entrada = NULL WHERE user_id = $2",
+      [tempoParaAdicionar, userId]
+    );
+
+    clearInterval(intervaloTempo);
+    await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
+    collector.stop();
+    canal.delete().catch(() => {});
   }
-
-  const h = Math.floor(tempoAtual / 3600000);
-  const m = Math.floor((tempoAtual % 3600000) / 60000);
-  const s = Math.floor((tempoAtual % 60000) / 1000);
-
-  const coins = status.rows[0].coins || 0;
-
-  await i.reply({
-    content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${coins}`,
-    ephemeral: true
-  });
-
-} else if (i.customId === "sair") {
-  // pega total e entrada antes de finalizar
-  const ponto = await pool.query("SELECT entrada, total FROM pontos WHERE user_id = $1", [userId]);
-  if (!ponto.rows[0]) return i.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
-
-  let tempoFinal = ponto.rows[0].total || 0;
-  if (ponto.rows[0].entrada) {
-    tempoFinal += Date.now() - ponto.rows[0].entrada;
-  }
-
-  // atualiza banco e finaliza ponto
-  await pool.query(
-    "UPDATE pontos SET ativo = false, total = $1, canal = NULL WHERE user_id = $2",
-    [tempoFinal, userId]
-  );
-
-  clearInterval(intervaloTempo);
-  await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
-  collector.stop(); // para o collector
-  canal.delete().catch(() => {});
-}
 });
     // =====================
     // RESET DO SELECT MENU PARA PODER CLICAR NOVAMENTE
