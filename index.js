@@ -47,11 +47,11 @@ client.once("clientReady", async () => {
 
   const produtos = [
     // Primeiro grupo
-    { label: "Vip", value: "vip", description: "💰 6000 coins" },
-    { label: "Robux", value: "robux", description: "💰 4000 coins" },
-    { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
-    { label: "Ripa", value: "ripa", description: "💰 1700 coins" },
-    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
+    { label: "Vip", value: "vip", description: "🪙 6000 coins" },
+    { label: "Robux", value: "robux", description: "🪙 4000 coins" },
+    { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
+    { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
+    { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
     // Segundo grupo
     { label: "Nitro 1 mês", value: "nitro_1", description: "💵 R$ 3" },
     { label: "Nitro 3 meses", value: "nitro_3", description: "💵 R$ 6" },
@@ -75,29 +75,29 @@ client.once("clientReady", async () => {
 
 ***Apenas para membros da equipe***
 > 🛒 **Vip**
--# **COMPRA COM COINS**
+-# **COMPRA COM COINS 🪙**
 > 🛒 **Robux (Maximo de 200 Robux )** 
--# **COMPRA COM COINS**
+-# **COMPRA COM COINS 🪙**
 > 🛒 **Nitro** 
--# **COMPRA COM COINS**
+-# **COMPRA COM COINS 🪙**
 > 🛒 **Ripa**
--# **COMPRA COM COINS**
+-# **COMPRA COM COINS 🪙**
 > 🛒 **Roupa personalizada** 
--# **COMPRA COM COINS**
+-# **COMPRA COM COINS 🪙**
 
 ***Para Todos***
 > 🛒 **Nitro mensal (1 mês/3 meses)** 
--# **COMPRA COM R$**
+-# **COMPRA COM R$ 💵**
 > 🛒 **Contas virgem +30 Dias** 
--# **COMPRA COM R$**
+-# **COMPRA COM R$ 💵**
 > 🛒 **Ativação do Nitro** 
--# **COMPRA COM R$**
+-# **COMPRA COM R$ 💵**
 > 🛒 **Spotify Premium**
--# COMPRA COM R$**
+-# COMPRA COM R$ 💵**
 > 🛒 **Molduras com icon personalizado** 
--# **COMPRA COM R$**
+-# **COMPRA COM R$ 💵**
 > 🛒 **Youtube Premium** 
--# **COMPRA COM R$**
+-# **COMPRA COM R$ 💵**
 
 -# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
 `;
@@ -131,11 +131,11 @@ client.on("interactionCreate", async (interaction) => {
 
   const produtos = [
     
-    { label: "Vip", value: "vip", description: "💰 6000 coins" },
-    { label: "Robux", value: "robux", description: "💰 4000 coins" },
-    { label: "Nitro", value: "nitro", description: "💰 2500 coins" },
-    { label: "Ripa", value: "ripa", description: "💰 1700 coins" },
-    { label: "Roupa personalizada", value: "roupa", description: "💰 1400 coins" },
+    { label: "Vip", value: "vip", description: "🪙 6000 coins" },
+    { label: "Robux", value: "robux", description: "🪙 4000 coins" },
+    { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
+    { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
+    { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
     { label: "Nitro 1 mês", value: "nitro_1", description: "💵 R$ 3", categoriaId: "1474885663425036470" },
     { label: "Nitro 3 meses", value: "nitro_3", description: "💵 R$ 6", categoriaId: "1474885663425036470" },
     { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💵 R$ 5", categoriaId: "1474885663425036470" },
