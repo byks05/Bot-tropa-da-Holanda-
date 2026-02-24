@@ -338,31 +338,64 @@ client.on("interactionCreate", async (interaction) => {
       setTimeout(() => msgCoins.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
 
-    case "addTime":
-      const msgTime = await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", ephemeral: false });
-      const filterTime = m => m.author.id === userId;
-      const collectorTime = interaction.channel.createMessageCollector({ filter: filterTime, max: 1, time: 60000 });
+    case "addTime": {
+  const msgTime = await interaction.reply({ 
+    content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", 
+    ephemeral: false 
+  });
 
-      collectorTime.on("collect", async m => {
-        const [mention, amount] = m.content.split(" ");
-        const id = mention.replace(/[<@!>]/g, "");
-        const time = parseInt(amount);
+  const filterTime = m => m.author.id === userId;
+  const collectorTime = interaction.channel.createMessageCollector({ 
+    filter: filterTime, 
+    max: 1, 
+    time: 60000 
+  });
 
-        if (!id || isNaN(time)) {
-          const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade_em_ms`", ephemeral: false });
-          setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
-          return;
-        }
-
-        await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
-        const confirm = await interaction.followUp({ content: `✅ Adicionados ${Math.floor(time/3600000)}h para <@${id}>`, ephemeral: false });
-        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
-        m.delete().catch(() => {});
+  collectorTime.on("collect", async m => {
+    const [mention, amount] = m.content.split(" ");
+    if (!mention || !amount) {
+      const erro = await interaction.followUp({ 
+        content: "❌ Formato inválido. Use: `@usuário quantidade_em_ms`", 
+        ephemeral: false 
       });
-      setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
-      break;
-  }
-});
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    const id = mention.replace(/[<@!>]/g, "");
+    const time = parseInt(amount, 10);
+
+    if (!id || isNaN(time) || time <= 0) {
+      const erro = await interaction.followUp({ 
+        content: "❌ Valor inválido. Certifique-se de colocar um número válido de ms.", 
+        ephemeral: false 
+      });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    // Atualiza o banco
+    await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
+
+    // Converte para horas e minutos para exibição
+    const hours = Math.floor(time / 3600000);
+    const minutes = Math.floor((time % 3600000) / 60000);
+
+    const confirm = await interaction.followUp({ 
+      content: `✅ Adicionados ${hours}h${minutes > 0 ? ` e ${minutes}min` : ""} para <@${id}>`, 
+      ephemeral: false 
+    });
+
+    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+    m.delete().catch(() => {});
+  });
+
+  setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
+  break;
+}
+  });
 // =====================
 // SELECT MENU FIXO PONTO
 // =====================
