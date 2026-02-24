@@ -219,7 +219,8 @@ async function criarPainelAdmin(client) {
     const canal = await client.channels.fetch(adminChannelId);
     if (!canal) return console.log("Canal de administração não encontrado.");
 
-    const botoesAdmin = new ActionRowBuilder().addComponents(
+    // Linha 1 de botões
+    const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("resetAll").setLabel("🗑 Reset Todos").setStyle(ButtonStyle.Danger),
@@ -227,17 +228,23 @@ async function criarPainelAdmin(client) {
       new ButtonBuilder().setCustomId("addTime").setLabel("⏱ Adicionar Tempo").setStyle(ButtonStyle.Success)
     );
 
-    let conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
+    // Linha 2 de botões
+    const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger)
+    );
+
+    const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
 
     if (painelMensagemId) {
       const mensagem = await canal.messages.fetch(painelMensagemId).catch(() => null);
       if (mensagem) {
-        await mensagem.edit({ content: conteudo, components: [botoesAdmin] });
+        await mensagem.edit({ content: conteudo, components: [botoesAdminLinha1, botoesAdminLinha2] });
         return;
       }
     }
 
-    const mensagemNova = await canal.send({ content: conteudo, components: [botoesAdmin] });
+    const mensagemNova = await canal.send({ content: conteudo, components: [botoesAdminLinha1, botoesAdminLinha2] });
     painelMensagemId = mensagemNova.id;
 
   } catch (err) {
@@ -246,7 +253,6 @@ async function criarPainelAdmin(client) {
 }
 
 client.once("ready", () => criarPainelAdmin(client));
-
 // =====================
 // INTERAÇÃO COM BOTÕES
 // =====================
@@ -401,6 +407,89 @@ client.on("interactionCreate", async (interaction) => {
   setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
 }
+      case "removeCoins": {
+  const msgCoins = await interaction.reply({ content: "Use: `@usuário quantidade` para remover coins.", ephemeral: false });
+  const filterCoins = m => m.author.id === userId;
+  const collectorCoins = interaction.channel.createMessageCollector({ filter: filterCoins, max: 1, time: 60000 });
+
+  collectorCoins.on("collect", async m => {
+    const [mention, amount] = m.content.split(" ");
+    const id = mention.replace(/[<@!>]/g, "");
+    const coins = parseInt(amount, 10);
+
+    if (!id || isNaN(coins)) {
+      const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade`", ephemeral: false });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      return;
+    }
+
+    await pool.query("UPDATE pontos SET coins = GREATEST(COALESCE(coins,0) - $1, 0) WHERE user_id = $2", [coins, id]);
+    const confirm = await interaction.followUp({ content: `✅ Removidos ${coins} coins de <@${id}>`, ephemeral: false });
+    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+    m.delete().catch(() => {});
+  });
+
+  setTimeout(() => msgCoins.delete().catch(() => {}), MESSAGE_LIFETIME);
+  break;
+}
+
+case "removeTime": {
+  const msgTime = await interaction.reply({ content: "Use: `@usuário 3h 15m` para remover tempo.", ephemeral: false });
+  const filterTime = m => m.author.id === userId;
+  const collectorTime = interaction.channel.createMessageCollector({ filter: filterTime, max: 1, time: 60000 });
+
+  collectorTime.on("collect", async m => {
+    const args = m.content.split(" ");
+    const mention = args[0];
+    if (!mention) return;
+
+    const id = mention.replace(/[<@!>]/g, "");
+    if (!id) return;
+
+    const timeString = args.slice(1).join(" ").toLowerCase();
+    if (!timeString) {
+      const erro = await interaction.followUp({ content: "❌ Você precisa informar o tempo. Ex: `3h 15m`", ephemeral: false });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    function parseTime(str) {
+      let total = 0;
+      const regex = /(\d+)\s*(h|m|s)/g;
+      let match;
+      while ((match = regex.exec(str)) !== null) {
+        const value = parseInt(match[1]);
+        const unit = match[2];
+        if (unit === "h") total += value * 3600000;
+        else if (unit === "m") total += value * 60000;
+        else if (unit === "s") total += value * 1000;
+      }
+      return total;
+    }
+
+    const timeMs = parseTime(timeString);
+    if (timeMs <= 0) {
+      const erro = await interaction.followUp({ content: "❌ Tempo inválido.", ephemeral: false });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    await pool.query("UPDATE pontos SET total = GREATEST(total - $1, 0) WHERE user_id = $2", [timeMs, id]);
+
+    const hours = Math.floor(timeMs / 3600000);
+    const minutes = Math.floor((timeMs % 3600000) / 60000);
+    const seconds = Math.floor((timeMs % 60000) / 1000);
+
+    const confirm = await interaction.followUp({ content: `✅ Removidos ${hours}h ${minutes}m ${seconds}s de <@${id}>`, ephemeral: false });
+    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+    m.delete().catch(() => {});
+  });
+
+  setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
+  break;
+    }
 
   } // fim do switch
 }); // fim do client.on
