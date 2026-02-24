@@ -207,13 +207,37 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 
-otoesAdminLinha1 = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("resetAll").setLabel("🗑 Reset Todos").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("addCoins").setLabel("💰 Adicionar Coins").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("addTime").setLabel("⏱ Adicionar Tempo").setStyle(ButtonStyle.Success)
-    );
+// =====================
+// PAINEL DE ADMIN FIXO AVANÇADO
+// =====================
+const adminChannelId = "1474384292015640626"; // Canal fixo do painel
+let painelMensagemId = null;
+const MESSAGE_LIFETIME = 15000; // 15 segundos
+
+async function criarPainelAdmin(client) {
+try {
+const canal = await client.channels.fetch(adminChannelId);
+if (!canal) return console.log("Canal de administração não encontrado.");
+
+// procura se já existe a mensagem do painel  
+if (!painelMensagemId) {  
+  const mensagens = await canal.messages.fetch({ limit: 50 });  
+  const existente = mensagens.find(msg =>   
+    msg.components.some(row =>   
+      row.components.some(c => ["registro","resetUser","resetAll","addCoins","addTime","removeCoins","removeTime"].includes(c.customId))  
+    )  
+  );  
+  if (existente) painelMensagemId = existente.id;  
+}  
+
+// agora cria ou atualiza  
+const botoesAdminLinha1 = new ActionRowBuilder().addComponents(  
+  new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),  
+  new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),  
+  new ButtonBuilder().setCustomId("resetAll").setLabel("🗑 Reset Todos").setStyle(ButtonStyle.Danger),  
+  new ButtonBuilder().setCustomId("addCoins").setLabel("💰 Adicionar Coins").setStyle(ButtonStyle.Success),  
+  new ButtonBuilder().setCustomId("addTime").setLabel("⏱ Adicionar Tempo").setStyle(ButtonStyle.Success)  
+);  
 
     const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
