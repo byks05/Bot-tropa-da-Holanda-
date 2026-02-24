@@ -704,6 +704,9 @@ const botoesPainel = new ActionRowBuilder().addComponents(
     .setStyle(ButtonStyle.Primary)
 );
 
+// =====================
+// RESET DO SELECT MENU MANTENDO BOTÕES
+// =====================
 const resetMenu = new ActionRowBuilder().addComponents(
   new StringSelectMenuBuilder()
     .setCustomId("ponto_menu")
@@ -711,11 +714,24 @@ const resetMenu = new ActionRowBuilder().addComponents(
     .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
 );
 
-await interaction.update({ 
-  content: "Selecione uma ação:", 
+const botoesPainel = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId("converter_horas")
+    .setLabel("💸 Converter Horas")
+    .setStyle(ButtonStyle.Success),
+  new ButtonBuilder()
+    .setCustomId("consultar_saldo")
+    .setLabel("💳 Consultar Saldo")
+    .setStyle(ButtonStyle.Primary)
+);
+
+// Substitui o interaction.update antigo pelo correto:
+await interaction.update({
+  content: "Selecione uma ação:",
   components: [resetMenu, botoesPainel] // ✅ Inclui os botões aqui
 });
-
+await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
+      
   // ----------------- BOTÃO CONVERTER HORAS -----------------
   if (interaction.isButton() && interaction.customId === "converter_horas") {
     const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
