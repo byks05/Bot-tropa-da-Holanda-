@@ -150,9 +150,9 @@ client.on("interactionCreate", async (interaction) => {
   if (!produtoSelecionado) return;
 
   const guild = interaction.guild;
-  const categoriaId = produtoSelecionado.categoriaId;
-  const ticketName = `ticket-${interaction.user.username}`;
-
+const categoriaId = "1474885663425036470"; // 👈 Categoria fixa
+const ticketName = `ticket-${interaction.user.username}`;
+  
   // Evita ticket duplicado
   const existingChannel = guild.channels.cache.find(
     c => c.name === ticketName && c.parentId === categoriaId
