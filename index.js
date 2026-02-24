@@ -272,7 +272,7 @@ client.on("messageDelete", async (message) => {
   console.log("Painel de admin reapareceu após exclusão!");
 });
 
-client.once("ready", () => criarPainelAdmin(client));
+client.once("clientReady", () => criarPainelAdmin(client));
 // =====================
 // INTERAÇÃO COM BOTÕES
 // =====================
@@ -563,7 +563,7 @@ async function garantirPainel(client) {
 // =====================
 // QUANDO O BOT LIGA
 // =====================
-client.once("ready", async () => {
+client.once("clientReady", async () => {
   await garantirPainel(client);
 });
 
