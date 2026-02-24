@@ -556,10 +556,12 @@ case "removeTime": {
 
   break;
       }
-      case "verStatusUser": {
-  const msgStatus = await interaction.reply({
-    content: "Mencione o usuário que deseja consultar.",
-    ephemeral: false
+     case "verStatusUser": {
+
+  await interaction.deferReply({ ephemeral: false });
+
+  const msgStatus = await interaction.editReply({
+    content: "Mencione o usuário que deseja consultar."
   });
 
   const filterStatus = m => m.author.id === userId;
