@@ -691,19 +691,6 @@ client.on("interactionCreate", async (interaction) => {
         }
       });
 
-      // Reseta select menu
-      // Reseta select menu **mantendo os botões**
-const botoesPainel = new ActionRowBuilder().addComponents(
-  new ButtonBuilder()
-    .setCustomId("converter_horas")
-    .setLabel("💸 Converter Horas")
-    .setStyle(ButtonStyle.Success),
-  new ButtonBuilder()
-    .setCustomId("consultar_saldo")
-    .setLabel("💳 Consultar Saldo")
-    .setStyle(ButtonStyle.Primary)
-);
-
 // =====================
 // RESET DO SELECT MENU MANTENDO BOTÕES
 // =====================
