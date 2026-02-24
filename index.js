@@ -242,7 +242,8 @@ const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
     const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("fecharTodos").setLabel("🔒 Fechar Todos Pontos").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("fecharTodos").setLabel("🔒 Fechar Todos Pontos").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("ver_status_user").setLabel("📊 Ver Status Usuário").setStyle(ButtonStyle.Primary)
     );
 
     const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
@@ -553,6 +554,72 @@ case "removeTime": {
     flags: 64
   });
 
+  break;
+      }
+      case "verStatusUser": {
+  const msgStatus = await interaction.reply({
+    content: "Mencione o usuário que deseja consultar.",
+    ephemeral: false
+  });
+
+  const filterStatus = m => m.author.id === userId;
+  const collectorStatus = interaction.channel.createMessageCollector({
+    filter: filterStatus,
+    max: 1,
+    time: 60000
+  });
+
+  collectorStatus.on("collect", async m => {
+
+    const mention = m.mentions.users.first();
+    if (!mention) {
+      const erro = await interaction.followUp({
+        content: "❌ Você precisa mencionar um usuário válido.",
+        ephemeral: false
+      });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    const res = await pool.query(
+      "SELECT * FROM pontos WHERE user_id = $1",
+      [mention.id]
+    );
+
+    if (!res.rows.length) {
+      const erro = await interaction.followUp({
+        content: "❌ Usuário não encontrado no banco.",
+        ephemeral: false
+      });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    const userData = res.rows[0];
+
+    const horas = Math.floor((userData.total || 0) / 3600000);
+    const minutos = Math.floor(((userData.total || 0) % 3600000) / 60000);
+    const segundos = Math.floor(((userData.total || 0) % 60000) / 1000);
+
+    const statusMsg =
+      `📊 **Status de <@${mention.id}>**\n\n` +
+      `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n` +
+      `⏱ Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
+      `💰 Coins: ${userData.coins || 0}\n` +
+      `📂 Canal: ${userData.canal ? `<#${userData.canal}>` : "Nenhum"}`;
+
+    const confirm = await interaction.followUp({
+      content: statusMsg,
+      ephemeral: false
+    });
+
+    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+    m.delete().catch(() => {});
+  });
+
+  setTimeout(() => msgStatus.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
       }
 
