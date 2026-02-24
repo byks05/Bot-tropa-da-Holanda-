@@ -207,31 +207,7 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 
-// =====================
-// PAINEL DE ADMIN FIXO AVANÇADO
-// =====================
-const adminChannelId = "1474384292015640626"; // Canal fixo do painel
-let painelMensagemId = null;
-const MESSAGE_LIFETIME = 15000; // 15 segundos
-
-async function criarPainelAdmin(client) {
-  try {
-    const canal = await client.channels.fetch(adminChannelId);
-    if (!canal) return console.log("Canal de administração não encontrado.");
-
-    // procura se já existe a mensagem do painel
-    if (!painelMensagemId) {
-      const mensagens = await canal.messages.fetch({ limit: 50 });
-      const existente = mensagens.find(msg => 
-        msg.components.some(row => 
-          row.components.some(c => ["registro","resetUser","resetAll","addCoins","addTime","removeCoins","removeTime"].includes(c.customId))
-        )
-      );
-      if (existente) painelMensagemId = existente.id;
-    }
-
-    // agora cria ou atualiza
-    const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
+otoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("resetAll").setLabel("🗑 Reset Todos").setStyle(ButtonStyle.Danger),
@@ -241,7 +217,8 @@ async function criarPainelAdmin(client) {
 
     const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("fecharTodos").setLabel("🔒 Fechar Todos Pontos").setStyle(ButtonStyle.Danger)
     );
 
     const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
@@ -510,6 +487,50 @@ case "removeTime": {
   setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
     }
+      case "fecharTodos": {
+  const categoriaId = "1474413150441963615";
+
+  // Busca todos ativos
+  const res = await pool.query("SELECT user_id, entrada FROM pontos WHERE ativo = true");
+
+  if (!res.rows.length) {
+    return interaction.reply({
+      content: "⚠ Nenhum ponto ativo encontrado.",
+      flags: 64
+    });
+  }
+
+  let fechados = 0;
+
+  for (const user of res.rows) {
+    const tempoTrabalhado = Date.now() - parseInt(user.entrada || 0);
+
+    // Atualiza banco
+    await pool.query(
+      "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
+      [tempoTrabalhado, user.user_id]
+    );
+
+    fechados++;
+  }
+
+  // Agora deletar canais da categoria
+  const guild = interaction.guild;
+  const canais = guild.channels.cache.filter(
+    c => c.parentId === categoriaId
+  );
+
+  for (const canal of canais.values()) {
+    await canal.delete().catch(() => {});
+  }
+
+  await interaction.reply({
+    content: `✅ ${fechados} pontos foram encerrados e canais fechados.`,
+    flags: 64
+  });
+
+  break;
+      }
 
   } // fim do switch
 }); // fim do client.on
