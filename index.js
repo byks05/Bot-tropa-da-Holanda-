@@ -818,9 +818,7 @@ client.on("interactionCreate", async (interaction) => {
     await interaction.reply({ content: "🔴 Ponto finalizado!", flags: 64 });
     interaction.channel.delete().catch(() => {});
   }
-});
 
-    
 
   // ----------------- BOTÃO CONVERTER HORAS -----------------
   if (interaction.isButton() && interaction.customId === "converter_horas") {
