@@ -219,7 +219,18 @@ async function criarPainelAdmin(client) {
     const canal = await client.channels.fetch(adminChannelId);
     if (!canal) return console.log("Canal de administração não encontrado.");
 
-    // Linha 1 de botões
+    // procura se já existe a mensagem do painel
+    if (!painelMensagemId) {
+      const mensagens = await canal.messages.fetch({ limit: 50 });
+      const existente = mensagens.find(msg => 
+        msg.components.some(row => 
+          row.components.some(c => ["registro","resetUser","resetAll","addCoins","addTime","removeCoins","removeTime"].includes(c.customId))
+        )
+      );
+      if (existente) painelMensagemId = existente.id;
+    }
+
+    // agora cria ou atualiza
     const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("registro").setLabel("📋 Registro").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("resetUser").setLabel("🔄 Reset Usuário").setStyle(ButtonStyle.Danger),
@@ -228,7 +239,6 @@ async function criarPainelAdmin(client) {
       new ButtonBuilder().setCustomId("addTime").setLabel("⏱ Adicionar Tempo").setStyle(ButtonStyle.Success)
     );
 
-    // Linha 2 de botões
     const botoesAdminLinha2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger)
@@ -251,6 +261,16 @@ async function criarPainelAdmin(client) {
     console.log("Erro ao criar painel de admin:", err);
   }
 }
+client.on("messageDelete", async (message) => {
+  if (message.channel.id !== adminChannelId) return;
+  if (!message.components.some(row => 
+        row.components.some(c => ["registro","resetUser","resetAll","addCoins","addTime","removeCoins","removeTime"].includes(c.customId))
+      )) return;
+
+  // recria o painel se a mensagem for apagada
+  await criarPainelAdmin(client);
+  console.log("Painel de admin reapareceu após exclusão!");
+});
 
 client.once("ready", () => criarPainelAdmin(client));
 // =====================
