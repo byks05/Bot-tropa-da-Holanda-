@@ -856,22 +856,28 @@ if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
       components: [botoesPrivado]
     });
 
-    // 🔥 Resetar o select menu (sem deixar marcado)
-    await interaction.update({
-      content: "✅ Ponto iniciado com sucesso!",
-      components: [
-        new ActionRowBuilder().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId("ponto_menu")
-            .setPlaceholder("Selecione uma opção")
-            .addOptions([
-              { label: "🟢 Entrar", value: "entrar" },
-              { label: "🔴 Sair", value: "sair" }
-            ])
-        )
-      ]
-    });
+  // 🔥 Resetar o select menu (sem deixar marcado)
+await interaction.update({
+  content: "Selecione uma ação:",
+  components: [
+    entrarMenu,
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("converter_horas")
+        .setLabel("💸 Converter Horas")
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId("consultar_saldo")
+        .setLabel("💳 Consultar Saldo")
+        .setStyle(ButtonStyle.Primary)
+    )
+  ]
+});
 
+await interaction.followUp({
+  content: "✅ Ponto iniciado com sucesso!",
+  ephemeral: true
+});
   }
 }
 
