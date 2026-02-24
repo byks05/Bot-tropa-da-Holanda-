@@ -799,68 +799,81 @@ client.on("interactionCreate", async (interaction) => {
   const userId = interaction.user.id;
 
   // -------- SELECT MENU --------
-  if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
+if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
 
-    if (interaction.values[0] === "entrar") {
+  if (interaction.values[0] === "entrar") {
 
-      let res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
-      let userData = res.rows[0];
+    let res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+    let userData = res.rows[0];
 
-      if (!userData) {
-        await pool.query(
-          "INSERT INTO pontos (user_id, ativo, total, entrada, canal, coins) VALUES ($1,false,0,NULL,NULL,0)",
-          [userId]
-        );
-        userData = { ativo: false };
-      }
-
-      if (userData.ativo)
-        return interaction.reply({ content: "❌ Você já iniciou seu ponto.", flags: 64 });
-
-      const now = Date.now();
-      await pool.query("UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2", [now, userId]);
-
-      const canal = await interaction.guild.channels.create({
-        name: `ponto-${interaction.user.username}`,
-        type: ChannelType.GuildText,
-        parent: categoriaId,
-        permissionOverwrites: [
-          { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-          { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
-        ]
-      });
-
-      await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
-
-      iniciarCicloPresenca(userId);
-
-      const botoesPrivado = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("status").setLabel("📊 Status").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("sair").setLabel("🔴 Sair").setStyle(ButtonStyle.Danger)
+    if (!userData) {
+      await pool.query(
+        "INSERT INTO pontos (user_id, ativo, total, entrada, canal, coins) VALUES ($1,false,0,NULL,NULL,0)",
+        [userId]
       );
+      userData = { ativo: false };
+    }
 
-      await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botoesPrivado] });
+    if (userData.ativo)
+      return interaction.reply({ content: "❌ Você já iniciou seu ponto.", flags: 64 });
 
-      await interaction.update({
-  content: "✅ Ponto iniciado com sucesso!",
-  components: [
-    new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("ponto_menu")
-        .setPlaceholder("Selecione uma opção")
-        .addOptions([
-          {
-            label: "🟢 Entrar",
-            value: "entrar"
-          },
-          {
-            label: "🔴 Sair",
-            value: "sair"
-          }
-        ])
-    )
-  ]
-});
+    const now = Date.now();
+    await pool.query(
+      "UPDATE pontos SET ativo = true, entrada = $1 WHERE user_id = $2",
+      [now, userId]
+    );
+
+    const canal = await interaction.guild.channels.create({
+      name: `ponto-${interaction.user.username}`,
+      type: ChannelType.GuildText,
+      parent: categoriaId,
+      permissionOverwrites: [
+        { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+        { id: userId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }
+      ]
+    });
+
+    await pool.query(
+      "UPDATE pontos SET canal = $1 WHERE user_id = $2",
+      [canal.id, userId]
+    );
+
+    iniciarCicloPresenca(userId);
+
+    const botoesPrivado = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("status")
+        .setLabel("📊 Status")
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId("sair")
+        .setLabel("🔴 Sair")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    await canal.send({
+      content: `🟢 Ponto iniciado! <@${userId}>`,
+      components: [botoesPrivado]
+    });
+
+    // 🔥 Resetar o select menu (sem deixar marcado)
+    await interaction.update({
+      content: "✅ Ponto iniciado com sucesso!",
+      components: [
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId("ponto_menu")
+            .setPlaceholder("Selecione uma opção")
+            .addOptions([
+              { label: "🟢 Entrar", value: "entrar" },
+              { label: "🔴 Sair", value: "sair" }
+            ])
+        )
+      ]
+    });
+
+  }
+}
 
   // -------- BOTÃO STATUS --------
   if (interaction.isButton() && interaction.customId === "status") {
