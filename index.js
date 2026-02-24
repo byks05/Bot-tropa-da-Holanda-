@@ -665,47 +665,63 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   // --------------- BOTÃO CONVERTER HORAS ---------------
-  if (interaction.isButton() && interaction.customId === "converter_horas") {
-    // Pega usuário e dados
-    const userId = interaction.user.id;
-    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-    const userData = status.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+if (interaction.isButton() && interaction.customId === "converter_horas") {
+  const userId = interaction.user.id;
 
-    // Checa se usuário está ativo
-    if (userData.ativo) return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
+  // Pega os dados do usuário
+  let status = await pool.query("SELECT ativo, total, coins FROM pontos WHERE user_id = $1", [userId]);
+  let userData = status.rows[0];
+  if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
 
-    let tempoTotal = parseInt(userData.total, 10) || 0;
-    if (tempoTotal < 1800000) return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
+  if (userData.ativo) 
+    return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
 
-    // Pergunta quantas horas deseja converter
-    await interaction.reply({ content: "Quantos minutos deseja converter em coins? (Ex: 60 = 1h, 30 = 30m)", ephemeral: true });
+  let tempoTotal = parseInt(userData.total, 10) || 0;
+  if (tempoTotal < 1800000) 
+    return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
 
-    const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
-    collector.on("collect", async m => {
-      const minutos = parseInt(m.content, 10);
-      if (isNaN(minutos) || minutos < 30) {
-        m.delete().catch(() => {});
-        return interaction.followUp({ content: "❌ Valor inválido. Mínimo 30 minutos.", ephemeral: true });
-      }
+  // Pergunta quantos minutos deseja converter
+  await interaction.reply({ content: "Quantos minutos deseja converter em coins? (Ex: 60 = 1h, 30 = 30m)", ephemeral: true });
 
-      const msParaConverter = minutos * 60000;
-      if (msParaConverter > tempoTotal) return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
-
-      // Calcula coins
-      const coins = Math.floor((minutos / 60) * 100);
-      const coinsFinal = minutos === 30 ? 50 : coins;
-
-      // Atualiza banco
-      await pool.query(
-        "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
-        [msParaConverter, coinsFinal, userId]
-      );
-
-      await interaction.followUp({ content: `✅ Convertido ${minutos} minutos em ${coinsFinal} coins!`, ephemeral: true });
+  const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
+  collector.on("collect", async m => {
+    const minutos = parseInt(m.content, 10);
+    if (isNaN(minutos) || minutos < 30) {
       m.delete().catch(() => {});
+      return interaction.followUp({ content: "❌ Valor inválido. Mínimo 30 minutos.", ephemeral: true });
+    }
+
+    const msParaConverter = minutos * 60000;
+    if (msParaConverter > tempoTotal) 
+      return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
+
+    // Calcula coins
+    const coins = Math.floor((minutos / 60) * 100);
+    const coinsFinal = minutos === 30 ? 50 : coins;
+
+    // Atualiza banco
+    await pool.query(
+      "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
+      [msParaConverter, coinsFinal, userId]
+    );
+
+    // Busca os dados atualizados
+    status = await pool.query("SELECT total, coins FROM pontos WHERE user_id = $1", [userId]);
+    userData = status.rows[0];
+
+    // Converte ms para h/m/s
+    const h = Math.floor(userData.total / 3600000);
+    const mAtual = Math.floor((userData.total % 3600000) / 60000);
+    const s = Math.floor((userData.total % 60000) / 1000);
+
+    await interaction.followUp({ 
+      content: `✅ Convertido ${minutos} minutos em ${coinsFinal} coins!\n⏱ Tempo restante: ${h}h ${mAtual}m ${s}s\n💰 Total de coins: ${userData.coins}`, 
+      ephemeral: true 
     });
-  }
+
+    m.delete().catch(() => {});
+  });
+}
 });
 // =============================
 // CONFIG
