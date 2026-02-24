@@ -395,7 +395,7 @@ client.on("interactionCreate", async (interaction) => {
   setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
 }
-  });
+  
 // =====================
 // SELECT MENU FIXO PONTO
 // =====================
