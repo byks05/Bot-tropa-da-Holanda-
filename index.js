@@ -256,7 +256,7 @@ client.on("interactionCreate", async (interaction) => {
 
   switch (interaction.customId) {
 
-    case "registro":
+    case "registro": {
       const res = await pool.query("SELECT user_id, ativo, total, coins FROM pontos ORDER BY total DESC");
       if (!res.rows.length) {
         const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
@@ -281,12 +281,10 @@ client.on("interactionCreate", async (interaction) => {
         setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
       }
       break;
+    }
 
-    case "resetUser":
-      // Mensagem inicial pedindo menção
+    case "resetUser": {
       const msgReset = await interaction.reply({ content: "Mencione o usuário que deseja resetar.", ephemeral: false });
-
-      // Collector para pegar a menção
       const filterReset = m => m.author.id === userId;
       const collectorReset = interaction.channel.createMessageCollector({ filter: filterReset, max: 1, time: 60000 });
 
@@ -307,14 +305,16 @@ client.on("interactionCreate", async (interaction) => {
 
       setTimeout(() => msgReset.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
+    }
 
-    case "resetAll":
+    case "resetAll": {
       await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL, coins = 0");
       const msgAll = await interaction.reply({ content: "✅ Todos os usuários foram resetados!", ephemeral: false });
       setTimeout(() => msgAll.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
+    }
 
-    case "addCoins":
+    case "addCoins": {
       const msgCoins = await interaction.reply({ content: "Use: `@usuário quantidade` para adicionar coins.", ephemeral: false });
       const filterCoins = m => m.author.id === userId;
       const collectorCoins = interaction.channel.createMessageCollector({ filter: filterCoins, max: 1, time: 60000 });
@@ -322,7 +322,7 @@ client.on("interactionCreate", async (interaction) => {
       collectorCoins.on("collect", async m => {
         const [mention, amount] = m.content.split(" ");
         const id = mention.replace(/[<@!>]/g, "");
-        const coins = parseInt(amount);
+        const coins = parseInt(amount, 10);
 
         if (!id || isNaN(coins)) {
           const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade`", ephemeral: false });
@@ -335,67 +335,51 @@ client.on("interactionCreate", async (interaction) => {
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
         m.delete().catch(() => {});
       });
+
       setTimeout(() => msgCoins.delete().catch(() => {}), MESSAGE_LIFETIME);
       break;
+    }
 
     case "addTime": {
-  const msgTime = await interaction.reply({ 
-    content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", 
-    ephemeral: false 
-  });
+      const msgTime = await interaction.reply({ content: "Use: `@usuário quantidade_em_ms` para adicionar tempo.", ephemeral: false });
+      const filterTime = m => m.author.id === userId;
+      const collectorTime = interaction.channel.createMessageCollector({ filter: filterTime, max: 1, time: 60000 });
 
-  const filterTime = m => m.author.id === userId;
-  const collectorTime = interaction.channel.createMessageCollector({ 
-    filter: filterTime, 
-    max: 1, 
-    time: 60000 
-  });
+      collectorTime.on("collect", async m => {
+        const [mention, amount] = m.content.split(" ");
+        if (!mention || !amount) {
+          const erro = await interaction.followUp({ content: "❌ Formato inválido. Use: `@usuário quantidade_em_ms`", ephemeral: false });
+          setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+          m.delete().catch(() => {});
+          return;
+        }
 
-  collectorTime.on("collect", async m => {
-    const [mention, amount] = m.content.split(" ");
-    if (!mention || !amount) {
-      const erro = await interaction.followUp({ 
-        content: "❌ Formato inválido. Use: `@usuário quantidade_em_ms`", 
-        ephemeral: false 
+        const id = mention.replace(/[<@!>]/g, "");
+        const time = parseInt(amount, 10);
+
+        if (!id || isNaN(time) || time <= 0) {
+          const erro = await interaction.followUp({ content: "❌ Valor inválido. Certifique-se de colocar um número válido de ms.", ephemeral: false });
+          setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+          m.delete().catch(() => {});
+          return;
+        }
+
+        await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
+
+        const hours = Math.floor(time / 3600000);
+        const minutes = Math.floor((time % 3600000) / 60000);
+        const confirm = await interaction.followUp({ content: `✅ Adicionados ${hours}h${minutes > 0 ? ` e ${minutes}min` : ""} para <@${id}>`, ephemeral: false });
+        setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+        m.delete().catch(() => {});
       });
-      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
-      m.delete().catch(() => {});
-      return;
+
+      setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
+      break;
     }
 
-    const id = mention.replace(/[<@!>]/g, "");
-    const time = parseInt(amount, 10);
+  } // fim do switch
+}); // fim do client.on
 
-    if (!id || isNaN(time) || time <= 0) {
-      const erro = await interaction.followUp({ 
-        content: "❌ Valor inválido. Certifique-se de colocar um número válido de ms.", 
-        ephemeral: false 
-      });
-      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
-      m.delete().catch(() => {});
-      return;
-    }
-
-    // Atualiza o banco
-    await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [time, id]);
-
-    // Converte para horas e minutos para exibição
-    const hours = Math.floor(time / 3600000);
-    const minutes = Math.floor((time % 3600000) / 60000);
-
-    const confirm = await interaction.followUp({ 
-      content: `✅ Adicionados ${hours}h${minutes > 0 ? ` e ${minutes}min` : ""} para <@${id}>`, 
-      ephemeral: false 
-    });
-
-    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
-    m.delete().catch(() => {});
-  });
-
-  setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
-  break;
-}
-  
 // =====================
 // SELECT MENU FIXO PONTO
 // =====================
