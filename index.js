@@ -820,35 +820,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-      // ----------------- PAINEL PRINCIPAL (SELECT + BOTÕES) -----------------
-      const resetMenu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("ponto_menu")
-          .setPlaceholder("Selecione uma ação")
-          .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-      );
-
-      const botoesPainel = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("converter_horas")
-          .setLabel("💸 Converter Horas")
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId("consultar_saldo")
-          .setLabel("💳 Consultar Saldo")
-          .setStyle(ButtonStyle.Primary)
-      );
-
-      // Atualiza a mensagem original do select menu (ou envia nova)
-      if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({ content: "Selecione uma ação:", components: [resetMenu, botoesPainel] });
-      } else {
-        await interaction.update({ content: "Selecione uma ação:", components: [resetMenu, botoesPainel] });
-      }
-
-      await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
-    }
-  }
+    
 
   // ----------------- BOTÃO CONVERTER HORAS -----------------
   if (interaction.isButton() && interaction.customId === "converter_horas") {
