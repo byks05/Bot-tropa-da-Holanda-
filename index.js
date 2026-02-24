@@ -564,7 +564,58 @@ async function garantirPainel(client) {
 // QUANDO O BOT LIGA
 // =====================
 client.once("clientReady", async () => {
+
+  console.log(`Bot logado como ${client.user.tag}`);
+
+  // Garante que o painel principal exista
   await garantirPainel(client);
+
+  // =====================
+  // RECUPERAR PONTOS ATIVOS (REINÍCIO)
+  // =====================
+  const ativos = await pool.query("SELECT * FROM pontos WHERE ativo = true");
+
+  for (const user of ativos.rows) {
+    const guild = client.guilds.cache.first();
+    const canalExistente = guild.channels.cache.get(user.canal);
+
+    if (!canalExistente && user.entrada) {
+      const tempo = Date.now() - parseInt(user.entrada, 10);
+
+      await pool.query(
+        "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
+        [tempo, user.user_id]
+      );
+
+      console.log(`Ponto recuperado de ${user.user_id}`);
+    }
+  }
+
+  // =====================
+  // AUTO VERIFICAÇÃO A CADA 20 MIN
+  // =====================
+  setInterval(async () => {
+
+    const ativosInterval = await pool.query("SELECT * FROM pontos WHERE ativo = true");
+
+    for (const user of ativosInterval.rows) {
+      const guild = client.guilds.cache.first();
+      const canal = guild.channels.cache.get(user.canal);
+
+      if (!canal && user.entrada) {
+        const tempo = Date.now() - parseInt(user.entrada, 10);
+
+        await pool.query(
+          "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
+          [tempo, user.user_id]
+        );
+
+        console.log(`Tempo salvo automaticamente para ${user.user_id}`);
+      }
+    }
+
+  }, 20 * 60 * 1000); // 20 minutos
+
 });
 
 // =====================
@@ -622,6 +673,34 @@ client.on("interactionCreate", async (interaction) => {
 
       await pool.query("UPDATE pontos SET canal = $1 WHERE user_id = $2", [canal.id, userId]);
 
+// =====================
+// INATIVIDADE 2 MINUTOS
+// =====================
+const collectorMsg = canal.createMessageCollector({
+  filter: m => !m.author.bot,
+  idle: 2 * 60 * 1000 // 2 minutos
+});
+
+collectorMsg.on("end", async (_, reason) => {
+  if (reason === "idle") {
+
+    const status = await pool.query("SELECT ativo, entrada FROM pontos WHERE user_id = $1", [interaction.user.id]);
+    const userData = status.rows[0];
+
+    if (userData && userData.ativo && userData.entrada) {
+      const tempo = Date.now() - parseInt(userData.entrada, 10);
+
+      await pool.query(
+        "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
+        [tempo, interaction.user.id]
+      );
+
+      canal.send("⏳ Canal fechado por inatividade.");
+      setTimeout(() => canal.delete().catch(() => {}), 3000);
+    }
+  }
+});
+      
       // Botões dentro do canal privado
       const botoesPrivado = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -650,43 +729,59 @@ client.on("interactionCreate", async (interaction) => {
         canal.setTopic(`⏱ Tempo ativo: ${horas}h ${minutos}m ${segundos}s`).catch(() => {});
       }, 1000);
 
-      // ----------------- BOTÕES DO CANAL PRIVADO -----------------
-      const filter = i => i.user.id === userId && ["status", "sair"].includes(i.customId);
-      const collector = canal.createMessageComponentCollector({ filter, time: 86400000 });
+// =====================
+// BOTÕES DO CANAL PRIVADO (GLOBAL)
+// =====================
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+  if (!interaction.channel.name.startsWith("ponto-")) return;
 
-      collector.on("collect", async i => {
-        const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-        const userData = status.rows[0];
-        if (!userData) return i.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+  const userId = interaction.user.id;
 
-        if (i.customId === "status") {
-          let tempoAtual = parseInt(userData.total, 10) || 0;
-          if (userData.ativo && userData.entrada) {
-            tempoAtual += Date.now() - parseInt(userData.entrada, 10);
-          }
-          const h = Math.floor(tempoAtual / 3600000);
-          const m = Math.floor((tempoAtual % 3600000) / 60000);
-          const s = Math.floor((tempoAtual % 60000) / 1000);
+  if (interaction.customId === "status") {
 
-          await i.reply({ content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`, ephemeral: true });
+    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
+    const userData = status.rows[0];
+    if (!userData)
+      return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
 
-        } else if (i.customId === "sair") {
-          let tempoParaAdicionar = 0;
-          if (userData.ativo && userData.entrada) {
-            tempoParaAdicionar = Date.now() - parseInt(userData.entrada, 10);
-          }
+    let tempoAtual = parseInt(userData.total, 10) || 0;
+    if (userData.ativo && userData.entrada) {
+      tempoAtual += Date.now() - parseInt(userData.entrada, 10);
+    }
 
-          await pool.query(
-            "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL, entrada = NULL WHERE user_id = $2",
-            [tempoParaAdicionar, userId]
-          );
+    const h = Math.floor(tempoAtual / 3600000);
+    const m = Math.floor((tempoAtual % 3600000) / 60000);
+    const s = Math.floor((tempoAtual % 60000) / 1000);
 
-          clearInterval(intervaloTempo);
-          await i.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
-          collector.stop();
-          canal.delete().catch(() => {});
-        }
-      });
+    return interaction.reply({
+      content: `⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
+      ephemeral: true
+    });
+  }
+
+  if (interaction.customId === "sair") {
+
+    const status = await pool.query("SELECT ativo, entrada, total FROM pontos WHERE user_id = $1", [userId]);
+    const userData = status.rows[0];
+    if (!userData)
+      return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+
+    let tempoParaAdicionar = 0;
+    if (userData.ativo && userData.entrada) {
+      tempoParaAdicionar = Date.now() - parseInt(userData.entrada, 10);
+    }
+
+    await pool.query(
+      "UPDATE pontos SET ativo = false, total = total + $1, canal = NULL, entrada = NULL WHERE user_id = $2",
+      [tempoParaAdicionar, userId]
+    );
+
+    await interaction.reply({ content: "🔴 Ponto finalizado!", ephemeral: true });
+
+    interaction.channel.delete().catch(() => {});
+  }
+});
 
       // ----------------- PAINEL PRINCIPAL (SELECT + BOTÕES) -----------------
       const resetMenu = new ActionRowBuilder().addComponents(
