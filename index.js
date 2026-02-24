@@ -841,9 +841,26 @@ client.on("interactionCreate", async (interaction) => {
 
       await canal.send({ content: `🟢 Ponto iniciado! <@${userId}>`, components: [botoesPrivado] });
 
-      return interaction.reply({ content: "✅ Ponto iniciado com sucesso!", flags: 64 });
-    }
-  }
+      await interaction.update({
+  content: "✅ Ponto iniciado com sucesso!",
+  components: [
+    new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("ponto_menu")
+        .setPlaceholder("Selecione uma opção")
+        .addOptions([
+          {
+            label: "🟢 Entrar",
+            value: "entrar"
+          },
+          {
+            label: "🔴 Sair",
+            value: "sair"
+          }
+        ])
+    )
+  ]
+});
 
   // -------- BOTÃO STATUS --------
   if (interaction.isButton() && interaction.customId === "status") {
