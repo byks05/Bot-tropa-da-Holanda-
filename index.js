@@ -692,17 +692,29 @@ client.on("interactionCreate", async (interaction) => {
       });
 
       // Reseta select menu
-      const resetMenu = new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("ponto_menu")
-          .setPlaceholder("Selecione uma ação")
-          .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
-      );
+      // Reseta select menu **mantendo os botões**
+const botoesPainel = new ActionRowBuilder().addComponents(
+  new ButtonBuilder()
+    .setCustomId("converter_horas")
+    .setLabel("💸 Converter Horas")
+    .setStyle(ButtonStyle.Success),
+  new ButtonBuilder()
+    .setCustomId("consultar_saldo")
+    .setLabel("💳 Consultar Saldo")
+    .setStyle(ButtonStyle.Primary)
+);
 
-      await interaction.update({ content: "Selecione uma ação:", components: [resetMenu] });
-      await interaction.followUp({ content: "✅ Ponto iniciado com sucesso!", ephemeral: true });
-    }
-  }
+const resetMenu = new ActionRowBuilder().addComponents(
+  new StringSelectMenuBuilder()
+    .setCustomId("ponto_menu")
+    .setPlaceholder("Selecione uma ação")
+    .addOptions([{ label: "Entrar", value: "entrar", description: "Iniciar ponto" }])
+);
+
+await interaction.update({ 
+  content: "Selecione uma ação:", 
+  components: [resetMenu, botoesPainel] // ✅ Inclui os botões aqui
+});
 
   // ----------------- BOTÃO CONVERTER HORAS -----------------
   if (interaction.isButton() && interaction.customId === "converter_horas") {
