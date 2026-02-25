@@ -39,7 +39,7 @@ const client = new Client({
 // CLIENT READY (PAINEL ÚNICO)
 // =============================
 client.once("clientReady", async () => {
-  const canalEmbed = await client.channels.fetch("1476189793439453347").catch(() => null);
+  const canalEmbed = await client.channels.fetch("1476189793439453347")
   if (!canalEmbed) {
     console.log("Não foi possível achar o canal do painel. Verifique o ID e permissões.");
     return;
