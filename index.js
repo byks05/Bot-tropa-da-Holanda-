@@ -39,28 +39,19 @@ const client = new Client({
 // CLIENT READY (PAINEL ÚNICO)
 // =============================
 client.once("clientReady", async () => {
-  const canalEmbed = await client.channels.fetch("1474885764990107790").catch(() => null);
+  const canalEmbed = await client.channels.fetch("1476189793439453347").catch(() => null);
   if (!canalEmbed) {
     console.log("Não foi possível achar o canal do painel. Verifique o ID e permissões.");
     return;
   }
 
   const produtos = [
-    // Primeiro grupo
-    { label: "Vip", value: "vip", description: "🪙 6000 coins" },
-    { label: "Robux", value: "robux", description: "🪙 4000 coins" },
-    { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
-    { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
-    { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
-    // Segundo grupo
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💵 R$ 3" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💵 R$ 6" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💵 R$ 5" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💵 R$ 1,50" },
-    { label: "Spotify Premium", value: "spotify", description: "💵 R$ 5" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💵 R$ 2" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💵 R$ 6" },
-  ];
+  { label: "Vip", value: "vip", description: "🪙 6000 coins" },
+  { label: "Robux", value: "robux", description: "🪙 4000 coins" },
+  { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
+  { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
+  { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
+];
 
   const row = new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
@@ -71,35 +62,21 @@ client.once("clientReady", async () => {
 
   const textoPainel = `
 # Produtos | Tropa da Holanda 🇳🇱
--# Compre Apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408>  ou atendentes 🚨
+-# Compre apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408> ou atendentes 🚨
 
 ***Apenas para membros da equipe***
 > 🛒 **Vip**
 -# **COMPRA COM COINS 🪙**
-> 🛒 **Robux (Maximo de 200 Robux )** 
+> 🛒 **Robux (Máximo de 200 Robux)**
 -# **COMPRA COM COINS 🪙**
-> 🛒 **Nitro** 
+> 🛒 **Nitro**
 -# **COMPRA COM COINS 🪙**
 > 🛒 **Ripa**
 -# **COMPRA COM COINS 🪙**
-> 🛒 **Roupa personalizada** 
+> 🛒 **Roupa personalizada**
 -# **COMPRA COM COINS 🪙**
 
-***Para Todos***
-> 🛒 **Nitro mensal (1 mês/3 meses)** 
--# **COMPRA COM R$ 💵**
-> 🛒 **Contas virgem +30 Dias** 
--# **COMPRA COM R$ 💵**
-> 🛒 **Ativação do Nitro** 
--# **COMPRA COM R$ 💵**
-> 🛒 **Spotify Premium**
--# **COMPRA COM R$ 💵**
-> 🛒 **Molduras com icon personalizado** 
--# **COMPRA COM R$ 💵**
-> 🛒 **Youtube Premium** 
--# **COMPRA COM R$ 💵**
-
--# Compre Apenas com o vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
+-# Compre apenas com vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
 `;
 
   try {
@@ -130,28 +107,19 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.customId !== "loja_select") return;
 
   const produtos = [
-    
-    { label: "Vip", value: "vip", description: "🪙 6000 coins" },
-    { label: "Robux", value: "robux", description: "🪙 4000 coins" },
-    { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
-    { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
-    { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
-    { label: "Nitro 1 mês", value: "nitro_1", description: "💵 R$ 3", categoriaId: "1474885663425036470" },
-    { label: "Nitro 3 meses", value: "nitro_3", description: "💵 R$ 6", categoriaId: "1474885663425036470" },
-    { label: "Contas virgem +30 dias", value: "conta_virgem", description: "💵 R$ 5", categoriaId: "1474885663425036470" },
-    { label: "Ativação Nitro", value: "ativacao_nitro", description: "💵 R$ 1,50", categoriaId: "1474885663425036470" },
-    { label: "Spotify Premium", value: "spotify", description: "💵 R$ 5", categoriaId: "1474885663425036470" },
-    { label: "Molduras com icon personalizado", value: "moldura", description: "💵 R$ 2", categoriaId: "1474885663425036470" },
-    { label: "Y0utub3 Premium", value: "youtube", description: "💵 R$ 6", categoriaId: "1474885663425036470" },
-  ];
-
+  { label: "Vip", value: "vip", description: "🪙 6000 coins" },
+  { label: "Robux", value: "robux", description: "🪙 4000 coins" },
+  { label: "Nitro", value: "nitro", description: "🪙 2500 coins" },
+  { label: "Ripa", value: "ripa", description: "🪙 1700 coins" },
+  { label: "Roupa personalizada", value: "roupa", description: "🪙 1400 coins" },
+];
   const produtoValue = interaction.values[0];
   const produtoSelecionado = produtos.find(p => p.value === produtoValue);
 
   if (!produtoSelecionado) return;
 
   const guild = interaction.guild;
-const categoriaId = "1474885663425036470"; // 👈 Categoria fixa
+const categoriaId = "1474366472326222013"; // 👈 Categoria fixa
 const ticketName = `ticket-${interaction.user.username}`;
   
   // Evita ticket duplicado
