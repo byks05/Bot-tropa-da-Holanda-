@@ -1263,8 +1263,14 @@ if (command === "listaclientes") {
 // TICKET MENTION
 // =============================
 client.on("channelCreate", async (channel) => {
-  if (channel.parentId === IDS.TICKET_CATEGORY) {
-    channel.send(`<@&${IDS.RECRUITMENT_ROLE}>`);
+  if (channel.parentId === IDS.TICKET_CATEGORY && 
+      Array.isArray(IDS.RECRUITMENT_ROLE)) {
+
+    const mentions = IDS.RECRUITMENT_ROLE
+      .map(id => `<@&${id}>`)
+      .join(" ");
+
+    await channel.send({ content: mentions });
   }
 });
 
