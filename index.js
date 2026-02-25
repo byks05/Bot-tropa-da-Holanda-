@@ -13,7 +13,6 @@ const {
   PermissionsBitField,
   PermissionFlagsBits
 } = require("discord.js");
-const { Pool } = require("pg");
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
@@ -23,21 +22,6 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-
-(async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS pontos (
-      user_id TEXT PRIMARY KEY,
-      total INTEGER DEFAULT 0,
-      ativo BOOLEAN DEFAULT false,
-      entrada TIMESTAMP,
-      canal TEXT,
-      guild_id TEXT,
-      notificado BOOLEAN DEFAULT false,
-      coins INTEGER DEFAULT 0
-    );
-  `);
-})();
 // =============================
 // CLIENT & DATABASE
 // =============================
@@ -1285,18 +1269,3 @@ client.on("channelCreate", async (channel) => {
 
 client.login(process.env.TOKEN);
 
-// =============================
-// SERVIDOR PARA RENDER (PORTA)
-// =============================
-const express = require("express");
-const app = express();
-
-app.get("/", (req, res) => {
-  res.send("Bot online!");
-});
-
-const PORT = process.env.PORT;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-});
