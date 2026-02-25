@@ -18,12 +18,25 @@ const fs = require("fs");
 const path = require("path");
 
 // 🔥 PostgreSQL
-const { Pool } = require("pg");
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: { rejectUnauthorized: false }
 });
 
+(async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pontos (
+      user_id TEXT PRIMARY KEY,
+      total INTEGER DEFAULT 0,
+      ativo BOOLEAN DEFAULT false,
+      entrada TIMESTAMP,
+      canal TEXT,
+      guild_id TEXT,
+      notificado BOOLEAN DEFAULT false,
+      coins INTEGER DEFAULT 0
+    );
+  `);
+})();
 // =============================
 // CLIENT & DATABASE
 // =============================
