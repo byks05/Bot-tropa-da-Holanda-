@@ -1284,3 +1284,18 @@ client.on("channelCreate", async (channel) => {
 });
 
 client.login(process.env.TOKEN);
+
+// =============================
+// SERVIDOR PARA RENDER (PORTA)
+// =============================
+const express = require("express");
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Bot online!");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
