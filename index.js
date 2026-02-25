@@ -61,22 +61,22 @@ client.once("clientReady", async () => {
   );
 
   const textoPainel = `
-# Produtos | Tropa da Holanda 🇳🇱
--# Compre apenas com vendedor oficial <@1209478510847197216> , <@910351624189411408> ou atendentes 🚨
+# Resgate Coins | Tropa da Holanda 🇳🇱
+-# Resgate seus itens apenas com eles <@&1468017578747105390>  <@&1472589662144040960> 🚨
 
 ***Apenas para membros da equipe***
 > 🛒 **Vip**
--# **COMPRA COM COINS 🪙**
-> 🛒 **Robux (Máximo de 200 Robux)**
--# **COMPRA COM COINS 🪙**
+-# **🪙 6000 coins**
+> 🛒 **Robux**
+-# **MAXIMO DE 200 - 🪙 4000 coins**
 > 🛒 **Nitro**
--# **COMPRA COM COINS 🪙**
+-# **🪙 2500 coins**
 > 🛒 **Ripa**
--# **COMPRA COM COINS 🪙**
+-# **🪙 1700 coins**
 > 🛒 **Roupa personalizada**
--# **COMPRA COM COINS 🪙**
+-# **🪙 1400 coins**
 
--# Compre apenas com vendedor oficial <@1209478510847197216>, <@910351624189411408> e os atendentes 🚨
+-# Resgate seus itens apenas com eles <@&1468017578747105390>  <@&1472589662144040960> 🚨
 `;
 
   try {
