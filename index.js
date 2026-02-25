@@ -13,6 +13,7 @@ const {
   PermissionsBitField,
   PermissionFlagsBits
 } = require("discord.js");
+const { Pool } = require("pg");
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
