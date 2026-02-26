@@ -1535,7 +1535,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
 
     // Insere ou atualiza o usuário na tabela recrutamento
     await pool.query(
-      `INSERT INTO recrutamento
+      `INSERT INTO recrutamentos
         (userid, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
        VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
        ON CONFLICT (userid)
@@ -1572,7 +1572,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
 if (message.content === `${PREFIX}recrutados`) {
   try {
     const resultado = await pool.query(
-      `SELECT * FROM recrutamento
+      `SELECT * FROM recrutamentos
        WHERE status = 'aprovado'
        ORDER BY data_aprovacao DESC`
     );
