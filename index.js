@@ -340,42 +340,50 @@ client.on("interactionCreate", async (interaction) => {
   switch (interaction.customId) {
 
     case "registro": {
-      const registro = await pool.query(
-  "SELECT user_id, ativo, total_geral, coins FROM pontos ORDER BY total_geral DESC"
-);
 
-const ranking = registro.rows.map((u, index) => {
-  const tempo = u.total_geral || 0;
+  const res = await pool.query(
+    "SELECT user_id, ativo, total_geral, coins FROM pontos ORDER BY total_geral DESC"
+  );
 
-  const horas = Math.floor(tempo / 3600000);
-  const minutos = Math.floor((tempo % 3600000) / 60000);
-  const segundos = Math.floor((tempo % 60000) / 1000);
+  if (!res.rows.length) {
+    const msg = await interaction.reply({
+      content: "Nenhum usuário encontrado.",
+      ephemeral: false
+    });
+    setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
+    return;
+  }
 
-  return `${index + 1}. <@${u.user_id}> | ⏱ ${horas}h ${minutos}m ${segundos}s | 💰 ${u.coins || 0} coins`;
-});if (!res.rows.length) {
-        const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
-        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
-        return;
-      }
+  const chunkSize = 20;
 
-      const chunkSize = 20;
-      for (let i = 0; i < res.rows.length; i += chunkSize) {
-        const chunk = res.rows.slice(i, i + chunkSize);
-        const lista = chunk.map((u, index) => {
-          const horas = Math.floor(u.total / 3600000);
-          const minutos = Math.floor((u.total % 3600000) / 60000);
-          const segundos = Math.floor((u.total % 60000) / 1000);
-          return `**${i + index + 1}** - <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ⏱ ${horas}h ${minutos}m ${segundos}s - 💰 ${u.coins || 0} coins`;
-        }).join("\n");
+  for (let i = 0; i < res.rows.length; i += chunkSize) {
 
-        let msg;
-        if (i === 0) msg = await interaction.reply({ content: lista, ephemeral: false });
-        else msg = await interaction.followUp({ content: lista, ephemeral: false });
+    const chunk = res.rows.slice(i, i + chunkSize);
 
-        setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
-      }
-      break;
-    }
+    const lista = chunk.map((u, index) => {
+
+      const tempo = u.total_geral || 0;
+
+      const horas = Math.floor(tempo / 3600000);
+      const minutos = Math.floor((tempo % 3600000) / 60000);
+      const segundos = Math.floor((tempo % 60000) / 1000);
+
+      return `**${i + index + 1}** - <@${u.user_id}> - ${u.ativo ? "🟢 Ativo" : "🔴 Inativo"} - ⏱ ${horas}h ${minutos}m ${segundos}s - 💰 ${u.coins || 0} coins`;
+
+    }).join("\n");
+
+    let msg;
+
+    if (i === 0)
+      msg = await interaction.reply({ content: lista, ephemeral: false });
+    else
+      msg = await interaction.followUp({ content: lista, ephemeral: false });
+
+    setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
+  }
+
+  break;
+}
 
     case "resetUser": {
       const msgReset = await interaction.reply({ content: "Mencione o usuário que deseja resetar.", ephemeral: false });
@@ -711,7 +719,9 @@ case "removeTime": {
       return;
     }
 
-    const totalGeral = userData.total_geral || 0;
+    const userData = res.rows[0];
+
+const totalGeral = userData.total_geral || 0;
 const saldoHoras = userData.saldo_horas || 0;
 
 // Histórico total
@@ -727,16 +737,12 @@ const segundosSaldo = Math.floor((saldoHoras % 60000) / 1000);
 const statusMsg =
   `📊 **Status de <@${mention.id}>**\n\n` +
   `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n\n` +
-
   `🔒 Histórico Total:\n` +
   `⏱ ${horasTotal}h ${minutosTotal}m ${segundosTotal}s\n\n` +
-
   `💼 Horas Disponíveis para Converter:\n` +
   `⏱ ${horasSaldo}h ${minutosSaldo}m ${segundosSaldo}s\n\n` +
-
   `💰 Coins: ${userData.coins || 0}\n` +
   `📂 Canal: ${userData.canal ? `<#${userData.canal}>` : "Nenhum"}`;
-
 const confirm = await interaction.followUp({
   content: statusMsg,
   ephemeral: false
