@@ -1378,7 +1378,11 @@ const IDS = {
   STAFF: ["1468069638935150635", "1468017578747105390"],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
-  RECRUITMENT_ROLE: ["1468024687031484530", "1470541063256277012"],
+  RECRUITMENT_ROLE: ["1468024687031484530",
+                     "1470541063256277012",
+  "1476619364672475278",
+  "1476619432838168668",
+  "1476619502832713839"],
 
   SERVIDOR_PRINCIPAL: "1468007116936843359",
   SERVIDOR_RECRUTAMENTO: "1476618436170748129",
@@ -1392,7 +1396,10 @@ const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem
 const ALLOWED_REC = [
   "1468017578747105390",
   "1468069638935150635",
-  "1468066422490923081","1476619364672475278","1476619432838168668","1476619502832713839"
+  "1468066422490923081",
+  "1476619364672475278",
+  "1476619432838168668",
+  "1476619502832713839"
 ];
 // =============================
 // VERIFICAÇÃO AUTOMÁTICA DE RECRUTADOS
@@ -1533,26 +1540,26 @@ if (message.content === `${PREFIX}recrutados`) {
     message.reply("Ocorreu um erro ao buscar os recrutados.");
   }
 }
-  // =============================
+ // =============================
 // COMANDO !APROVAR
 // =============================
 if (message.content.startsWith(`${PREFIX}aprovar`)) {
   try {
-    // Só membros autorizados podem aprovar
+    // Checa se o autor tem permissão
     if (!ALLOWED_REC.includes(message.author.id)) {
-      return message.reply("Você não tem permissão para aprovar recrutas.");
+      return message.reply("❌ Você não tem permissão para aprovar recrutas.");
     }
 
     // Pega o usuário mencionado
     const membro = message.mentions.members.first();
-    if (!membro) return message.reply("Mencione o usuário que deseja aprovar.");
+    if (!membro) return message.reply("⚠️ Mencione o usuário que deseja aprovar.");
 
-    // Só roda no servidor de recrutamento
+    // Confirma que o comando está sendo usado no servidor de recrutamento
     if (message.guild.id !== IDS.SERVIDOR_RECRUTAMENTO) {
-      return message.reply("Este comando só pode ser usado no servidor de recrutamento.");
+      return message.reply("⚠️ Este comando só pode ser usado no servidor de recrutamento.");
     }
 
-    // Insere ou atualiza no banco
+    // Insere ou atualiza o usuário no banco
     await pool.query(
       `INSERT INTO recrutamentos 
         (user_id, recrutado, recrutador_id, servidor_origem, status, data_aprovacao, validade)
@@ -1568,11 +1575,20 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
       [membro.id, true, message.author.id, message.guild.id, 'aprovado']
     );
 
-    message.reply(`<@${membro.id}> foi aprovado com sucesso! ✅`);
+    // Confirmação no canal
+    message.reply(`✅ <@${membro.id}> foi aprovado com sucesso!`);
+
+    // =============================
+    // LOG NO CANAL
+    // =============================
+    const logChannel = message.guild.channels.cache.get(IDS.LOG_CHANNEL);
+    if (logChannel) {
+      logChannel.send(`✅ ${membro.user.tag} foi aprovado por ${message.author.tag}.`);
+    }
 
   } catch (err) {
     console.error("Erro ao aprovar recrutado:", err);
-    message.reply("Ocorreu um erro ao aprovar o recrutado.");
+    message.reply("❌ Ocorreu um erro ao aprovar o recrutado.");
   }
 }
 
