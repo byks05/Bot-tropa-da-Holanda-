@@ -1370,7 +1370,7 @@ if (interaction.isButton() && interaction.customId === "consultar_saldo") {
 }
 });
 // =============================
-// CONFIG
+// CONFIGURAÇÕES GERAIS
 // =============================
 const PREFIX = "thl!";
 
@@ -1378,10 +1378,64 @@ const IDS = {
   STAFF: ["1468069638935150635", "1468017578747105390"],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
-  RECRUITMENT_ROLE: ["1468024687031484530", "1470541063256277012"]
-};
-  
+  RECRUITMENT_ROLE: ["1468024687031484530", "1470541063256277012"],
 
+  SERVIDOR_PRINCIPAL: "1468007116936843359",
+  SERVIDOR_RECRUTAMENTO: "1476618436170748129",
+  CARGO_MEMBRO: "1468026315285205094"
+};
+
+// =============================
+// CONFIGURAÇÕES DE PERMISSÕES
+// =============================
+const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem usar addcoins/addtempo
+const ALLOWED_REC = [
+  "1468017578747105390",
+  "1468069638935150635",
+  "1468066422490923081"
+];
+// =============================
+// VERIFICAÇÃO AUTOMÁTICA DE RECRUTADOS
+// =============================
+client.on("guildMemberAdd", async (member) => {
+  try {
+    if (member.guild.id !== IDS.SERVIDOR_PRINCIPAL) return;
+
+    const resultado = await pool.query(
+      "SELECT * FROM recrutamentos WHERE user_id = $1",
+      [member.id]
+    );
+
+    if (resultado.rows.length === 0) return member.kick("Não passou pelo servidor de recrutamento.");
+
+    const dados = resultado.rows[0];
+
+    if (!dados.recrutado || dados.status !== "aprovado") return member.kick("Recrutamento não aprovado.");
+
+    if (new Date(dados.validade) < new Date()) {
+      await pool.query(
+        "UPDATE recrutamentos SET status = 'expirado', recrutado = false WHERE user_id = $1",
+        [member.id]
+      );
+      return member.kick("Recrutamento expirado.");
+    }
+
+    if (dados.servidor_origem !== IDS.SERVIDOR_RECRUTAMENTO) return member.kick("Servidor de origem inválido.");
+
+    // Dá o cargo ao membro
+    const cargo = member.guild.roles.cache.get(IDS.CARGO_MEMBRO);
+    if (cargo) await member.roles.add(cargo);
+
+    // =============================
+    // LOG DE ENTRADA
+    // =============================
+    const logChannel = member.guild.channels.cache.get(IDS.LOG_CHANNEL);
+    if (logChannel) logChannel.send(`✅ ${member.user.tag} entrou no servidor principal.`);
+
+  } catch (err) {
+    console.error("Erro na verificação de recrutamento:", err);
+  }
+});
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -1449,16 +1503,78 @@ if (!data) {
 
   data = result.rows[0];
 }
+  // =============================
+// COMANDO RECRUTADOS
+// =============================
+if (message.content === `${PREFIX}recrutados`) {
+  try {
+    const resultado = await pool.query(
+      `SELECT * FROM recrutamentos 
+       WHERE status = 'aprovado'
+       ORDER BY data_aprovacao DESC`
+    );
 
+    if (resultado.rows.length === 0) {
+      return message.reply("Nenhum recrutado aprovado no momento.");
+    }
+
+    let lista = resultado.rows.map((r, index) => {
+      return `${index + 1}. <@${r.user_id}> | Recrutador: <@${r.recrutador_id}>`;
+    });
+
+    const mensagemFinal = lista.join("\n").slice(0, 1900);
+
+    message.channel.send({
+      content: `📋 **Lista de Recrutados Aprovados**\n\n${mensagemFinal}`
+    });
+
+  } catch (err) {
+    console.error("Erro ao listar recrutados:", err);
+    message.reply("Ocorreu um erro ao buscar os recrutados.");
+  }
+}
+  // =============================
+// COMANDO !APROVAR
 // =============================
-// CONFIGURAÇÕES DE PERMISSÕES
-// =============================
-const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem usar addcoins/addtempo
-const ALLOWED_REC = [
-  "1468017578747105390",
-  "1468069638935150635",
-  "1468066422490923081"
-];
+if (message.content.startsWith(`${PREFIX}aprovar`)) {
+  try {
+    // Só membros autorizados podem aprovar
+    if (!ALLOWED_REC.includes(message.author.id)) {
+      return message.reply("Você não tem permissão para aprovar recrutas.");
+    }
+
+    // Pega o usuário mencionado
+    const membro = message.mentions.members.first();
+    if (!membro) return message.reply("Mencione o usuário que deseja aprovar.");
+
+    // Só roda no servidor de recrutamento
+    if (message.guild.id !== IDS.SERVIDOR_RECRUTAMENTO) {
+      return message.reply("Este comando só pode ser usado no servidor de recrutamento.");
+    }
+
+    // Insere ou atualiza no banco
+    await pool.query(
+      `INSERT INTO recrutamentos 
+        (user_id, recrutado, recrutador_id, servidor_origem, status, data_aprovacao, validade)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW() + INTERVAL '7 days')
+       ON CONFLICT (user_id)
+       DO UPDATE SET 
+         recrutado = $2,
+         status = $5,
+         recrutador_id = $3,
+         servidor_origem = $4,
+         data_aprovacao = NOW(),
+         validade = NOW() + INTERVAL '7 days'`,
+      [membro.id, true, message.author.id, message.guild.id, 'aprovado']
+    );
+
+    message.reply(`<@${membro.id}> foi aprovado com sucesso! ✅`);
+
+  } catch (err) {
+    console.error("Erro ao aprovar recrutado:", err);
+    message.reply("Ocorreu um erro ao aprovar o recrutado.");
+  }
+}
 
   // =============================
 // MUTE / UNMUTE CHAT
