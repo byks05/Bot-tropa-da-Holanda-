@@ -174,6 +174,93 @@ client.on("interactionCreate", async (interaction) => {
 
   await interaction.channel.delete().catch(() => {});
 });
+// =====================
+// PAINEL FIXO RECRUTAMENTO
+// =====================
+
+const recrutamentoChannelId = "1476543945033908267";
+let painelRecMensagemId = null;
+const REC_MESSAGE_LIFETIME = 15000;
+
+async function criarPainelRecrutamento(client) {
+  try {
+    const canal = await client.channels.fetch(recrutamentoChannelId);
+    if (!canal) return console.log("Canal de recrutamento não encontrado.");
+
+    // Verifica se já existe painel
+    if (!painelRecMensagemId) {
+      const mensagens = await canal.messages.fetch({ limit: 30 });
+      const existente = mensagens.find(msg =>
+        msg.components.some(row =>
+          row.components.some(c =>
+            ["rec_registro","rec_resetAll","rec_add","rec_remove"].includes(c.customId)
+          )
+        )
+      );
+      if (existente) painelRecMensagemId = existente.id;
+    }
+
+    const botoesRec = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("rec_registro")
+        .setLabel("📋 Registro")
+        .setStyle(ButtonStyle.Primary),
+
+      new ButtonBuilder()
+        .setCustomId("rec_resetAll")
+        .setLabel("🔄 Resetar Todos")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("rec_add")
+        .setLabel("➕ Adicionar Rec")
+        .setStyle(ButtonStyle.Success),
+
+      new ButtonBuilder()
+        .setCustomId("rec_remove")
+        .setLabel("➖ Remover Rec")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+    const conteudo = "🎖 **Painel de Recrutamento**\nGerencie os recrutadores abaixo.";
+
+    if (painelRecMensagemId) {
+      const mensagem = await canal.messages.fetch(painelRecMensagemId).catch(() => null);
+      if (mensagem) {
+        await mensagem.edit({ content: conteudo, components: [botoesRec] });
+        return;
+      }
+    }
+
+    const novaMensagem = await canal.send({
+      content: conteudo,
+      components: [botoesRec]
+    });
+
+    painelRecMensagemId = novaMensagem.id;
+
+  } catch (err) {
+    console.log("Erro ao criar painel recrutamento:", err);
+  }
+}
+
+// recria se apagar
+client.on("messageDelete", async (message) => {
+  if (message.channel.id !== recrutamentoChannelId) return;
+
+  if (!message.components?.some(row =>
+    row.components.some(c =>
+      ["rec_registro","rec_resetAll","rec_add","rec_remove"].includes(c.customId)
+    )
+  )) return;
+
+  await criarPainelRecrutamento(client);
+});
+
+// cria ao iniciar bot
+client.once("clientReady", () => {
+  criarPainelRecrutamento(client);
+});
 
 // =====================
 // PAINEL DE ADMIN FIXO AVANÇADO
@@ -592,6 +679,129 @@ case "removeTime": {
   setTimeout(() => msgStatus.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
       }
+// =====================
+// INTERAÇÕES RECRUTAMENTO
+// =====================
+
+case "rec_registro": {
+
+  const res = await pool.query(
+    "SELECT user_id, recrutamentos FROM recrutadores ORDER BY recrutamentos DESC"
+  );
+
+  if (!res.rows.length) {
+    const msg = await interaction.reply({
+      content: "Nenhum recrutador encontrado.",
+      ephemeral: false
+    });
+    setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
+    break;
+  }
+
+  const lista = res.rows.map((u, i) =>
+    `**${i+1}°** - <@${u.user_id}> - 🎯 ${u.recrutamentos} recrutamentos`
+  ).join("\n");
+
+  const msg = await interaction.reply({ content: lista, ephemeral: false });
+  setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
+  break;
+}
+
+case "rec_resetAll": {
+
+  await pool.query("UPDATE recrutadores SET recrutamentos = 0");
+
+  const msg = await interaction.reply({
+    content: "✅ Todos recrutamentos foram resetados!",
+    ephemeral: false
+  });
+
+  setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
+  break;
+}
+
+case "rec_add": {
+
+  await interaction.reply({
+    content: "Use: `@usuário quantidade`",
+    ephemeral: false
+  });
+
+  const filter = m => m.author.id === interaction.user.id;
+
+  const collector = interaction.channel.createMessageCollector({
+    filter,
+    max: 1,
+    time: 60000
+  });
+
+  collector.on("collect", async m => {
+
+    const [mention, amount] = m.content.split(" ");
+    const id = mention?.replace(/[<@!>]/g, "");
+    const quantidade = parseInt(amount) || 1;
+
+    if (!id) return;
+
+    await pool.query(`
+      INSERT INTO recrutadores (user_id, recrutamentos)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id)
+      DO UPDATE SET recrutamentos = recrutadores.recrutamentos + $2
+    `, [id, quantidade]);
+
+    const confirm = await interaction.followUp({
+      content: `✅ Adicionado ${quantidade} recrutamento(s) para <@${id}>`,
+      ephemeral: false
+    });
+
+    setTimeout(() => confirm.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
+    m.delete().catch(()=>{});
+  });
+
+  break;
+}
+
+case "rec_remove": {
+
+  await interaction.reply({
+    content: "Use: `@usuário quantidade`",
+    ephemeral: false
+  });
+
+  const filter = m => m.author.id === interaction.user.id;
+
+  const collector = interaction.channel.createMessageCollector({
+    filter,
+    max: 1,
+    time: 60000
+  });
+
+  collector.on("collect", async m => {
+
+    const [mention, amount] = m.content.split(" ");
+    const id = mention?.replace(/[<@!>]/g, "");
+    const quantidade = parseInt(amount) || 1;
+
+    if (!id) return;
+
+    await pool.query(`
+      UPDATE recrutadores
+      SET recrutamentos = GREATEST(recrutamentos - $1, 0)
+      WHERE user_id = $2
+    `, [quantidade, id]);
+
+    const confirm = await interaction.followUp({
+      content: `✅ Removido ${quantidade} recrutamento(s) de <@${id}>`,
+      ephemeral: false
+    });
+
+    setTimeout(() => confirm.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
+    m.delete().catch(()=>{});
+  });
+
+  break;
+}
 
   } // fim do switch
 }); // fim do client.on
@@ -1171,7 +1381,85 @@ if (command === "recaliados") {
     console.error(err);
   }
 }
-// =============================
+  // =============================
+  // RECSTATUS
+  // =============================
+  if (command === "recstatus") {
+
+  try {
+
+    const res = await pool.query(
+      "SELECT recrutamentos FROM recrutadores WHERE user_id = $1",
+      [message.author.id]
+    );
+
+    if (res.rows.length === 0) {
+      return message.reply("📊 Você ainda não possui recrutamentos.");
+    }
+
+    const quantidade = res.rows[0].recrutamentos;
+
+    return message.reply(
+      `📊 ${message.author.tag}, você possui **${quantidade} recrutamentos**.`
+    );
+
+  } catch (err) {
+    console.error("Erro ao consultar recrutamentos:", err);
+    return message.reply("❌ Ocorreu um erro ao consultar seus recrutamentos.");
+  }
+  }
+  // =============================
+  // RECAPROVADO
+  // =============================
+  
+  if (command === "recaprovado") {
+
+  const aprovado = message.mentions.members.first();
+  if (!aprovado)
+    return message.reply("❌ Mencione o usuário aprovado.");
+
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+
+  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
+    return message.reply("❌ Sem permissão para usar esse comando.");
+
+  try {
+
+    // Verifica se quem executou já existe na tabela
+    const res = await pool.query(
+      "SELECT recrutamentos FROM recrutadores WHERE user_id = $1",
+      [message.author.id]
+    );
+
+    let quantidade = 1;
+
+    if (res.rows.length === 0) {
+
+      await pool.query(
+        "INSERT INTO recrutadores (user_id, recrutamentos) VALUES ($1, $2)",
+        [message.author.id, quantidade]
+      );
+
+    } else {
+
+      quantidade = Number(res.rows[0].recrutamentos) + 1;
+
+      await pool.query(
+        "UPDATE recrutadores SET recrutamentos = $1 WHERE user_id = $2",
+        [quantidade, message.author.id]
+      );
+    }
+
+    return message.reply(
+      `✅ Recrutamento aprovado!\n👤 ${message.author.tag} agora tem **${quantidade} recrutamentos**.`
+    );
+
+  } catch (err) {
+    console.error("Erro ao registrar recrutamento:", err);
+    return message.reply("❌ Ocorreu um erro ao registrar o recrutamento.");
+  }
+  }
+  // =============================
   // COMPRACONFIRMADA
   // =============================
   if (command === "compraconfirmada") {
