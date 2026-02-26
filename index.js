@@ -1511,47 +1511,17 @@ if (!data) {
   data = result.rows[0];
 }
   // =============================
-// COMANDO RECRUTADOS
-// =============================
-if (message.content === `${PREFIX}recrutados`) {
-  try {
-    const resultado = await pool.query(
-      `SELECT * FROM recrutamentos 
-       WHERE status = 'aprovado'
-       ORDER BY data_aprovacao DESC`
-    );
-
-    if (resultado.rows.length === 0) {
-      return message.reply("Nenhum recrutado aprovado no momento.");
-    }
-
-    let lista = resultado.rows.map((r, index) => {
-      return `${index + 1}. <@${r.user_id}> | Recrutador: <@${r.recrutador_id}>`;
-    });
-
-    const mensagemFinal = lista.join("\n").slice(0, 1900);
-
-    message.channel.send({
-      content: `📋 **Lista de Recrutados Aprovados**\n\n${mensagemFinal}`
-    });
-
-  } catch (err) {
-    console.error("Erro ao listar recrutados:", err);
-    message.reply("Ocorreu um erro ao buscar os recrutados.");
-  }
-}
-// =============================
-// COMANDO !APROVAR CHECANDO CARGOS
+// COMANDO !APROVAR
 // =============================
 if (message.content.startsWith(`${PREFIX}aprovar`)) {
   try {
-    // Checa se o autor tem algum dos cargos permitidos
-    const memberRoles = message.member.roles.cache.map(r => r.id); // pega os IDs de todos os cargos do usuário
-    const allowedRoles = IDS.RECRUITMENT_ROLE; // cargos autorizados para aprovar
+    // Checa se o autor tem o cargo de recrutador
+    const membroAutor = message.member;
+    const cargosPermitidos = IDS.RECRUITMENT_ROLE; // array de cargos que podem aprovar
+    const temCargo = membroAutor.roles.cache.some(r => cargosPermitidos.includes(r.id));
 
-    const temPermissao = memberRoles.some(r => allowedRoles.includes(r));
-    if (!temPermissao) {
-      return message.reply("❌ Você não tem permissão para aprovar recrutas. (Cargos insuficientes)");
+    if (!temCargo) {
+      return message.reply("❌ Você não tem permissão para aprovar recrutas.");
     }
 
     // Pega o usuário mencionado
@@ -1563,26 +1533,28 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
       return message.reply("⚠️ Este comando só pode ser usado no servidor de recrutamento.");
     }
 
-    // Insere ou atualiza o usuário no banco
+    // Insere ou atualiza o usuário na tabela recrutamento
     await pool.query(
-      `INSERT INTO recrutamentos 
-        (user_id, recrutado, recrutador_id, servidor_origem, status, data_aprovacao, validade)
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW() + INTERVAL '7 days')
-       ON CONFLICT (user_id)
-       DO UPDATE SET 
+      `INSERT INTO recrutamento
+        (userid, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
+       VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
+       ON CONFLICT (userid)
+       DO UPDATE SET
          recrutado = $2,
-         status = $5,
-         recrutador_id = $3,
-         servidor_origem = $4,
+         status = $3,
          data_aprovacao = NOW(),
-         validade = NOW() + INTERVAL '7 days'`,
-      [membro.id, true, message.author.id, message.guild.id, 'aprovado']
+         validade = NOW() + INTERVAL '7 days',
+         recrutador_id = $4,
+         servidor_origem = $5`,
+      [membro.id, true, 'aprovado', message.author.id, message.guild.id]
     );
 
     // Confirmação no canal
     message.reply(`✅ <@${membro.id}> foi aprovado com sucesso!`);
 
+    // =============================
     // LOG NO CANAL
+    // =============================
     const logChannel = message.guild.channels.cache.get(IDS.LOG_CHANNEL);
     if (logChannel) {
       logChannel.send(`✅ ${membro.user.tag} foi aprovado por ${message.author.tag}.`);
@@ -1591,6 +1563,37 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
   } catch (err) {
     console.error("Erro ao aprovar recrutado:", err);
     message.reply("❌ Ocorreu um erro ao aprovar o recrutado.");
+  }
+}
+
+// =============================
+// COMANDO !RECRUTADOS
+// =============================
+if (message.content === `${PREFIX}recrutados`) {
+  try {
+    const resultado = await pool.query(
+      `SELECT * FROM recrutamento
+       WHERE status = 'aprovado'
+       ORDER BY data_aprovacao DESC`
+    );
+
+    if (resultado.rows.length === 0) {
+      return message.reply("Nenhum recrutado aprovado no momento.");
+    }
+
+    let lista = resultado.rows.map((r, index) => {
+      return `${index + 1}. <@${r.userid}> | Recrutador: <@${r.recrutador_id}>`;
+    });
+
+    const mensagemFinal = lista.join("\n").slice(0, 1900);
+
+    message.channel.send({
+      content: `📋 **Lista de Recrutados Aprovados**\n\n${mensagemFinal}`
+    });
+
+  } catch (err) {
+    console.error("Erro ao listar recrutados:", err);
+    message.reply("❌ Ocorreu um erro ao buscar os recrutados.");
   }
 }
   // =============================
