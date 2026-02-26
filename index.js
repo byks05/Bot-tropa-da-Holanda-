@@ -445,28 +445,40 @@ const ranking = registro.rows.map((u, index) => {
     }
 
     case "addTime": {
-  const msgTime = await interaction.reply({ content: "Use: `@usuário 3h 15m` ou `@usuário 2h` para adicionar tempo.", ephemeral: false });
+
+  const msgTime = await interaction.reply({
+    content: "Use: `@usuário 3h 15m` ou `@usuário 2h` para adicionar tempo.",
+    ephemeral: false
+  });
+
   const filterTime = m => m.author.id === userId;
-  const collectorTime = interaction.channel.createMessageCollector({ filter: filterTime, max: 1, time: 60000 });
+  const collectorTime = interaction.channel.createMessageCollector({
+    filter: filterTime,
+    max: 1,
+    time: 60000
+  });
 
   collectorTime.on("collect", async m => {
+
     const args = m.content.split(" ");
     const mention = args[0];
     if (!mention) return;
-    
+
     const id = mention.replace(/[<@!>]/g, "");
     if (!id) return;
 
-    // Transformar o restante da mensagem em tempo
-    const timeString = args.slice(1).join(" ").toLowerCase(); // "3h 15m"
+    const timeString = args.slice(1).join(" ").toLowerCase();
     if (!timeString) {
-      const erro = await interaction.followUp({ content: "❌ Você precisa informar o tempo. Ex: `3h 15m`", ephemeral: false });
+      const erro = await interaction.followUp({
+        content: "❌ Você precisa informar o tempo. Ex: `3h 15m`",
+        ephemeral: false
+      });
       setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
       m.delete().catch(() => {});
       return;
     }
 
-    // Função para converter "3h 15m" em ms
+    // Converter "3h 15m" em ms
     function parseTime(str) {
       let total = 0;
       const regex = /(\d+)\s*(h|m|s)/g;
@@ -482,32 +494,41 @@ const ranking = registro.rows.map((u, index) => {
     }
 
     const timeMs = parseTime(timeString);
+
     if (timeMs <= 0) {
-      const erro = await interaction.followUp({ content: "❌ Tempo inválido.", ephemeral: false });
+      const erro = await interaction.followUp({
+        content: "❌ Tempo inválido.",
+        ephemeral: false
+      });
       setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
       m.delete().catch(() => {});
       return;
     }
 
-    // Adiciona o tempo no banco
+    // ✅ UPDATE CORRIGIDO
     await pool.query(`
-  UPDATE pontos 
-  SET 
-    saldo_horas = COALESCE(saldo_horas,0) + $1,
-    total_geral = COALESCE(total_geral,0) + $1
-  WHERE user_id = $2
-`, [tempoEmMs, userId]);
-    // Mostrar de forma legível
+      UPDATE pontos 
+      SET 
+        saldo_horas = COALESCE(saldo_horas,0) + $1,
+        total_geral = COALESCE(total_geral,0) + $1
+      WHERE user_id = $2
+    `, [timeMs, id]);
+
     const hours = Math.floor(timeMs / 3600000);
     const minutes = Math.floor((timeMs % 3600000) / 60000);
     const seconds = Math.floor((timeMs % 60000) / 1000);
 
-    const confirm = await interaction.followUp({ content: `✅ Adicionados ${hours}h ${minutes}m ${seconds}s para <@${id}>`, ephemeral: false });
+    const confirm = await interaction.followUp({
+      content: `✅ Adicionados ${hours}h ${minutes}m ${seconds}s para <@${id}>`,
+      ephemeral: false
+    });
+
     setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
     m.delete().catch(() => {});
   });
 
   setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
+
   break;
 }
       case "removeCoins": {
