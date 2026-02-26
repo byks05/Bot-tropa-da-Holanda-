@@ -1399,9 +1399,15 @@ if (command === "recaliados") {
 
     const quantidade = res.rows[0].recrutamentos;
 
-    return message.reply(
-      `📊 ${message.author.tag}, você possui **${quantidade} recrutamentos**.`
-    );
+    const msg = await message.reply(
+  `📊 ${message.author.tag}, você possui **${quantidade} recrutamentos**.`
+);
+
+setTimeout(() => {
+  msg.delete().catch(() => {});
+}, MESSAGE_LIFETIME);
+
+return;
 
   } catch (err) {
     console.error("Erro ao consultar recrutamentos:", err);
@@ -1450,9 +1456,15 @@ if (command === "recaliados") {
       );
     }
 
-    return message.reply(
-      `✅ Recrutamento aprovado!\n👤 ${message.author.tag} agora tem **${quantidade} recrutamentos**.`
-    );
+    const msg = await message.reply(
+  `✅ Recrutamento aprovado!\n👤 ${message.author.tag} agora tem **${quantidade} recrutamentos**.`
+);
+
+setTimeout(() => {
+  msg.delete().catch(() => {});
+}, MESSAGE_LIFETIME);
+
+return;
 
   } catch (err) {
     console.error("Erro ao registrar recrutamento:", err);
