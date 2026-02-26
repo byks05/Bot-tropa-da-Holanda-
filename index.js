@@ -1536,7 +1536,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
     // Insere ou atualiza o usuário na tabela recrutamento
     await pool.query(
       `INSERT INTO recrutamentos
-        (user_id, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
+        (id, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
        VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
        ON CONFLICT (userid)
        DO UPDATE SET
