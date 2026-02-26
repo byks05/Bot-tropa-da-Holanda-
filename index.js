@@ -340,8 +340,19 @@ client.on("interactionCreate", async (interaction) => {
   switch (interaction.customId) {
 
     case "registro": {
-      const res = await pool.query("SELECT user_id, ativo, total, coins FROM pontos ORDER BY total DESC");
-      if (!res.rows.length) {
+      const registro = await pool.query(
+  "SELECT user_id, ativo, total_geral, coins FROM pontos ORDER BY total_geral DESC"
+);
+
+const ranking = registro.rows.map((u, index) => {
+  const tempo = u.total_geral || 0;
+
+  const horas = Math.floor(tempo / 3600000);
+  const minutos = Math.floor((tempo % 3600000) / 60000);
+  const segundos = Math.floor((tempo % 60000) / 1000);
+
+  return `${index + 1}. <@${u.user_id}> | ⏱ ${horas}h ${minutos}m ${segundos}s | 💰 ${u.coins || 0} coins`;
+});if (!res.rows.length) {
         const msg = await interaction.reply({ content: "Nenhum usuário encontrado.", ephemeral: false });
         setTimeout(() => msg.delete().catch(() => {}), MESSAGE_LIFETIME);
         return;
@@ -380,7 +391,17 @@ client.on("interactionCreate", async (interaction) => {
           return;
         }
 
-        await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL, coins = 0 WHERE user_id = $1", [mention.id]);
+        await pool.query(`
+  UPDATE pontos 
+  SET 
+    ativo = false,
+    saldo_horas = 0,
+    total_geral = 0,
+    entrada = NULL,
+    canal = NULL,
+    coins = 0
+  WHERE user_id = $1
+`, [mention.id]);
         const confirm = await interaction.followUp({ content: `✅ Usuário <@${mention.id}> resetado com sucesso!`, ephemeral: false });
         setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
         m.delete().catch(() => {});
@@ -469,8 +490,13 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     // Adiciona o tempo no banco
-    await pool.query("UPDATE pontos SET total = total + $1 WHERE user_id = $2", [timeMs, id]);
-
+    await pool.query(`
+  UPDATE pontos 
+  SET 
+    saldo_horas = COALESCE(saldo_horas,0) + $1,
+    total_geral = COALESCE(total_geral,0) + $1
+  WHERE user_id = $2
+`, [tempoEmMs, userId]);
     // Mostrar de forma legível
     const hours = Math.floor(timeMs / 3600000);
     const minutes = Math.floor((timeMs % 3600000) / 60000);
@@ -553,8 +579,13 @@ case "removeTime": {
       return;
     }
 
-    await pool.query("UPDATE pontos SET total = GREATEST(total - $1, 0) WHERE user_id = $2", [timeMs, id]);
-
+    await pool.query(`
+  UPDATE pontos 
+  SET 
+    saldo_horas = GREATEST(COALESCE(saldo_horas,0) - $1, 0),
+    total_geral = GREATEST(COALESCE(total_geral,0) - $1, 0)
+  WHERE user_id = $2
+`, [tempoEmMs, userId]);
     const hours = Math.floor(timeMs / 3600000);
     const minutes = Math.floor((timeMs % 3600000) / 60000);
     const seconds = Math.floor((timeMs % 60000) / 1000);
@@ -586,10 +617,15 @@ case "removeTime": {
     const tempoTrabalhado = Date.now() - parseInt(user.entrada || 0);
 
     // Atualiza banco
-    await pool.query(
-      "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
-      [tempoTrabalhado, user.user_id]
-    );
+    await pool.query(`
+  UPDATE pontos 
+  SET 
+    saldo_horas = COALESCE(saldo_horas,0) + $1,
+    total_geral = COALESCE(total_geral,0) + $1,
+    ativo = false,
+    entrada = NULL
+  WHERE user_id = $2
+`, [tempo, user.user_id]);
 
     fechados++;
   }
@@ -654,23 +690,36 @@ case "removeTime": {
       return;
     }
 
-    const userData = res.rows[0];
+    const totalGeral = userData.total_geral || 0;
+const saldoHoras = userData.saldo_horas || 0;
 
-    const horas = Math.floor((userData.total || 0) / 3600000);
-    const minutos = Math.floor(((userData.total || 0) % 3600000) / 60000);
-    const segundos = Math.floor(((userData.total || 0) % 60000) / 1000);
+// Histórico total
+const horasTotal = Math.floor(totalGeral / 3600000);
+const minutosTotal = Math.floor((totalGeral % 3600000) / 60000);
+const segundosTotal = Math.floor((totalGeral % 60000) / 1000);
 
-    const statusMsg =
-      `📊 **Status de <@${mention.id}>**\n\n` +
-      `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n` +
-      `⏱ Tempo acumulado: ${horas}h ${minutos}m ${segundos}s\n` +
-      `💰 Coins: ${userData.coins || 0}\n` +
-      `📂 Canal: ${userData.canal ? `<#${userData.canal}>` : "Nenhum"}`;
+// Saldo disponível
+const horasSaldo = Math.floor(saldoHoras / 3600000);
+const minutosSaldo = Math.floor((saldoHoras % 3600000) / 60000);
+const segundosSaldo = Math.floor((saldoHoras % 60000) / 1000);
 
-    const confirm = await interaction.followUp({
-      content: statusMsg,
-      ephemeral: false
-    });
+const statusMsg =
+  `📊 **Status de <@${mention.id}>**\n\n` +
+  `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n\n` +
+
+  `🔒 Histórico Total:\n` +
+  `⏱ ${horasTotal}h ${minutosTotal}m ${segundosTotal}s\n\n` +
+
+  `💼 Horas Disponíveis para Converter:\n` +
+  `⏱ ${horasSaldo}h ${minutosSaldo}m ${segundosSaldo}s\n\n` +
+
+  `💰 Coins: ${userData.coins || 0}\n` +
+  `📂 Canal: ${userData.canal ? `<#${userData.canal}>` : "Nenhum"}`;
+
+const confirm = await interaction.followUp({
+  content: statusMsg,
+  ephemeral: false
+});
 
     setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
     m.delete().catch(() => {});
@@ -925,9 +974,16 @@ async function encerrarPonto(userId, dados, canal) {
   const tempo = Date.now() - parseInt(dados.entrada, 10);
 
   await pool.query(
-    "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL, canal = NULL WHERE user_id = $2",
-    [tempo, userId]
-  );
+  `UPDATE pontos 
+   SET 
+     saldo_horas = COALESCE(saldo_horas,0) + $1,
+     total_geral = COALESCE(total_geral,0) + $1,
+     ativo = false,
+     entrada = NULL,
+     canal = NULL
+   WHERE user_id = $2`,
+  [tempo, userId]
+);
 
   await canal.send("🔴 Ponto encerrado por inatividade.");
   setTimeout(() => canal.delete().catch(() => {}), 2000);
@@ -942,23 +998,29 @@ client.once("clientReady", async () => {
   await garantirPainel(client);
 
   // Recuperar ativos
-  const ativos = await pool.query("SELECT * FROM pontos WHERE ativo = true");
+const ativos = await pool.query("SELECT * FROM pontos WHERE ativo = true");
 
-  for (const user of ativos.rows) {
-    const guild = client.guilds.cache.first();
-    const canalExistente = guild.channels.cache.get(user.canal);
+for (const user of ativos.rows) {
+  const guild = client.guilds.cache.first();
+  const canalExistente = guild.channels.cache.get(user.canal);
 
-    if (!canalExistente && user.entrada) {
-      const tempo = Date.now() - parseInt(user.entrada, 10);
+  if (!canalExistente && user.entrada) {
+    const tempo = Date.now() - parseInt(user.entrada, 10);
 
-      await pool.query(
-        "UPDATE pontos SET total = total + $1, ativo = false, entrada = NULL WHERE user_id = $2",
-        [tempo, user.user_id]
-      );
-    } else {
-      iniciarCicloPresenca(user.user_id); // reativar verificação
-    }
+    await pool.query(
+      `UPDATE pontos 
+       SET 
+         saldo_horas = COALESCE(saldo_horas,0) + $1,
+         total_geral = COALESCE(total_geral,0) + $1,
+         ativo = false,
+         entrada = NULL
+       WHERE user_id = $2`,
+      [tempo, user.user_id]
+    );
+  } else {
+    iniciarCicloPresenca(user.user_id);
   }
+}
 });
 
 // =====================
@@ -984,13 +1046,13 @@ if (interaction.isStringSelectMenu() && interaction.customId === "ponto_menu") {
     let res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
     let userData = res.rows[0];
 
-    if (!userData) {
-      await pool.query(
-        "INSERT INTO pontos (user_id, ativo, total, entrada, canal, coins) VALUES ($1,false,0,NULL,NULL,0)",
-        [userId]
-      );
-      userData = { ativo: false };
-    }
+   if (!userData) {
+  await pool.query(
+    "INSERT INTO pontos (user_id, ativo, saldo_horas, total_geral, entrada, canal, coins) VALUES ($1,false,0,0,NULL,NULL,0)",
+    [userId]
+  );
+  userData = { ativo: false };
+}
 
     if (userData.ativo)
       return interaction.reply({ content: "❌ Você já iniciou seu ponto.", flags: 64 });
@@ -1069,108 +1131,216 @@ await interaction.followUp({
   // -------- BOTÃO STATUS --------
   if (interaction.isButton() && interaction.customId === "status") {
 
-    const res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
-    const userData = res.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto.", flags: 64 });
+  const res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
+  const userData = res.rows[0];
+  if (!userData) return interaction.reply({ content: "❌ Nenhum ponto.", flags: 64 });
 
-    let tempoAtual = parseInt(userData.total || 0);
-    if (userData.ativo && userData.entrada) {
-      tempoAtual += Date.now() - parseInt(userData.entrada);
-    }
+  let totalGeral = parseInt(userData.total_geral || 0);
+  let saldoHoras = parseInt(userData.saldo_horas || 0);
 
-    const h = Math.floor(tempoAtual / 3600000);
-    const m = Math.floor((tempoAtual % 3600000) / 60000);
-    const s = Math.floor((tempoAtual % 60000) / 1000);
-
-    return interaction.reply({
-      content: `⏱ ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
-      flags: 64
-    });
+  // Se estiver ativo, soma o tempo atual temporariamente
+  if (userData.ativo && userData.entrada) {
+    const tempoAtual = Date.now() - parseInt(userData.entrada);
+    totalGeral += tempoAtual;
+    saldoHoras += tempoAtual;
   }
+
+  // Histórico total
+  const hTotal = Math.floor(totalGeral / 3600000);
+  const mTotal = Math.floor((totalGeral % 3600000) / 60000);
+  const sTotal = Math.floor((totalGeral % 60000) / 1000);
+
+  // Saldo disponível
+  const hSaldo = Math.floor(saldoHoras / 3600000);
+  const mSaldo = Math.floor((saldoHoras % 3600000) / 60000);
+  const sSaldo = Math.floor((saldoHoras % 60000) / 1000);
+
+  return interaction.reply({
+    content:
+      `📊 **Seu Status**\n\n` +
+      `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n\n` +
+      `🔒 Histórico Total:\n⏱ ${hTotal}h ${mTotal}m ${sTotal}s\n\n` +
+      `💼 Disponível para Converter:\n⏱ ${hSaldo}h ${mSaldo}m ${sSaldo}s\n\n` +
+      `💰 Coins: ${userData.coins || 0}`,
+    flags: 64
+  });
+}
 
   // -------- BOTÃO SAIR --------
   if (interaction.isButton() && interaction.customId === "sair") {
 
-    const res = await pool.query("SELECT * FROM pontos WHERE user_id = $1", [userId]);
-    const userData = res.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto.", flags: 64 });
+  const res = await pool.query(
+    "SELECT ativo, entrada FROM pontos WHERE user_id = $1",
+    [userId]
+  );
 
-    let tempo = 0;
-    if (userData.ativo && userData.entrada) {
-      tempo = Date.now() - parseInt(userData.entrada);
-    }
+  const userData = res.rows[0];
 
-    await pool.query(
-      "UPDATE pontos SET ativo=false,total=total+$1,entrada=NULL,canal=NULL WHERE user_id=$2",
-      [tempo, userId]
-    );
+  if (!userData)
+    return interaction.reply({ content: "❌ Nenhum ponto encontrado.", flags: 64 });
 
-    await interaction.reply({ content: "🔴 Ponto finalizado!", flags: 64 });
-    interaction.channel.delete().catch(() => {});
+  if (!userData.ativo)
+    return interaction.reply({ content: "❌ Você não está com ponto ativo.", flags: 64 });
+
+  let tempo = 0;
+
+  if (userData.entrada) {
+    tempo = Date.now() - parseInt(userData.entrada);
   }
+
+  await pool.query(
+    `UPDATE pontos 
+     SET 
+       saldo_horas = COALESCE(saldo_horas,0) + $1,
+       total_geral = COALESCE(total_geral,0) + $1,
+       ativo = false,
+       entrada = NULL,
+       canal = NULL
+     WHERE user_id = $2`,
+    [tempo, userId]
+  );
+
+  const h = Math.floor(tempo / 3600000);
+  const m = Math.floor((tempo % 3600000) / 60000);
+  const s = Math.floor((tempo % 60000) / 1000);
+
+  await interaction.reply({
+    content: `🔴 Ponto finalizado!\n⏱ Tempo registrado: ${h}h ${m}m ${s}s`,
+    flags: 64
+  });
+
+  interaction.channel.delete().catch(() => {});
+}
 
 
   // ----------------- BOTÃO CONVERTER HORAS -----------------
-  if (interaction.isButton() && interaction.customId === "converter_horas") {
-    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-    const userData = status.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
-    if (userData.ativo) return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
+if (interaction.isButton() && interaction.customId === "converter_horas") {
 
-    let tempoTotal = parseInt(userData.total, 10) || 0;
-    if (tempoTotal < 1800000) return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
+  const status = await pool.query(
+    "SELECT ativo, saldo_horas, total_geral, entrada, coins FROM pontos WHERE user_id = $1",
+    [userId]
+  );
 
-    await interaction.reply({ content: "Quantas horas deseja converter? (Ex: 1 = 1h, 0.5 = 30m)", ephemeral: true });
+  const userData = status.rows[0];
+  if (!userData)
+    return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
 
-    const collector = interaction.channel.createMessageCollector({ filter: m => m.author.id === userId, max: 1, time: 60000 });
-    collector.on("collect", async m => {
-      const horas = parseFloat(m.content.replace(",", "."));
-      if (isNaN(horas) || horas < 0.5) {
-        m.delete().catch(() => {});
-        return interaction.followUp({ content: "❌ Valor inválido. Mínimo 0.5h (30m).", ephemeral: true });
-      }
+  if (userData.ativo)
+    return interaction.reply({ content: "❌ Você precisa finalizar o ponto antes de converter horas.", ephemeral: true });
 
-      const msParaConverter = horas * 3600000;
-      if (msParaConverter > tempoTotal) return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
+  let tempoDisponivel = parseInt(userData.saldo_horas || 0);
 
-      const coins = Math.floor(horas * 100);
-      const coinsFinal = horas === 0.5 ? 50 : coins;
+  if (tempoDisponivel < 1800000)
+    return interaction.reply({ content: "❌ Você precisa ter pelo menos 30 minutos para converter.", ephemeral: true });
 
-      await pool.query(
-        "UPDATE pontos SET total = total - $1, coins = COALESCE(coins,0) + $2 WHERE user_id = $3",
-        [msParaConverter, coinsFinal, userId]
-      );
+  await interaction.reply({
+    content: "Quantas horas deseja converter? (Ex: 1 = 1h, 0.5 = 30m)",
+    ephemeral: true
+  });
 
-      const novoStatus = await pool.query("SELECT total, coins FROM pontos WHERE user_id = $1", [userId]);
-      const novoUser = novoStatus.rows[0];
-      const totalH = Math.floor(novoUser.total / 3600000);
-      const totalM = Math.floor((novoUser.total % 3600000) / 60000);
+  const collector = interaction.channel.createMessageCollector({
+    filter: m => m.author.id === userId,
+    max: 1,
+    time: 60000
+  });
 
-      await interaction.followUp({ content: `✅ Convertido ${horas}h em ${coinsFinal} coins!\n⏱ Novo total: ${totalH}h ${totalM}m\n💰 Coins: ${novoUser.coins}`, ephemeral: true });
+  collector.on("collect", async m => {
+
+    const horas = parseFloat(m.content.replace(",", "."));
+
+    if (isNaN(horas) || horas < 0.5) {
       m.delete().catch(() => {});
-    });
-  }
-
-  // ----------------- BOTÃO CONSULTAR SALDO -----------------
-  if (interaction.isButton() && interaction.customId === "consultar_saldo") {
-    const status = await pool.query("SELECT ativo, entrada, total, coins FROM pontos WHERE user_id = $1", [userId]);
-    const userData = status.rows[0];
-    if (!userData) return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
-
-    let tempoAtual = parseInt(userData.total, 10) || 0;
-    if (userData.ativo && userData.entrada) {
-      tempoAtual += Date.now() - parseInt(userData.entrada, 10);
+      return interaction.followUp({ content: "❌ Valor inválido. Mínimo 0.5h (30m).", ephemeral: true });
     }
 
-    const h = Math.floor(tempoAtual / 3600000);
-    const m = Math.floor((tempoAtual % 3600000) / 60000);
-    const s = Math.floor((tempoAtual % 60000) / 1000);
+    const msParaConverter = Math.floor(horas * 3600000);
 
-    await interaction.reply({
-      content: `💳 **Seu saldo atual:**\n⏱ Tempo acumulado: ${h}h ${m}m ${s}s\n💰 Coins: ${userData.coins || 0}`,
+    if (msParaConverter > tempoDisponivel)
+      return interaction.followUp({ content: "❌ Você não tem esse tempo disponível.", ephemeral: true });
+
+    const coinsFinal = Math.floor(horas * 100); // 1h = 100 coins
+
+    await pool.query(
+      `UPDATE pontos 
+       SET saldo_horas = saldo_horas - $1,
+           coins = COALESCE(coins,0) + $2
+       WHERE user_id = $3`,
+      [msParaConverter, coinsFinal, userId]
+    );
+
+    const novoStatus = await pool.query(
+      "SELECT saldo_horas, total_geral, coins FROM pontos WHERE user_id = $1",
+      [userId]
+    );
+
+    const novoUser = novoStatus.rows[0];
+
+    // Saldo restante
+    const saldoH = Math.floor(novoUser.saldo_horas / 3600000);
+    const saldoM = Math.floor((novoUser.saldo_horas % 3600000) / 60000);
+
+    // Histórico total (não muda na conversão)
+    const totalH = Math.floor(novoUser.total_geral / 3600000);
+    const totalM = Math.floor((novoUser.total_geral % 3600000) / 60000);
+
+    await interaction.followUp({
+      content:
+        `✅ **Conversão realizada!**\n\n` +
+        `🕒 Convertido: ${horas}h\n` +
+        `💰 Recebido: ${coinsFinal} coins\n\n` +
+        `💼 Saldo restante: ${saldoH}h ${saldoM}m\n` +
+        `🔒 Histórico total: ${totalH}h ${totalM}m\n` +
+        `💎 Coins atuais: ${novoUser.coins}`,
       ephemeral: true
     });
+
+    m.delete().catch(() => {});
+  });
+}
+  // ----------------- BOTÃO CONSULTAR SALDO -----------------
+if (interaction.isButton() && interaction.customId === "consultar_saldo") {
+
+  const status = await pool.query(
+    "SELECT ativo, entrada, saldo_horas, total_geral, coins FROM pontos WHERE user_id = $1",
+    [userId]
+  );
+
+  const userData = status.rows[0];
+  if (!userData)
+    return interaction.reply({ content: "❌ Nenhum ponto encontrado.", ephemeral: true });
+
+  let saldoAtual = parseInt(userData.saldo_horas || 0);
+  let totalGeral = parseInt(userData.total_geral || 0);
+
+  // Se estiver ativo, soma tempo atual temporariamente
+  if (userData.ativo && userData.entrada) {
+    const tempoAtual = Date.now() - parseInt(userData.entrada, 10);
+    saldoAtual += tempoAtual;
+    totalGeral += tempoAtual;
   }
+
+  // 🔹 Converter saldo disponível
+  const hSaldo = Math.floor(saldoAtual / 3600000);
+  const mSaldo = Math.floor((saldoAtual % 3600000) / 60000);
+  const sSaldo = Math.floor((saldoAtual % 60000) / 1000);
+
+  // 🔹 Converter histórico
+  const hTotal = Math.floor(totalGeral / 3600000);
+  const mTotal = Math.floor((totalGeral % 3600000) / 60000);
+  const sTotal = Math.floor((totalGeral % 60000) / 1000);
+
+  await interaction.reply({
+    content:
+      `💳 **Seu saldo atual:**\n\n` +
+      `🟢 Ativo: ${userData.ativo ? "Sim" : "Não"}\n\n` +
+      `💼 Disponível para converter:\n` +
+      `⏱ ${hSaldo}h ${mSaldo}m ${sSaldo}s\n\n` +
+      `🔒 Histórico total trabalhado:\n` +
+      `⏱ ${hTotal}h ${mTotal}m ${sTotal}s\n\n` +
+      `💰 Coins: ${userData.coins || 0}`,
+    ephemeral: true
+  });
+}
 });
 // =============================
 // CONFIG
