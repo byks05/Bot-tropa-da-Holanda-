@@ -1541,13 +1541,17 @@ if (message.content === `${PREFIX}recrutados`) {
   }
 }
 // =============================
-// COMANDO !APROVAR
+// COMANDO !APROVAR CHECANDO CARGOS
 // =============================
 if (message.content.startsWith(`${PREFIX}aprovar`)) {
   try {
-    // Checa se o autor tem permissão
-    if (!ALLOWED_REC.includes(message.author.id)) {
-      return message.reply("❌ Você não tem permissão para aprovar recrutas.");
+    // Checa se o autor tem algum dos cargos permitidos
+    const memberRoles = message.member.roles.cache.map(r => r.id); // pega os IDs de todos os cargos do usuário
+    const allowedRoles = IDS.RECRUITMENT_ROLE; // cargos autorizados para aprovar
+
+    const temPermissao = memberRoles.some(r => allowedRoles.includes(r));
+    if (!temPermissao) {
+      return message.reply("❌ Você não tem permissão para aprovar recrutas. (Cargos insuficientes)");
     }
 
     // Pega o usuário mencionado
@@ -1578,9 +1582,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
     // Confirmação no canal
     message.reply(`✅ <@${membro.id}> foi aprovado com sucesso!`);
 
-    // =============================
     // LOG NO CANAL
-    // =============================
     const logChannel = message.guild.channels.cache.get(IDS.LOG_CHANNEL);
     if (logChannel) {
       logChannel.send(`✅ ${membro.user.tag} foi aprovado por ${message.author.tag}.`);
