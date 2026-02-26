@@ -1540,7 +1540,7 @@ if (message.content === `${PREFIX}recrutados`) {
     message.reply("Ocorreu um erro ao buscar os recrutados.");
   }
 }
- // =============================
+// =============================
 // COMANDO !APROVAR
 // =============================
 if (message.content.startsWith(`${PREFIX}aprovar`)) {
@@ -1591,7 +1591,6 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
     message.reply("❌ Ocorreu um erro ao aprovar o recrutado.");
   }
 }
-
   // =============================
 // MUTE / UNMUTE CHAT
 // =============================
