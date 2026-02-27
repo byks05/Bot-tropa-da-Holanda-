@@ -178,7 +178,7 @@ client.on("interactionCreate", async (interaction) => {
 // PAINEL FIXO RECRUTAMENTO
 // =====================
 
-const recrutamentoChannelId = "1476543945033908267";
+const recrutamentoChannelId = "1477010744770953319";
 let painelRecMensagemId = null;
 const REC_MESSAGE_LIFETIME = 15000;
 
