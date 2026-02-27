@@ -1656,8 +1656,8 @@ if (command === "recadd") {
     await user.roles.remove("1468024885354959142");
 
     // Adiciona cargos normais
-    await user.roles.add("1468283328510558208");
     await user.roles.add("1468026315285205094");
+    
 
     return message.reply(`✅ Cargos normais aplicados em ${user}`);
   } catch (err) {
@@ -1680,9 +1680,7 @@ if (command === "recaddmenina") {
 
     // Adiciona os três cargos para "menina"
     await user.roles.add("1472223890821611714"); // cargo 1
-    await user.roles.add("1468283328510558208"); // cargo 2
-    await user.roles.add("1468026315285205094"); // cargo 3
-
+   
     return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
   } catch (err) {
     console.error(err);
@@ -1704,7 +1702,7 @@ if (command === "recaliados") {
 
     // Adiciona cargos aliados
     await user.roles.add("1468279104624398509");
-    await user.roles.add("1468283328510558208");
+   
 
     return message.reply(`✅ Cargos aliados aplicados em ${user}`);
   } catch (err) {
