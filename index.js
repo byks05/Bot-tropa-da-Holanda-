@@ -1521,6 +1521,42 @@ if (!data) {
 
   data = result.rows[0];
 }
+  if (command === "kickcargo") {
+
+  if (!message.member.permissions.has("KickMembers")) {
+    return message.reply("❌ Você não tem permissão.");
+  }
+
+  const role = message.mentions.roles.first();
+
+  if (!role) {
+    return message.reply(`❌ Use assim:\n${prefix}kickcargo @Cargo`);
+  }
+
+  const members = message.guild.members.cache.filter(member =>
+    member.roles.cache.has(role.id)
+  );
+
+  if (!members.size) {
+    return message.reply("⚠ Nenhum membro encontrado com esse cargo.");
+  }
+
+  let expulsos = 0;
+
+  for (const member of members.values()) {
+
+    if (!member.kickable) continue;
+
+    try {
+      await member.kick(`Expulsão em massa por ${message.author.tag}`);
+      expulsos++;
+    } catch (err) {
+      console.log(`Erro ao expulsar ${member.user.tag}`);
+    }
+  }
+
+  message.channel.send(`✅ ${expulsos} membros com o cargo ${role.name} foram expulsos.`);
+}
   // =============================
 // COMANDO !APROVAR
 // =============================
