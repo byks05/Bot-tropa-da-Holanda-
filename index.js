@@ -1399,7 +1399,7 @@ const ALLOWED_REC = [
   "1476619502832713839"
 ];
 // =============================
-// VERIFICAÇÃO AUTOMÁTICA DE RECRUTADOS
+// VERIFICAÇÃO AUTOMÁTICA DE RECRUTADOS (SEM KICK)
 // =============================
 client.on("guildMemberAdd", async (member) => {
   try {
@@ -1410,33 +1410,45 @@ client.on("guildMemberAdd", async (member) => {
       [member.id]
     );
 
-    if (resultado.rows.length === 0) return member.kick("Não passou pelo servidor de recrutamento.");
+    // ❌ Não está no banco → só ignora
+    if (resultado.rows.length === 0) {
+      console.log("Usuário não está no banco.");
+      return;
+    }
 
     const dados = resultado.rows[0];
 
-    if (!dados.recrutado || dados.status !== "aprovado") return member.kick("Recrutamento não aprovado.");
+    // ❌ Não está aprovado → só ignora
+    if (!dados.recrutado || dados.status !== "aprovado") {
+      console.log("Recrutamento não aprovado.");
+      return;
+    }
 
+    // ❌ Expirado → atualiza banco e ignora
     if (new Date(dados.validade) < new Date()) {
       await pool.query(
-        "UPDATE recrutamentos2 SET status = 'expirado', recrutado = false WHERE user_id = $1",
+        "UPDATE recrutamentos2 SET status = 'expirado', recrutado = false WHERE userid = $1",
         [member.id]
       );
-      if (resultado.rows.length === 0) {
-  console.log("Usuário não está no banco.");
-  return;
-}
+      console.log("Recrutamento expirado.");
+      return;
+    }
 
-    if (dados.servidor_origem !== IDS.SERVIDOR_RECRUTAMENTO) return member.kick("Servidor de origem inválido.");
+    // ❌ Servidor de origem inválido → ignora
+    if (dados.servidor_origem !== IDS.SERVIDOR_RECRUTAMENTO) {
+      console.log("Servidor de origem inválido.");
+      return;
+    }
 
-    // Dá o cargo ao membro
+    // ✅ Dá o cargo
     const cargo = member.guild.roles.cache.get(IDS.CARGO_MEMBRO);
     if (cargo) await member.roles.add(cargo);
 
-    // =============================
-    // LOG DE ENTRADA
-    // =============================
+    // ✅ Log
     const logChannel = member.guild.channels.cache.get(IDS.LOG_CHANNEL);
-    if (logChannel) logChannel.send(`✅ ${member.user.tag} entrou no servidor principal.`);
+    if (logChannel) {
+      logChannel.send(`✅ ${member.user.tag} entrou no servidor principal.`);
+    }
 
   } catch (err) {
     console.error("Erro na verificação de recrutamento:", err);
