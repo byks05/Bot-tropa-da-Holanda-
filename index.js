@@ -1523,14 +1523,23 @@ if (!data) {
 }
   if (command === "kickcargo") {
 
+  // Ignorar bots
+  if (message.author.bot) return;
+
+  // Verificar permissão do usuário
   if (!message.member.permissions.has("KickMembers")) {
-    return message.reply("❌ Você não tem permissão.");
+    return message.reply("❌ Você não tem permissão para usar esse comando.");
+  }
+
+  // Verificar permissão do bot
+  if (!message.guild.members.me.permissions.has("KickMembers")) {
+    return message.reply("❌ Eu não tenho permissão para expulsar membros.");
   }
 
   const role = message.mentions.roles.first();
 
   if (!role) {
-    return message.reply(`❌ Use assim:\n${prefix}kickcargo @Cargo`);
+    return message.reply("❌ Use assim:\nthl!kickcargo @Cargo");
   }
 
   const members = message.guild.members.cache.filter(member =>
@@ -1545,6 +1554,10 @@ if (!data) {
 
   for (const member of members.values()) {
 
+    // Não expulsar o dono
+    if (member.id === message.guild.ownerId) continue;
+
+    // Verificar se o bot pode expulsar
     if (!member.kickable) continue;
 
     try {
@@ -1555,7 +1568,9 @@ if (!data) {
     }
   }
 
-  message.channel.send(`✅ ${expulsos} membros com o cargo ${role.name} foram expulsos.`);
+  return message.channel.send(
+    `✅ ${expulsos} membros com o cargo ${role.name} foram expulsos.`
+  );
 }
   // =============================
 // COMANDO !APROVAR
