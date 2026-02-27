@@ -1538,7 +1538,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
       `INSERT INTO recrutamentos
         (id, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
        VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
-       ON CONFLICT (userid)
+       ON CONFLICT (id)
        DO UPDATE SET
          recrutado = $2,
          status = $3,
