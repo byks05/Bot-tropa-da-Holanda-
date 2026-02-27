@@ -1421,8 +1421,10 @@ client.on("guildMemberAdd", async (member) => {
         "UPDATE recrutamentos2 SET status = 'expirado', recrutado = false WHERE user_id = $1",
         [member.id]
       );
-      return member.kick("Recrutamento expirado.");
-    }
+      if (resultado.rows.length === 0) {
+  console.log("Usuário não está no banco.");
+  return;
+}
 
     if (dados.servidor_origem !== IDS.SERVIDOR_RECRUTAMENTO) return member.kick("Servidor de origem inválido.");
 
