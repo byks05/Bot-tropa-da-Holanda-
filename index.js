@@ -1409,7 +1409,7 @@ client.on("guildMemberAdd", async (member) => {
     if (member.guild.id !== IDS.SERVIDOR_PRINCIPAL) return;
 
     const resultado = await pool.query(
-      "SELECT * FROM recrutamentos WHERE user_id = $1",
+      "SELECT * FROM recrutamentos2 WHERE user_id = $1",
       [member.id]
     );
 
