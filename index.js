@@ -1379,10 +1379,7 @@ const IDS = {
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
   RECRUITMENT_ROLE: ["1468024687031484530",
-                     "1470541063256277012",
-  "1476619364672475278",
-  "1476619432838168668",
-  "1476619502832713839"],
+                     "1470541063256277012"],
 
   SERVIDOR_PRINCIPAL: "1468007116936843359",
   SERVIDOR_RECRUTAMENTO: "1476618436170748129",
@@ -1517,7 +1514,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
   try {
     // Checa se o autor tem o cargo de recrutador
     const membroAutor = message.member;
-    const cargosPermitidos = IDS.RECRUITMENT_ROLE; // array de cargos que podem aprovar
+    const cargosPermitidos = IDS.ALLOWED_REC; // array de cargos que podem aprovar
     const temCargo = membroAutor.roles.cache.some(r => cargosPermitidos.includes(r.id));
 
     if (!temCargo) {
