@@ -1677,9 +1677,10 @@ if (command === "recaddmenina") {
   try {
     // Remove apenas o cargo específico antigo
     await user.roles.remove("1468024885354959142");
-
+    
     // Adiciona os três cargos para "menina"
     await user.roles.add("1472223890821611714"); // cargo 1
+    await user.roles.add("1468026315285205094");
    
     return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
   } catch (err) {
