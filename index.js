@@ -1535,19 +1535,19 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
 
     // Insere ou atualiza o usuário na tabela recrutamento
     await pool.query(
-      `INSERT INTO recrutamentos
-        (id, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
-       VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
-       ON CONFLICT (id)
-       DO UPDATE SET
-         recrutado = $2,
-         status = $3,
-         data_aprovacao = NOW(),
-         validade = NOW() + INTERVAL '7 days',
-         recrutador_id = $4,
-         servidor_origem = $5`,
-      [membro.id, true, 'aprovado', message.author.id, message.guild.id]
-    );
+  `INSERT INTO recrutamentos
+     (userid, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
+   VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
+   ON CONFLICT (userid)
+   DO UPDATE SET
+     recrutado = $2,
+     status = $3,
+     data_aprovacao = NOW(),
+     validade = NOW() + INTERVAL '7 days',
+     recrutador_id = $4,
+     servidor_origem = $5`,
+  [membro.id, true, 'aprovado', message.author.id, message.guild.id]
+);
 
     // Confirmação no canal
     message.reply(`✅ <@${membro.id}> foi aprovado com sucesso!`);
