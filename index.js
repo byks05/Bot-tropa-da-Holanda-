@@ -178,10 +178,11 @@ client.on("interactionCreate", async (interaction) => {
 // PAINEL FIXO RECRUTAMENTO
 // =====================
 
-const recrutamentoChannelId = "1477010744770953319";
+const recrutamentoGuildId = "1476618436170748129";
+const recrutamentoChannelId = "1476755481228738713";
+
 let painelRecMensagemId = null;
 const REC_MESSAGE_LIFETIME = 15000;
-
 async function criarPainelRecrutamento(client) {
   try {
     const canal = await client.channels.fetch(recrutamentoChannelId);
