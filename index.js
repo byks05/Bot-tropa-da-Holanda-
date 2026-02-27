@@ -1754,7 +1754,7 @@ return;
   if (!aprovado)
     return message.reply("❌ Mencione o usuário aprovado.");
 
-  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
+  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635","1476619364672475278","1476619432838168668","1476619502832713839"];
 
   if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
     return message.reply("❌ Sem permissão para usar esse comando.");
