@@ -645,8 +645,8 @@ case "removeTime": {
   for (const user of res.rows) {
     const tempoTrabalhado = Date.now() - parseInt(user.entrada || 0);
 
-    // Atualiza banco
-    await pool.query(`
+  // Atualiza banco
+await pool.query(`
   UPDATE pontos 
   SET 
     saldo_horas = COALESCE(saldo_horas,0) + $1,
@@ -654,9 +654,9 @@ case "removeTime": {
     ativo = false,
     entrada = NULL
   WHERE user_id = $2
-`, [tempo, user.user_id]);
+`, [tempoTrabalhado, user.user_id]);
 
-    fechados++;
+fechados++;
   }
 
   // Agora deletar canais da categoria
