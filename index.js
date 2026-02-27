@@ -1421,7 +1421,7 @@ client.on("guildMemberAdd", async (member) => {
 
     if (new Date(dados.validade) < new Date()) {
       await pool.query(
-        "UPDATE recrutamentos SET status = 'expirado', recrutado = false WHERE user_id = $1",
+        "UPDATE recrutamentos2 SET status = 'expirado', recrutado = false WHERE user_id = $1",
         [member.id]
       );
       return member.kick("Recrutamento expirado.");
@@ -1535,7 +1535,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
 
     // Insere ou atualiza o usuário na tabela recrutamento
     await pool.query(
-  `INSERT INTO recrutamentos
+  `INSERT INTO recrutamentos2
      (userid, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
    VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
    ON CONFLICT (userid)
@@ -1572,7 +1572,7 @@ if (message.content.startsWith(`${PREFIX}aprovar`)) {
 if (message.content === `${PREFIX}recrutados`) {
   try {
     const resultado = await pool.query(
-      `SELECT * FROM recrutamentos
+      `SELECT * FROM recrutamentos2
        WHERE status = 'aprovado'
        ORDER BY data_aprovacao DESC`
     );
