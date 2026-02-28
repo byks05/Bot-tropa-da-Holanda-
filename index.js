@@ -175,95 +175,6 @@ client.on("interactionCreate", async (interaction) => {
   await interaction.channel.delete().catch(() => {});
 });
 // =====================
-// PAINEL FIXO RECRUTAMENTO
-// =====================
-
-const recrutamentoGuildId = "1476618436170748129";
-const recrutamentoChannelId = "1476755481228738713";
-
-let painelRecMensagemId = null;
-const REC_MESSAGE_LIFETIME = 15000;
-async function criarPainelRecrutamento(client) {
-  try {
-    const canal = await client.channels.fetch(recrutamentoChannelId);
-    if (!canal) return console.log("Canal de recrutamento não encontrado.");
-
-    // Verifica se já existe painel
-    if (!painelRecMensagemId) {
-      const mensagens = await canal.messages.fetch({ limit: 30 });
-      const existente = mensagens.find(msg =>
-        msg.components.some(row =>
-          row.components.some(c =>
-            ["rec_registro","rec_resetAll","rec_add","rec_remove"].includes(c.customId)
-          )
-        )
-      );
-      if (existente) painelRecMensagemId = existente.id;
-    }
-
-    const botoesRec = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("rec_registro")
-        .setLabel("📋 Registro")
-        .setStyle(ButtonStyle.Primary),
-
-      new ButtonBuilder()
-        .setCustomId("rec_resetAll")
-        .setLabel("🔄 Resetar Todos")
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId("rec_add")
-        .setLabel("➕ Adicionar Rec")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId("rec_remove")
-        .setLabel("➖ Remover Rec")
-        .setStyle(ButtonStyle.Danger)
-    );
-
-    const conteudo = "🎖 **Painel de Recrutamento**\nGerencie os recrutadores abaixo.";
-
-    if (painelRecMensagemId) {
-      const mensagem = await canal.messages.fetch(painelRecMensagemId).catch(() => null);
-      if (mensagem) {
-        await mensagem.edit({ content: conteudo, components: [botoesRec] });
-        return;
-      }
-    }
-
-    const novaMensagem = await canal.send({
-      content: conteudo,
-      components: [botoesRec]
-    });
-
-    painelRecMensagemId = novaMensagem.id;
-
-  } catch (err) {
-    console.log("Erro ao criar painel recrutamento:", err);
-  }
-}
-
-// recria se apagar
-client.on("messageDelete", async (message) => {
-  if (message.channel.id !== recrutamentoChannelId) return;
-
-  if (!message.components?.some(row =>
-    row.components.some(c =>
-      ["rec_registro","rec_resetAll","rec_add","rec_remove"].includes(c.customId)
-    )
-  )) return;
-
-  await criarPainelRecrutamento(client);
-});
-
-// cria ao iniciar bot
-client.once("clientReady", () => {
-  criarPainelRecrutamento(client);
-});
-
-// =====================
 // PAINEL DE ADMIN FIXO AVANÇADO
 // =====================
 const adminChannelId = "1474384292015640626"; // Canal fixo do painel
@@ -756,130 +667,90 @@ const confirm = await interaction.followUp({
   setTimeout(() => msgStatus.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
       }
-// =====================
-// INTERAÇÕES RECRUTAMENTO
-// =====================
-
-case "rec_registro": {
-
-  const res = await pool.query(
-    "SELECT user_id, recrutamentos FROM recrutadores ORDER BY recrutamentos DESC"
-  );
-
-  if (!res.rows.length) {
-    const msg = await interaction.reply({
-      content: "Nenhum recrutador encontrado.",
-      ephemeral: false
-    });
-    setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
-    break;
-  }
-
-  const lista = res.rows.map((u, i) =>
-    `**${i+1}°** - <@${u.user_id}> - 🎯 ${u.recrutamentos} recrutamentos`
-  ).join("\n");
-
-  const msg = await interaction.reply({ content: lista, ephemeral: false });
-  setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
-  break;
-}
-
-case "rec_resetAll": {
-
-  await pool.query("UPDATE recrutadores SET recrutamentos = 0");
-
-  const msg = await interaction.reply({
-    content: "✅ Todos recrutamentos foram resetados!",
+case "removeTime": {
+  const msgTime = await interaction.reply({
+    content: "Use: `@usuário 3h 15m` para remover tempo.",
     ephemeral: false
   });
 
-  setTimeout(() => msg.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
-  break;
-}
-
-case "rec_add": {
-
-  await interaction.reply({
-    content: "Use: `@usuário quantidade`",
-    ephemeral: false
-  });
-
-  const filter = m => m.author.id === interaction.user.id;
-
-  const collector = interaction.channel.createMessageCollector({
-    filter,
+  const filterTime = m => m.author.id === userId;
+  const collectorTime = interaction.channel.createMessageCollector({
+    filter: filterTime,
     max: 1,
     time: 60000
   });
 
-  collector.on("collect", async m => {
+  collectorTime.on("collect", async m => {
+    const args = m.content.split(" ");
+    const mention = args[0];
+    if (!mention) return;
 
-    const [mention, amount] = m.content.split(" ");
-    const id = mention?.replace(/[<@!>]/g, "");
-    const quantidade = parseInt(amount) || 1;
-
+    const id = mention.replace(/[<@!>]/g, "");
     if (!id) return;
 
+    const timeString = args.slice(1).join(" ").toLowerCase();
+    if (!timeString) {
+      const erro = await interaction.followUp({
+        content: "❌ Você precisa informar o tempo. Ex: `3h 15m`",
+        ephemeral: false
+      });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    // Converter tempo
+    function parseTime(str) {
+      let total = 0;
+      const regex = /(\d+)\s*(h|m|s)/g;
+      let match;
+      while ((match = regex.exec(str)) !== null) {
+        const value = parseInt(match[1]);
+        const unit = match[2];
+        if (unit === "h") total += value * 3600000;
+        else if (unit === "m") total += value * 60000;
+        else if (unit === "s") total += value * 1000;
+      }
+      return total;
+    }
+
+    const timeMs = parseTime(timeString);
+
+    if (timeMs <= 0) {
+      const erro = await interaction.followUp({
+        content: "❌ Tempo inválido.",
+        ephemeral: false
+      });
+      setTimeout(() => erro.delete().catch(() => {}), MESSAGE_LIFETIME);
+      m.delete().catch(() => {});
+      return;
+    }
+
+    // 🔥 AGORA USANDO timeMs CORRETAMENTE
     await pool.query(`
-      INSERT INTO recrutadores (user_id, recrutamentos)
-      VALUES ($1, $2)
-      ON CONFLICT (user_id)
-      DO UPDATE SET recrutamentos = recrutadores.recrutamentos + $2
-    `, [id, quantidade]);
-
-    const confirm = await interaction.followUp({
-      content: `✅ Adicionado ${quantidade} recrutamento(s) para <@${id}>`,
-      ephemeral: false
-    });
-
-    setTimeout(() => confirm.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
-    m.delete().catch(()=>{});
-  });
-
-  break;
-}
-
-case "rec_remove": {
-
-  await interaction.reply({
-    content: "Use: `@usuário quantidade`",
-    ephemeral: false
-  });
-
-  const filter = m => m.author.id === interaction.user.id;
-
-  const collector = interaction.channel.createMessageCollector({
-    filter,
-    max: 1,
-    time: 60000
-  });
-
-  collector.on("collect", async m => {
-
-    const [mention, amount] = m.content.split(" ");
-    const id = mention?.replace(/[<@!>]/g, "");
-    const quantidade = parseInt(amount) || 1;
-
-    if (!id) return;
-
-    await pool.query(`
-      UPDATE recrutadores
-      SET recrutamentos = GREATEST(recrutamentos - $1, 0)
+      UPDATE pontos 
+      SET 
+        saldo_horas = GREATEST(COALESCE(saldo_horas,0) - $1, 0),
+        total_geral = GREATEST(COALESCE(total_geral,0) - $1, 0)
       WHERE user_id = $2
-    `, [quantidade, id]);
+    `, [timeMs, id]); // ← aqui também corrigi para usar o ID do mencionado
+
+    const hours = Math.floor(timeMs / 3600000);
+    const minutes = Math.floor((timeMs % 3600000) / 60000);
+    const seconds = Math.floor((timeMs % 60000) / 1000);
 
     const confirm = await interaction.followUp({
-      content: `✅ Removido ${quantidade} recrutamento(s) de <@${id}>`,
+      content: `✅ Removidos ${hours}h ${minutes}m ${seconds}s de <@${id}>`,
       ephemeral: false
     });
 
-    setTimeout(() => confirm.delete().catch(()=>{}), REC_MESSAGE_LIFETIME);
-    m.delete().catch(()=>{});
+    setTimeout(() => confirm.delete().catch(() => {}), MESSAGE_LIFETIME);
+    m.delete().catch(() => {});
   });
 
+  setTimeout(() => msgTime.delete().catch(() => {}), MESSAGE_LIFETIME);
   break;
 }
-
   } // fim do switch
 }); // fim do client.on
 
@@ -1399,62 +1270,7 @@ const ALLOWED_REC = [
   "1476619432838168668",
   "1476619502832713839"
 ];
-// =============================
-// VERIFICAÇÃO AUTOMÁTICA DE RECRUTADOS (SEM KICK)
-// =============================
-client.on("guildMemberAdd", async (member) => {
-  try {
-    if (member.guild.id !== IDS.SERVIDOR_PRINCIPAL) return;
 
-    const resultado = await pool.query(
-      "SELECT * FROM recrutamentos2 WHERE userid = $1",
-      [member.id]
-    );
-
-    // ❌ Não está no banco → só ignora
-    if (resultado.rows.length === 0) {
-      console.log("Usuário não está no banco.");
-      return;
-    }
-
-    const dados = resultado.rows[0];
-
-    // ❌ Não está aprovado → só ignora
-    if (!dados.recrutado || dados.status !== "aprovado") {
-      console.log("Recrutamento não aprovado.");
-      return;
-    }
-
-    // ❌ Expirado → atualiza banco e ignora
-    if (new Date(dados.validade) < new Date()) {
-      await pool.query(
-        "UPDATE recrutamentos2 SET status = 'expirado', recrutado = false WHERE userid = $1",
-        [member.id]
-      );
-      console.log("Recrutamento expirado.");
-      return;
-    }
-
-    // ❌ Servidor de origem inválido → ignora
-    if (dados.servidor_origem !== IDS.SERVIDOR_RECRUTAMENTO) {
-      console.log("Servidor de origem inválido.");
-      return;
-    }
-
-    // ✅ Dá o cargo
-    const cargo = member.guild.roles.cache.get(IDS.CARGO_MEMBRO);
-    if (cargo) await member.roles.add(cargo);
-
-    // ✅ Log
-    const logChannel = member.guild.channels.cache.get(IDS.LOG_CHANNEL);
-    if (logChannel) {
-      logChannel.send(`✅ ${member.user.tag} entrou no servidor principal.`);
-    }
-
-  } catch (err) {
-    console.error("Erro na verificação de recrutamento:", err);
-  }
-});
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -1568,92 +1384,7 @@ if (!data) {
     `✅ ${expulsos} membros com o cargo ${role.name} foram expulsos.`
   );
 }
-  // =============================
-// COMANDO !APROVAR
-// =============================
-if (message.content.startsWith(`${PREFIX}aprovar`)) {
-  try {
-    // Checa se o autor tem o cargo de recrutador
-    const membroAutor = message.member;
-    const cargosPermitidos = IDS.ALLOWED_REC; // array de cargos que podem aprovar
-    const temCargo = membroAutor.roles.cache.some(r => cargosPermitidos.includes(r.id));
-
-    if (!temCargo) {
-      return message.reply("❌ Você não tem permissão para aprovar recrutas.");
-    }
-
-    // Pega o usuário mencionado
-    const membro = message.mentions.members.first();
-    if (!membro) return message.reply("⚠️ Mencione o usuário que deseja aprovar.");
-
-    // Confirma que o comando está sendo usado no servidor de recrutamento
-    if (message.guild.id !== IDS.SERVIDOR_RECRUTAMENTO) {
-      return message.reply("⚠️ Este comando só pode ser usado no servidor de recrutamento.");
-    }
-
-    // Insere ou atualiza o usuário na tabela recrutamento
-    await pool.query(
-  `INSERT INTO recrutamentos2
-     (userid, recrutado, status, data_aprovacao, validade, recrutador_id, servidor_origem)
-   VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '7 days', $4, $5)
-   ON CONFLICT (userid)
-   DO UPDATE SET
-     recrutado = $2,
-     status = $3,
-     data_aprovacao = NOW(),
-     validade = NOW() + INTERVAL '7 days',
-     recrutador_id = $4,
-     servidor_origem = $5`,
-  [membro.id, true, 'aprovado', message.author.id, message.guild.id]
-);
-
-    // Confirmação no canal
-    message.reply(`✅ <@${membro.id}> foi aprovado com sucesso!`);
-
-    // =============================
-    // LOG NO CANAL
-    // =============================
-    const logChannel = message.guild.channels.cache.get(IDS.LOG_CHANNEL);
-    if (logChannel) {
-      logChannel.send(`✅ ${membro.user.tag} foi aprovado por ${message.author.tag}.`);
-    }
-
-  } catch (err) {
-    console.error("Erro ao aprovar recrutado:", err);
-    message.reply("❌ Ocorreu um erro ao aprovar o recrutado.");
-  }
-}
-
-// =============================
-// COMANDO !RECRUTADOS
-// =============================
-if (message.content === `${PREFIX}recrutados`) {
-  try {
-    const resultado = await pool.query(
-      `SELECT * FROM recrutamentos2
-       WHERE status = 'aprovado'
-       ORDER BY data_aprovacao DESC`
-    );
-
-    if (resultado.rows.length === 0) {
-      return message.reply("Nenhum recrutado aprovado no momento.");
-    }
-
-    let lista = resultado.rows.map((r, index) => {
-      return `${index + 1}. <@${r.userid}> | Recrutador: <@${r.recrutador_id}>`;
-    });
-
-    const mensagemFinal = lista.join("\n").slice(0, 1900);
-
-    message.channel.send({
-      content: `📋 **Lista de Recrutados Aprovados**\n\n${mensagemFinal}`
-    });
-
-  } catch (err) {
-    console.error("Erro ao listar recrutados:", err);
-    message.reply("❌ Ocorreu um erro ao buscar os recrutados.");
-  }
-}
+ 
   // =============================
 // MUTE / UNMUTE CHAT
 // =============================
@@ -1771,183 +1502,7 @@ if (command === "recaliados") {
     console.error(err);
   }
 }
-  // =============================
-  // RECSTATUS
-  // =============================
-  if (command === "recstatus") {
-
-  try {
-
-    const res = await pool.query(
-      "SELECT recrutamentos FROM recrutadores WHERE user_id = $1",
-      [message.author.id]
-    );
-
-    if (res.rows.length === 0) {
-      return message.reply("📊 Você ainda não possui recrutamentos.");
-    }
-
-    const quantidade = res.rows[0].recrutamentos;
-
-    const msg = await message.reply(
-  `📊 ${message.author.tag}, você possui **${quantidade} recrutamentos**.`
-);
-
-setTimeout(() => {
-  msg.delete().catch(() => {});
-}, MESSAGE_LIFETIME);
-
-return;
-
-  } catch (err) {
-    console.error("Erro ao consultar recrutamentos:", err);
-    return message.reply("❌ Ocorreu um erro ao consultar seus recrutamentos.");
-  }
-  }
-  // =============================
-  // RECAPROVADO
-  // =============================
   
-  if (command === "recaprovado") {
-
-  const aprovado = message.mentions.members.first();
-  if (!aprovado)
-    return message.reply("❌ Mencione o usuário aprovado.");
-
-  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635","1476619364672475278","1476619432838168668","1476619502832713839"];
-
-  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
-    return message.reply("❌ Sem permissão para usar esse comando.");
-
-  try {
-
-    // Verifica se quem executou já existe na tabela
-    const res = await pool.query(
-      "SELECT recrutamentos FROM recrutadores WHERE user_id = $1",
-      [message.author.id]
-    );
-
-    let quantidade = 1;
-
-    if (res.rows.length === 0) {
-
-      await pool.query(
-        "INSERT INTO recrutadores (user_id, recrutamentos) VALUES ($1, $2)",
-        [message.author.id, quantidade]
-      );
-
-    } else {
-
-      quantidade = Number(res.rows[0].recrutamentos) + 1;
-
-      await pool.query(
-        "UPDATE recrutadores SET recrutamentos = $1 WHERE user_id = $2",
-        [quantidade, message.author.id]
-      );
-    }
-
-    const msg = await message.reply(
-  `✅ Recrutamento aprovado!\n👤 ${message.author.tag} agora tem **${quantidade} recrutamentos**.`
-);
-
-setTimeout(() => {
-  msg.delete().catch(() => {});
-}, MESSAGE_LIFETIME);
-
-return;
-
-  } catch (err) {
-    console.error("Erro ao registrar recrutamento:", err);
-    return message.reply("❌ Ocorreu um erro ao registrar o recrutamento.");
-  }
-  }
-  // =============================
-  // COMPRACONFIRMADA
-  // =============================
-  if (command === "compraconfirmada") {
-
-    const user = message.mentions.members.first();
-    if (!user)
-      return message.reply("❌ Mencione um usuário válido.");
-
-    const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
-
-    if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
-      return message.reply("❌ Sem permissão para usar esse comando.");
-
-    const CARGO_COMPRADOR = "1475111107114041447";
-
-    try {
-
-      if (!user.roles.cache.has(CARGO_COMPRADOR)) {
-        await user.roles.add(CARGO_COMPRADOR);
-      }
-
-      const res = await pool.query(
-        "SELECT compras FROM clientes WHERE user_id = $1",
-        [user.id]
-      );
-
-      let quantidade = 1;
-
-      if (res.rows.length === 0) {
-        await pool.query(
-          "INSERT INTO clientes (user_id, compras) VALUES ($1, $2)",
-          [user.id, quantidade]
-        );
-      } else {
-        quantidade = Number(res.rows[0].compras) + 1;
-
-        await pool.query(
-          "UPDATE clientes SET compras = $1 WHERE user_id = $2",
-          [quantidade, user.id]
-        );
-      }
-
-      return message.reply(
-        `✅ Compra confirmada para ${user.user.tag}! Total de compras: **${quantidade}**`
-      );
-
-    } catch (err) {
-      console.error("Erro ao registrar compra:", err);
-      return message.reply("❌ Ocorreu um erro ao registrar a compra.");
-    }
-  }
-  // =============================
-// LISTA CLIENTES - REGISTRO CONTÍNUO
-// =============================
-if (command === "listaclientes") {
-
-  const ALLOWED_ROLES = ["1468017578747105390","1468069638935150635"];
-  if (!message.member.roles.cache.some(r => ALLOWED_ROLES.includes(r.id)))
-    return message.reply("❌ Sem permissão para usar este comando.");
-
-  try {
-
-    const res = await pool.query(
-      "SELECT user_id, compras FROM clientes ORDER BY compras DESC"
-    );
-
-    if (res.rows.length === 0)
-      return message.reply("❌ Nenhum cliente registrado.");
-
-    let texto = "📋 **REGISTRO DE CLIENTES**\n\n";
-
-    for (const row of res.rows) {
-      texto += `👤 <@${row.user_id}> — 🛒 ${row.compras} compras\n`;
-    }
-
-    // Quebrar em partes se ultrapassar 2000 caracteres
-    const limite = 1900;
-    for (let i = 0; i < texto.length; i += limite) {
-      await message.channel.send(texto.slice(i, i + limite));
-    }
-
-  } catch (err) {
-    console.error("Erro ao listar clientes:", err);
-    return message.reply("❌ Ocorreu um erro ao buscar os clientes.");
-  }
-}
 });
   // =============================
 // TICKET MENTION
