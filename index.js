@@ -332,11 +332,39 @@ client.on("interactionCreate", async (interaction) => {
     }
 
     case "resetAll": {
-      await pool.query("UPDATE pontos SET ativo = false, total = 0, canal = NULL, coins = 0");
-      const msgAll = await interaction.reply({ content: "✅ Todos os usuários foram resetados!", ephemeral: false });
-      setTimeout(() => msgAll.delete().catch(() => {}), MESSAGE_LIFETIME);
-      break;
-    }
+  try {
+
+    await pool.query(`
+      UPDATE pontos 
+      SET 
+        ativo = false,
+        saldo_horas = 0,
+        total_geral = 0,
+        entrada = NULL,
+        canal = NULL,
+        coins = 0
+    `);
+
+    const msgAll = await interaction.reply({ 
+      content: "✅ Todos os usuários foram resetados com sucesso!", 
+      ephemeral: false 
+    });
+
+    setTimeout(() => {
+      msgAll.delete().catch(() => {});
+    }, MESSAGE_LIFETIME);
+
+  } catch (error) {
+    console.error("Erro ao resetar todos:", error);
+
+    interaction.reply({
+      content: "❌ Ocorreu um erro ao resetar todos os usuários.",
+      ephemeral: true
+    });
+  }
+
+  break;
+}
 
     case "addCoins": {
       const msgCoins = await interaction.reply({ content: "Use: `@usuário quantidade` para adicionar coins.", ephemeral: false });
