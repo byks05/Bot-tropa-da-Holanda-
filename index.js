@@ -1319,30 +1319,34 @@ if (interaction.isButton() && interaction.customId === "consultar_saldo") {
 const PREFIX = "thl!";
 
 const IDS = {
-  STAFF: ["1468069638935150635", "1468017578747105390"],
+  STAFF: ["1468069638935150635","1468017578747105390"],
   LOG_CHANNEL: "1468722726247338115",
   TICKET_CATEGORY: "1468014890500489447",
-  RECRUITMENT_ROLE: ["1468024687031484530",
-                     "1470541063256277012"],
-
-  SERVIDOR_PRINCIPAL: "1468007116936843359",
-  SERVIDOR_RECRUTAMENTO: "1476618436170748129",
-  CARGO_MEMBRO: "1468026315285205094"
+  RECRUITMENT_ROLE: ["1468024687031484530"]
 };
 
 // =============================
-// CONFIGURAÇÕES DE PERMISSÕES
+// FUNÇÃO DE TEMPO
 // =============================
-const ADM_IDS = ["1468017578747105390", "1468069638935150635"]; // IDs que podem usar addcoins/addtempo
-const ALLOWED_REC = [
-  "1468017578747105390",
-  "1468069638935150635",
-  "1468066422490923081",
-  "1476619364672475278",
-  "1476619432838168668",
-  "1476619502832713839"
-];
+function parseDuration(input) {
+  if (!input) return null;
 
+  const regex = /(\d+)([smhd])/g;
+  let match;
+  let total = 0;
+
+  while ((match = regex.exec(input)) !== null) {
+    const value = parseInt(match[1]);
+    const unit = match[2];
+
+    if (unit === "s") total += value * 1000;
+    if (unit === "m") total += value * 60000;
+    if (unit === "h") total += value * 3600000;
+    if (unit === "d") total += value * 86400000;
+  }
+
+  return total;
+}
 // =============================
 // MESSAGE CREATE
 // =============================
@@ -1377,8 +1381,19 @@ client.on("messageCreate", async (message) => {
     setTimeout(() => botMsg.delete().catch(() => {}), 60000);
     return;
   }
-
   // =============================
+  // FUNÇÕES DE PERMISSÃO
+  // =============================
+
+  function isStaff(member) {
+    return member.roles.cache.some(role => IDS.STAFF.includes(role.id));
+  }
+
+  function isRecruitment(member) {
+    return member.roles.cache.some(role => IDS.RECRUITMENT_ROLE.includes(role.id));
+  }
+
+// =============================
 // COMANDOS COM PREFIXO
 // =============================
 if (!message.content.startsWith(PREFIX)) return;
@@ -1410,46 +1425,41 @@ if (!data) {
 
   data = result.rows[0];
 }
-  if (command === "kickcargo") {
+  // =============================
+// Kickcargo
+// =============================
+  
+ if (command === "kickcargo") {
 
-  if (!message.member.permissions.has("KickMembers")) {
-    return message.reply("❌ Você não tem permissão.");
-  }
+  if (!isStaff(message.member))
+    return message.reply("❌ Apenas a STAFF pode usar este comando.");
 
-  if (!message.guild.members.me.permissions.has("KickMembers")) {
+  if (!message.guild.members.me.permissions.has("KickMembers"))
     return message.reply("❌ Eu não tenho permissão para expulsar membros.");
-  }
 
   const role = message.mentions.roles.first();
-
-  if (!role) {
+  if (!role)
     return message.reply("❌ Use assim:\nthl!kickcargo @Cargo");
-  }
 
-  // 🔥 FORÇA BUSCAR TODOS OS MEMBROS
   await message.guild.members.fetch();
 
   const members = message.guild.members.cache.filter(member =>
     member.roles.cache.has(role.id)
   );
 
-  if (!members.size) {
+  if (!members.size)
     return message.reply("⚠ Nenhum membro encontrado com esse cargo.");
-  }
 
   let expulsos = 0;
 
   for (const member of members.values()) {
-
     if (member.id === message.guild.ownerId) continue;
     if (!member.kickable) continue;
 
     try {
       await member.kick(`Expulsão em massa por ${message.author.tag}`);
       expulsos++;
-    } catch (err) {
-      console.log(`Erro ao expulsar ${member.user.tag}`);
-    }
+    } catch {}
   }
 
   message.channel.send(
@@ -1461,120 +1471,149 @@ if (!data) {
 // MUTE / UNMUTE CHAT
 // =============================
 if (command === "mutechat") {
+
+  if (!isStaff(message.member))
+    return message.reply("❌ Apenas a STAFF pode usar.");
+
   const user = message.mentions.members.first();
   const duration = parseDuration(args[1]) || 120000;
-  const motivo = args.slice(2).join(" ") || "Sem motivo";
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
+
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
 
   const muteRole = await getMuteRole(message.guild);
   await user.roles.add(muteRole);
-  message.reply(`${user} foi mutado no chat por ${duration/60000} minutos.`);
 
-  setTimeout(async () => { if(user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole); }, duration);
+  message.reply(`${user} foi mutado por ${duration/60000} minutos.`);
+
+  setTimeout(async () => {
+    if (user.roles.cache.has(muteRole.id))
+      await user.roles.remove(muteRole);
+  }, duration);
 }
-
+  
 if (command === "unmutechat") {
+
+  if (!isStaff(message.member))
+    return message.reply("❌ Apenas a STAFF pode usar.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
 
   const muteRole = message.guild.roles.cache.find(r => r.name === "Muted");
-  if(muteRole && user.roles.cache.has(muteRole.id)) await user.roles.remove(muteRole);
-  message.reply(`${user} foi desmutado no chat.`);
-}
 
+  if (muteRole && user.roles.cache.has(muteRole.id))
+    await user.roles.remove(muteRole);
+
+  message.reply(`${user} foi desmutado.`);
+}
 // =============================
 // MUTE / UNMUTE CALL
 // =============================
 if (command === "mutecall") {
+
+  if (!isStaff(message.member))
+    return message.reply("❌ Apenas a STAFF pode usar.");
+
   const user = message.mentions.members.first();
   const duration = parseDuration(args[1]) || 120000;
-  if(!user) return message.reply("❌ Mencione um usuário válido.");
-  if(!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
+
+  if (!user.voice?.channel)
+    return message.reply("❌ Usuário não está em call.");
 
   await user.voice.setMute(true);
+
   message.reply(`${user} foi mutado na call por ${duration/60000} minutos.`);
 
-  setTimeout(() => user.voice.setMute(false).catch(()=>{}), duration);
+  setTimeout(() => {
+    user.voice.setMute(false).catch(() => {});
+  }, duration);
 }
-
 if (command === "unmutecall") {
+
+  if (!isStaff(message.member))
+    return message.reply("❌ Apenas a STAFF pode usar.");
+
   const user = message.mentions.members.first();
-  if(!user) return message.reply("❌ Mencione um usuário válido.");
-  if(!user.voice?.channel) return message.reply("❌ Usuário não está em call.");
+
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
+
+  if (!user.voice?.channel)
+    return message.reply("❌ Usuário não está em call.");
 
   await user.voice.setMute(false);
+
   message.reply(`${user} foi desmutado na call.`);
 }
-
 // =============================
 // COMANDO RECADD
 // =============================
 if (command === "recadd") {
+
+  if (!isRecruitment(message.member))
+    return message.reply("❌ Apenas a equipe de Recrutamento pode usar.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
-    return message.reply("❌ Sem permissão.");
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
 
   try {
-    // Remove apenas o cargo específico antigo
     await user.roles.remove("1468024885354959142");
-
-    // Adiciona cargos normais
     await user.roles.add("1468026315285205094");
-    
 
-    return message.reply(`✅ Cargos normais aplicados em ${user}`);
+    message.reply(`✅ Cargos aplicados em ${user}`);
   } catch (err) {
     console.error(err);
   }
 }
-
 // =============================
 // COMANDO RECADDMENINA
 // =============================
 if (command === "recaddmenina") {
+
+  if (!isRecruitment(message.member))
+    return message.reply("❌ Apenas a equipe de Recrutamento pode usar.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
-    return message.reply("❌ Sem permissão.");
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
 
   try {
-    // Remove apenas o cargo específico antigo
     await user.roles.remove("1468024885354959142");
-    
-    // Adiciona os três cargos para "menina"
-    await user.roles.add("1472223890821611714"); // cargo 1
+    await user.roles.add("1472223890821611714");
     await user.roles.add("1468026315285205094");
-   
-    return message.reply(`✅ Cargos "menina" aplicados em ${user}`);
+
+    message.reply(`✅ Cargos aplicados em ${user}`);
   } catch (err) {
     console.error(err);
   }
 }
-
 // =============================
 // COMANDO RECALIADOS
 // =============================
 if (command === "recaliados") {
+
+  if (!isRecruitment(message.member))
+    return message.reply("❌ Apenas a equipe de Recrutamento pode usar.");
+
   const user = message.mentions.members.first();
-  if (!user) return message.reply("❌ Mencione um usuário válido.");
-  if (!message.member.roles.cache.some(r => ALLOWED_REC.includes(r.id)))
-    return message.reply("❌ Sem permissão.");
+  if (!user)
+    return message.reply("❌ Mencione um usuário válido.");
 
   try {
-    // Remove apenas o cargo específico antigo
     await user.roles.remove("1468024885354959142");
-
-    // Adiciona cargos aliados
     await user.roles.add("1468279104624398509");
-   
 
-    return message.reply(`✅ Cargos aliados aplicados em ${user}`);
+    message.reply(`✅ Cargos aplicados em ${user}`);
   } catch (err) {
     console.error(err);
   }
-}
-  
+}  
 });
   // =============================
 // TICKET MENTION
