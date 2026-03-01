@@ -210,7 +210,8 @@ const botoesAdminLinha1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("removeCoins").setLabel("➖ Remover Coins").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("removeTime").setLabel("➖ Remover Tempo").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("fecharTodos").setLabel("🔒 Fechar Todos Pontos").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("verStatusUser").setLabel("📊 Ver Status Usuário").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("verStatusUser").setLabel("📊 Ver Status Usuário").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("limparBanco").setLabel("🧹 Limpar Banco").setStyle(ButtonStyle.Secondary)
     );
 
     const conteudo = "🎛 Painel de Administração\nUse os botões abaixo para gerenciar usuários e pontos.";
@@ -296,6 +297,49 @@ client.on("interactionCreate", async (interaction) => {
 
   break;
 }
+      case "limparBanco": {
+  try {
+
+    await interaction.reply({
+      content: "🔎 Verificando usuários que não estão mais no servidor...",
+      ephemeral: false
+    });
+
+    // Buscar todos usuários do banco
+    const result = await pool.query("SELECT user_id FROM pontos");
+
+    const membrosServidor = await interaction.guild.members.fetch();
+    let removidos = 0;
+
+    for (const row of result.rows) {
+
+      const aindaNoServidor = membrosServidor.has(row.user_id);
+
+      if (!aindaNoServidor) {
+        await pool.query(
+          "DELETE FROM pontos WHERE user_id = $1",
+          [row.user_id]
+        );
+        removidos++;
+      }
+    }
+
+    await interaction.followUp({
+      content: `🧹 Limpeza concluída!\n✅ ${removidos} usuários removidos do banco.`,
+      ephemeral: false
+    });
+
+  } catch (error) {
+    console.error("Erro ao limpar banco:", error);
+
+    await interaction.followUp({
+      content: "❌ Ocorreu um erro ao limpar o banco.",
+      ephemeral: true
+    });
+  }
+
+  break;
+  }
 
     case "resetUser": {
       const msgReset = await interaction.reply({ content: "Mencione o usuário que deseja resetar.", ephemeral: false });
