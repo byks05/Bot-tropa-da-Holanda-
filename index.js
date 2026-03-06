@@ -7,9 +7,6 @@ PermissionsBitField,
 ActionRowBuilder,
 ButtonBuilder,
 ButtonStyle,
-ModalBuilder,
-TextInputBuilder,
-TextInputStyle,
 EmbedBuilder
 } = require("discord.js");
 
@@ -31,6 +28,9 @@ ssl: { rejectUnauthorized: false }
 });
 
 const PREFIX = "ne!";
+
+const aguardandoCargo = new Map();
+const aguardandoCall = new Map();
 
 // IDS
 const IDS = {
@@ -73,11 +73,12 @@ expira BIGINT
 
 });
 
-// COMANDO VIP
+// PAINEL VIP
 client.on("messageCreate", async (message) => {
 
 if(message.author.bot) return;
-if(message.content.toLowerCase() !== `${PREFIX}vip`) return;
+
+if(message.content === `${PREFIX}vip`){
 
 const member = message.member;
 
@@ -128,21 +129,6 @@ new ButtonBuilder()
 row.addComponents(
 
 new ButtonBuilder()
-.setCustomId("limite")
-.setLabel("👥 Alterar Limite")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("nome_call")
-.setLabel("✏ Nome da Call")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("nome_cargo")
-.setLabel("🏷 Nome do Cargo")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
 .setCustomId("deletar")
 .setLabel("🗑 Deletar Call")
 .setStyle(ButtonStyle.Danger)
@@ -156,42 +142,45 @@ embeds:[embed],
 components:[row]
 });
 
+}
+
+// NOME DO CARGO
+if(aguardandoCargo.has(message.author.id)){
+
+const nome = message.content;
+
+aguardandoCargo.delete(message.author.id);
+
+try{
+
+const cargo = await message.guild.roles.create({
+name:nome
 });
 
-// BOTÕES
-client.on("interactionCreate", async interaction => {
+await message.member.roles.add(cargo);
 
-if(!interaction.isButton()) return;
+await pool.query(
+"UPDATE calls_ativas SET cargo_id=$1 WHERE user_id=$2",
+[cargo.id,message.author.id]
+);
 
-const member = interaction.member;
+message.reply(`✅ Cargo **${nome}** criado.`);
 
-if(interaction.customId === "fechar"){
-return interaction.message.delete().catch(()=>{});
+}catch{
+message.reply("❌ Erro ao criar cargo.");
 }
-
-// CRIAR CARGO
-if(interaction.customId === "criar_cargo"){
-
-const modal = new ModalBuilder()
-.setCustomId("modal_cargo")
-.setTitle("Criar Cargo");
-
-const input = new TextInputBuilder()
-.setCustomId("nome")
-.setLabel("Nome do cargo")
-.setStyle(TextInputStyle.Short);
-
-modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-return interaction.showModal(modal);
 
 }
 
-// CRIAR CALL
-if(interaction.customId === "criar_call"){
+// NOME DA CALL
+if(aguardandoCall.has(message.author.id)){
+
+const nome = message.content;
+
+aguardandoCall.delete(message.author.id);
 
 const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
-member.roles.cache.has(id)
+message.member.roles.cache.has(id)
 );
 
 const tipo = vipRole[0].toLowerCase();
@@ -201,37 +190,63 @@ let categoria = IDS.CATEGORIA_VIP;
 if(tipo === "fogo") categoria = IDS.CATEGORIA_FOGO;
 if(tipo === "imperio") categoria = IDS.CATEGORIA_IMPERIO;
 
-let nome = `call-${member.user.username}`;
+try{
 
-if(tipo === "fogo" || tipo === "imperio"){
-
-const modal = new ModalBuilder()
-.setCustomId("modal_nomecall")
-.setTitle("Nome da Call");
-
-const input = new TextInputBuilder()
-.setCustomId("nome")
-.setLabel("Digite o nome da call")
-.setStyle(TextInputStyle.Short);
-
-modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-return interaction.showModal(modal);
-
-}
-
-const canal = await interaction.guild.channels.create({
-name: nome,
-type: 2,
-parent: categoria
+const canal = await message.guild.channels.create({
+name:nome,
+type:2,
+parent:categoria
 });
 
 await pool.query(
 "INSERT INTO calls_ativas (user_id,channel_id,tipo) VALUES ($1,$2,$3)",
-[member.id, canal.id, tipo]
+[message.author.id,canal.id,tipo]
 );
 
-return interaction.reply({content:"✅ Call criada!",ephemeral:true});
+message.reply(`✅ Call **${nome}** criada.`);
+
+}catch{
+
+message.reply("❌ Erro ao criar call.");
+
+}
+
+}
+
+});
+
+// BOTÕES
+client.on("interactionCreate", async interaction => {
+
+if(!interaction.isButton()) return;
+
+const user = interaction.user;
+
+if(interaction.customId === "fechar"){
+return interaction.message.delete().catch(()=>{});
+}
+
+// CRIAR CARGO
+if(interaction.customId === "criar_cargo"){
+
+aguardandoCargo.set(user.id,true);
+
+return interaction.reply({
+content:"💬 Digite no chat o nome do cargo.",
+ephemeral:true
+});
+
+}
+
+// CRIAR CALL
+if(interaction.customId === "criar_call"){
+
+aguardandoCall.set(user.id,true);
+
+return interaction.reply({
+content:"💬 Digite no chat o nome da call.",
+ephemeral:true
+});
 
 }
 
@@ -239,8 +254,8 @@ return interaction.reply({content:"✅ Call criada!",ephemeral:true});
 if(interaction.customId === "deletar"){
 
 const call = await pool.query(
-"SELECT * FROM calls_ativas WHERE user_id = $1",
-[member.id]
+"SELECT * FROM calls_ativas WHERE user_id=$1",
+[user.id]
 );
 
 if(!call.rows.length)
@@ -251,8 +266,8 @@ const canal = interaction.guild.channels.cache.get(call.rows[0].channel_id);
 if(canal) await canal.delete();
 
 await pool.query(
-"DELETE FROM calls_ativas WHERE user_id = $1",
-[member.id]
+"DELETE FROM calls_ativas WHERE user_id=$1",
+[user.id]
 );
 
 interaction.reply({content:"🗑 Call deletada.",ephemeral:true});
@@ -261,7 +276,7 @@ interaction.reply({content:"🗑 Call deletada.",ephemeral:true});
 
 });
 
-// AUTO DELETE
+// AUTO DELETE CALL
 client.on("voiceStateUpdate", async oldState => {
 
 if(!oldState.channelId) return;
@@ -273,7 +288,7 @@ if(!canal) return;
 if(canal.members.size !== 0) return;
 
 const call = await pool.query(
-"SELECT * FROM calls_ativas WHERE channel_id = $1",
+"SELECT * FROM calls_ativas WHERE channel_id=$1",
 [canal.id]
 );
 
@@ -292,7 +307,7 @@ if(canalCheck && canalCheck.members.size === 0){
 await canalCheck.delete();
 
 await pool.query(
-"DELETE FROM calls_ativas WHERE channel_id = $1",
+"DELETE FROM calls_ativas WHERE channel_id=$1",
 [canal.id]
 );
 
@@ -311,19 +326,16 @@ client.on("messageCreate", async message => {
 
 if(message.author.bot) return;
 
-const args = message.content.split(" ");
-
 if(message.content.startsWith(`${PREFIX}vipdar`)){
 
 if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
 return message.reply("❌ Sem permissão.");
 
+const args = message.content.split(" ");
+
 const user = message.mentions.members.first();
-
-const args = message.content.split(" ").slice(1);
-
-const tipo = args[1]?.toLowerCase();
-const tempo = args[2];
+const tipo = args[2]?.toLowerCase();
+const tempo = args[3];
 
 if(!user || !tipo || !tempo)
 return message.reply("Use: ne!vipdar @user sol/brisa/fogo/imperio 30d");
@@ -346,10 +358,11 @@ DO UPDATE SET cargo_id=$2,expira=$3
 
 await user.roles.add(cargo);
 
-message.reply(`👑 VIP ${tipo.toUpperCase()} ativado em ${user.user.username}.`);
+message.reply(`👑 VIP ${tipo.toUpperCase()} ativado.`);
 
 }
-  // REMOVER VIP
+
+// REMOVER VIP
 if(message.content.startsWith(`${PREFIX}vipremover`)){
 
 const user = message.mentions.members.first();
@@ -372,36 +385,6 @@ await pool.query(
 );
 
 message.reply("🗑 VIP removido.");
-
-}
-
-// RENOVAR
-if(message.content.startsWith(`${PREFIX}viprenovar`)){
-
-const user = message.mentions.members.first();
-const tempo = args[2];
-
-if(!user || !tempo)
-return message.reply("Use: ne!viprenovar @user 30d");
-
-let tempoMs = parseInt(tempo) * 86400000;
-
-const vip = await pool.query(
-"SELECT * FROM vip_sistema WHERE user_id=$1",
-[user.id]
-);
-
-if(!vip.rows.length)
-return message.reply("Usuário não possui VIP.");
-
-const novo = vip.rows[0].expira + tempoMs;
-
-await pool.query(
-"UPDATE vip_sistema SET expira=$1 WHERE user_id=$2",
-[novo,user.id]
-);
-
-message.reply("🔁 VIP renovado.");
 
 }
 
@@ -435,7 +418,7 @@ message.reply({embeds:[embed]});
 
 });
 
-// EXPIRAÇÃO AUTOMÁTICA
+// EXPIRAÇÃO
 setInterval(async ()=>{
 
 const vips = await pool.query("SELECT * FROM vip_sistema");
@@ -462,97 +445,5 @@ await pool.query(
 }
 
 },60000);
-
-// MODAIS
-client.on("interactionCreate", async interaction => {
-
-if(!interaction.isModalSubmit()) return;
-
-const member = interaction.member;
-
-// ================= CRIAR CARGO =================
-if(interaction.customId === "modal_cargo"){
-
-const nome = interaction.fields.getTextInputValue("nome");
-
-try{
-
-const cargo = await interaction.guild.roles.create({
-name: nome
-});
-
-await member.roles.add(cargo);
-
-await pool.query(
-"UPDATE calls_ativas SET cargo_id = $1 WHERE user_id = $2",
-[cargo.id, member.id]
-);
-
-return interaction.reply({
-content:`✅ Cargo **${nome}** criado!`,
-ephemeral:true
-});
-
-}catch(err){
-
-console.log(err);
-
-return interaction.reply({
-content:"❌ Erro ao criar cargo.",
-ephemeral:true
-});
-
-}
-
-}
-
-// ================= NOME DA CALL =================
-if(interaction.customId === "modal_nomecall"){
-
-const nome = interaction.fields.getTextInputValue("nome");
-
-const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
-member.roles.cache.has(id)
-);
-
-const tipo = vipRole[0].toLowerCase();
-
-let categoria = IDS.CATEGORIA_VIP;
-
-if(tipo === "fogo") categoria = IDS.CATEGORIA_FOGO;
-if(tipo === "imperio") categoria = IDS.CATEGORIA_IMPERIO;
-
-try{
-
-const canal = await interaction.guild.channels.create({
-name: nome,
-type: 2,
-parent: categoria
-});
-
-await pool.query(
-"INSERT INTO calls_ativas (user_id,channel_id,tipo) VALUES ($1,$2,$3)",
-[member.id, canal.id, tipo]
-);
-
-return interaction.reply({
-content:`✅ Call **${nome}** criada!`,
-ephemeral:true
-});
-
-}catch(err){
-
-console.log(err);
-
-return interaction.reply({
-content:"❌ Erro ao criar call.",
-ephemeral:true
-});
-
-}
-
-}
-
-});
 
 client.login(process.env.TOKEN);
