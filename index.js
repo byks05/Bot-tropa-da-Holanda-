@@ -64,13 +64,13 @@ client.once("ready", async () => {
   }
 });
 
-// ================= COMANDO NE!VIP =================
-client.on("interactionCreate", async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  if (interaction.commandName !== "vip") return;
+// ================= COMANDO ne!vip =================
+client.on("messageCreate", async (message) => {
 
-  const member = interaction.member;
+  if (message.author.bot) return;
+  if (!message.content.toLowerCase().startsWith("ne!vip")) return;
 
+  const member = message.member;
   // ===== Verifica se já tem call ativa =====
   const existente = await pool.query(
     "SELECT * FROM calls_ativas WHERE user_id = $1",
@@ -228,3 +228,4 @@ client.on("voiceStateUpdate", async (oldState) => {
 });
 
 client.login(process.env.TOKEN);
+    
