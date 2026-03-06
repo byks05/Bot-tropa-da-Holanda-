@@ -1,117 +1,166 @@
 require("dotenv").config();
 
 const {
-Client,
-GatewayIntentBits,
-PermissionsBitField,
-ActionRowBuilder,
-ButtonBuilder,
-ButtonStyle,
-EmbedBuilder
+  Client,
+  GatewayIntentBits,
+  PermissionsBitField,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder
 } = require("discord.js");
 
 const { Pool } = require("pg");
 
+// ================== CRIAR CLIENT ==================
 const client = new Client({
-intents:[
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.MessageContent,
-GatewayIntentBits.GuildVoiceStates,
-GatewayIntentBits.GuildMembers
-]});
-
-const pool = new Pool({
-connectionString:process.env.DATABASE_URL,
-ssl:{rejectUnauthorized:false}
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
+// ================== CONEXÃO POSTGRES ==================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// ================== PREFIXO E IDS ==================
 const PREFIX = "ne!";
-
 const IDS = {
+  STAFF_ROLE: "1468017578747105390",
+  LOG_VIP: "1478697992071549081",
 
-STAFF_ROLE:"1468017578747105390",
-LOG_VIP:"1478697992071549081",
+  CATEGORIA_SOL_BRISA: "1478567017832251392",
+  CATEGORIA_FOGO: "1478695052015308800",
+  CATEGORIA_IMPERIO: "1478694889167257784",
 
-CATEGORIA_SOL_BRISA:"1478567017832251392",
-CATEGORIA_FOGO:"1478695052015308800",
-CATEGORIA_IMPERIO:"1478694889167257784",
-
-CARGOS:{
-SOL:"1478567864175693865",
-BRISA:"1478567921243521266",
-FOGO:"1478567970711273675",
-IMPERIO:"1478568023358050425"
-}
-
+  CARGOS: {
+    SOL: "1478567864175693865",
+    BRISA: "1478567921243521266",
+    FOGO: "1478567970711273675",
+    IMPERIO: "1478568023358050425"
+  }
 };
 
+// ================== SISTEMA DE ESTADOS ==================
 let aguardando = {};
 
-client.once("ready",async()=>{
+// ================== BANCO DE DADOS ==================
+client.once("ready", async () => {
+  console.log(`🔥 Bot online ${client.user.tag}`);
 
-console.log(`🔥 Bot online ${client.user.tag}`);
+  // Cria a tabela vip_users se não existir
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vip_users(
+      user_id TEXT PRIMARY KEY,
+      cargo_id TEXT,
+      tipo TEXT,
+      expira BIGINT
+    );
+  `);
 
-await pool.query(`
-CREATE TABLE IF NOT EXISTS vip_users(
-user_id TEXT PRIMARY KEY,
-cargo_id TEXT,
-tipo TEXT,
-expira BIGINT
-)
-`);
+  // Cria a tabela vip_calls se não existir
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS vip_calls(
+      user_id TEXT PRIMARY KEY,
+      channel_id TEXT,
+      cargo_id TEXT,
+      tipo TEXT
+    );
+  `);
 
-await pool.query(`
-CREATE TABLE IF NOT EXISTS vip_calls(
-user_id TEXT PRIMARY KEY,
-channel_id TEXT,
-cargo_id TEXT,
-tipo TEXT
-)
-`);
-
+  console.log("✅ Banco de dados pronto");
 });
 
-function categoriaVIP(tipo){
-
-if(tipo==="sol"||tipo==="brisa") return IDS.CATEGORIA_SOL_BRISA;
-if(tipo==="fogo") return IDS.CATEGORIA_FOGO;
-if(tipo==="imperio") return IDS.CATEGORIA_IMPERIO;
-
+// ================== FUNÇÕES AUXILIARES ==================
+function categoriaVIP(tipo) {
+  if(tipo === "sol" || tipo === "brisa") return IDS.CATEGORIA_SOL_BRISA;
+  if(tipo === "fogo") return IDS.CATEGORIA_FOGO;
+  if(tipo === "imperio") return IDS.CATEGORIA_IMPERIO;
 }
 
-async function logVIP(guild,msg){
-
-const canal = guild.channels.cache.get(IDS.LOG_VIP);
-if(canal) canal.send(msg);
-
+async function logVIP(guild, msg) {
+  const canal = guild.channels.cache.get(IDS.LOG_VIP);
+  if(canal) canal.send(msg);
 }
+
+// ================== A PARTIR DAQUI VÃO OS COMANDOS E INTERAÇÕES ==================
+
+// ================= COMANDOS =================
 
 client.on("messageCreate",async message=>{
 
 if(message.author.bot) return;
 
-if(message.content===`${PREFIX}vip`){
+// ================= PAINEL VIP =================
+
+if(message.content === `${PREFIX}vip`){
 
 const member = message.member;
 
-const vipRole = Object.entries(IDS.CARGOS).find(([k,id])=>
+// verificar se tem VIP
+const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
 member.roles.cache.has(id)
 );
 
 if(!vipRole) return message.reply("❌ Você não possui VIP.");
 
+// buscar no banco
+const call = await pool.query(
+"SELECT * FROM vip_calls WHERE user_id=$1",
+[member.id]
+);
+
+let temCall = false;
+let temCargo = false;
+
+if(call.rows.length){
+temCall = true;
+if(call.rows[0].cargo_id) temCargo = true;
+}
+
+// embed
 const embed = new EmbedBuilder()
 .setTitle("👑 Painel VIP")
 .setColor("Orange")
-.setDescription("Controle sua call VIP");
+.setDescription("Gerencie sua call e cargo VIP");
 
-const row = new ActionRowBuilder().addComponents(
+// botões
+const row = new ActionRowBuilder();
+
+// ================= SEM CALL E SEM CARGO =================
+if(!temCall && !temCargo){
+
+row.addComponents(
 
 new ButtonBuilder()
 .setCustomId("criar_call")
 .setLabel("🎤 Criar Call")
 .setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("criar_cargo")
+.setLabel("🏷 Criar Cargo")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+}
+
+// ================= TEM CALL MAS NÃO CARGO =================
+else if(temCall && !temCargo){
+
+row.addComponents(
 
 new ButtonBuilder()
 .setCustomId("criar_cargo")
@@ -129,27 +178,8 @@ new ButtonBuilder()
 .setStyle(ButtonStyle.Secondary),
 
 new ButtonBuilder()
-.setCustomId("renomear_cargo")
-.setLabel("🏷 Renomear Cargo")
-.setStyle(ButtonStyle.Secondary)
-
-);
-
-const row2 = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("cor_cargo")
-.setLabel("🎨 Cor do Cargo")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId("liberar")
-.setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
 .setCustomId("deletar_call")
-.setLabel("🗑 Excluir Call")
+.setLabel("🗑 Deletar Call")
 .setStyle(ButtonStyle.Danger),
 
 new ButtonBuilder()
@@ -159,18 +189,103 @@ new ButtonBuilder()
 
 );
 
-message.reply({
+}
+
+// ================= TEM CARGO MAS NÃO CALL =================
+else if(!temCall && temCargo){
+
+row.addComponents(
+
+new ButtonBuilder()
+.setCustomId("criar_call")
+.setLabel("🎤 Criar Call")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("renomear_cargo")
+.setLabel("🏷 Renomear Cargo")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("deletar_cargo")
+.setLabel("🗑 Deletar Cargo")
+.setStyle(ButtonStyle.Danger),
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+}
+
+// ================= TEM CALL E CARGO =================
+else if(temCall && temCargo){
+
+row.addComponents(
+
+new ButtonBuilder()
+.setCustomId("limite")
+.setLabel("👥 Limitar Call")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("renomear_call")
+.setLabel("✏ Renomear Call")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("renomear_cargo")
+.setLabel("🏷 Renomear Cargo")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("liberar")
+.setLabel("👤 Liberar Amigo")
+.setStyle(ButtonStyle.Success),
+
+new ButtonBuilder()
+.setCustomId("deletar_call")
+.setLabel("🗑 Deletar Call")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+const row2 = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("deletar_cargo")
+.setLabel("🗑 Deletar Cargo")
+.setStyle(ButtonStyle.Danger),
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+return message.reply({
 embeds:[embed],
 components:[row,row2]
 });
 
 }
-  // ================= PAINEL STAFF =================
+
+// enviar painel
+message.reply({
+embeds:[embed],
+components:[row]
+});
+
+}
+// ================= PAINEL STAFF =================
 
 if(message.content === `${PREFIX}vipstaff`){
 
 if(!message.member.roles.cache.has(IDS.STAFF_ROLE))
-return message.reply("❌ Apenas STAFF.");
+return message.reply("❌ Apenas STAFF pode usar.");
 
 const embed = new EmbedBuilder()
 .setTitle("👑 Painel STAFF VIP")
@@ -206,143 +321,144 @@ new ButtonBuilder()
 
 );
 
+const row2 = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar Painel")
+.setStyle(ButtonStyle.Secondary)
+
+);
+
 message.reply({
 embeds:[embed],
-components:[row]
+components:[row,row2]
 });
 
 }
 
-});
+});     
 
-client.on("interactionCreate",async interaction=>{
+client.on("interactionCreate", async interaction => {
 
 if(!interaction.isButton()) return;
 
 const member = interaction.member;
 
-if(interaction.customId==="fechar")
-return interaction.message.delete().catch(()=>{});
-
-if(interaction.customId==="criar_call"){
-
-aguardando[member.id]="criar_call";
-
-return interaction.reply({
-content:"Digite o nome da call.",
-ephemeral:true
-});
-
+// FECHAR PAINEL
+if(interaction.customId === "fechar") {
+  return interaction.message.delete().catch(()=>{});
 }
 
-if(interaction.customId==="criar_cargo"){
-
-aguardando[member.id]="criar_cargo";
-
-return interaction.reply({
-content:"Digite o nome do cargo.",
-ephemeral:true
-});
-
+// ================= CRIAR CALL =================
+if(interaction.customId === "criar_call") {
+  aguardando[member.id] = "criar_call";
+  return interaction.reply({
+    content: "Digite o nome da call.",
+    ephemeral: true
+  });
 }
 
-if(interaction.customId==="limite"){
-
-aguardando[member.id]="limite";
-
-return interaction.reply({
-content:"Digite o limite da call.",
-ephemeral:true
-});
-
+// ================= CRIAR CARGO =================
+if(interaction.customId === "criar_cargo") {
+  aguardando[member.id] = "criar_cargo";
+  return interaction.reply({
+    content: "Digite o nome do cargo.",
+    ephemeral: true
+  });
 }
 
-if(interaction.customId==="liberar"){
-
-aguardando[member.id]="liberar";
-
-return interaction.reply({
-content:"Marque o amigo.",
-ephemeral:true
-});
-
-}
-  // ================= STAFF DAR VIP =================
-
-if(interaction.customId === "staff_darvip"){
-
-aguardando[interaction.user.id] = "staff_darvip";
-
-return interaction.reply({
-content:"Use no chat:\n`@user tipo dias`\nExemplo:\n`@kaique sol 30`",
-ephemeral:true
-});
-
+// ================= LIMITE =================
+if(interaction.customId === "limite") {
+  aguardando[member.id] = "limite";
+  return interaction.reply({
+    content: "Digite o limite da call.",
+    ephemeral: true
+  });
 }
 
-// ================= STAFF RENOVAR =================
-
-if(interaction.customId === "staff_renovarvip"){
-
-aguardando[interaction.user.id] = "staff_renovar";
-
-return interaction.reply({
-content:"Use no chat:\n`@user dias`\nExemplo:\n`@kaique 30`",
-ephemeral:true
-});
-
+// ================= LIBERAR AMIGO =================
+if(interaction.customId === "liberar") {
+  aguardando[member.id] = "liberar";
+  return interaction.reply({
+    content: "Marque o amigo que deseja liberar.",
+    ephemeral: true
+  });
 }
 
-// ================= STAFF REMOVER =================
-
-if(interaction.customId === "staff_removervip"){
-
-aguardando[interaction.user.id] = "staff_remover";
-
-return interaction.reply({
-content:"Marque o usuário para remover VIP.",
-ephemeral:true
-});
-
+// ================= RENOMEAR CALL =================
+if(interaction.customId === "renomear_call") {
+  aguardando[member.id] = "renomear_call";
+  return interaction.reply({
+    content: "Digite o novo nome da call.",
+    ephemeral: true
+  });
 }
 
-// ================= VER VIPS =================
-
-if(interaction.customId === "staff_vervips"){
-
-const vips = await pool.query("SELECT * FROM vip_users");
-
-let lista="";
-
-for(const v of vips.rows){
-
-let dias = Math.floor((v.expira-Date.now())/86400000);
-
-lista+=`<@${v.user_id}> • ${dias} dias\n`;
-
+// ================= RENOMEAR CARGO =================
+if(interaction.customId === "renomear_cargo") {
+  aguardando[member.id] = "renomear_cargo";
+  return interaction.reply({
+    content: "Digite o novo nome do cargo.",
+    ephemeral: true
+  });
 }
 
-interaction.reply({
-content:lista || "Nenhum VIP.",
-ephemeral:true
-});
+// ================= DELETAR CALL =================
+if(interaction.customId === "deletar_call") {
 
+  const call = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
+
+  if(!call.rows.length) return interaction.reply({
+    content: "❌ Você não possui call.",
+    ephemeral: true
+  });
+
+  const canal = interaction.guild.channels.cache.get(call.rows[0].channel_id);
+  if(canal) await canal.delete().catch(()=>{});
+
+  await pool.query("DELETE FROM vip_calls WHERE user_id=$1", [member.id]);
+
+  return interaction.reply({
+    content: "🗑 Call deletada.",
+    ephemeral: true
+  });
 }
 
-// ================= LOGS =================
+// ================= DELETAR CARGO =================
+if(interaction.customId === "deletar_cargo") {
 
-if(interaction.customId === "staff_logs"){
+  const call = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-interaction.reply({
-content:`Canal de logs: <#${IDS.LOG_VIP}>`,
-ephemeral:true
-});
+  if(!call.rows.length || !call.rows[0].cargo_id) 
+    return interaction.reply({
+      content: "❌ Você não possui cargo VIP.",
+      ephemeral: true
+    });
 
+  const cargo = interaction.guild.roles.cache.get(call.rows[0].cargo_id);
+  if(cargo) await cargo.delete().catch(()=>{});
+
+  await pool.query(
+    "UPDATE vip_calls SET cargo_id=NULL WHERE user_id=$1",
+    [member.id]
+  );
+
+  return interaction.reply({
+    content: "🗑 Cargo deletado.",
+    ephemeral: true
+  });
 }
 
 });
 
-client.on("messageCreate",async message=>{
+client.on("messageCreate", async message => {
 
 if(message.author.bot) return;
 
@@ -354,315 +470,212 @@ delete aguardando[message.author.id];
 const member = message.member;
 
 // ================= CRIAR CALL =================
+if(estado === "criar_call") {
 
-if(estado==="criar_call"){
+  const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
+    member.roles.cache.has(id)
+  );
 
-const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
-member.roles.cache.has(id)
-);
+  if(!vipRole) return message.reply("❌ Você não possui VIP.");
 
-if(!vipRole) return message.reply("❌ Você não possui VIP.");
+  const tipo = vipRole[0].toLowerCase();
 
-const tipo = vipRole[0].toLowerCase();
+  const callExist = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-const canal = await message.guild.channels.create({
-name:message.content,
-type:2,
-parent:categoriaVIP(tipo)
-}).catch(()=>null);
+  // Limite de 1 call
+  if(callExist.rows.length && callExist.rows[0].channel_id)
+    return message.reply("❌ Você já possui uma call.");
 
-if(!canal) return message.reply("❌ Erro ao criar call.");
+  const canal = await message.guild.channels.create({
+    name: message.content,
+    type: 2,
+    parent: categoriaVIP(tipo)
+  }).catch(()=>null);
 
-await pool.query(`
-INSERT INTO vip_calls(user_id,channel_id,tipo)
-VALUES($1,$2,$3)
-ON CONFLICT(user_id)
-DO UPDATE SET channel_id=$2,tipo=$3
-`,[member.id,canal.id,tipo]);
+  if(!canal) return message.reply("❌ Erro ao criar call.");
 
-message.reply("✅ Call criada.");
+  await pool.query(`
+    INSERT INTO vip_calls(user_id,channel_id,tipo)
+    VALUES($1,$2,$3)
+    ON CONFLICT(user_id)
+    DO UPDATE SET channel_id=$2, tipo=$3
+  `,[member.id, canal.id, tipo]);
 
+  message.reply("✅ Call criada.");
 }
 
 // ================= CRIAR CARGO =================
+if(estado === "criar_cargo") {
 
-if(estado === "criar_cargo"){
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-const call = await pool.query(
-"SELECT * FROM calls_ativas WHERE user_id=$1",
-[member.id]
-);
+  // Limite de 1 cargo
+  if(callData.rows.length && callData.rows[0].cargo_id)
+    return message.reply("❌ Você já possui um cargo VIP.");
 
-// limite de 1 cargo
-if(call.rows.length && call.rows[0].cargo_id)
-return message.reply("❌ Você já possui um cargo VIP.");
+  const cargo = await message.guild.roles.create({
+    name: message.content
+  }).catch(()=>null);
 
-const cargo = await message.guild.roles.create({
-name: message.content
-}).catch(()=>null);
+  if(!cargo) return message.reply("❌ Erro ao criar cargo.");
 
-if(!cargo) return message.reply("❌ Erro ao criar cargo.");
+  await member.roles.add(cargo).catch(()=>{});
 
-await member.roles.add(cargo).catch(()=>{});
+  await pool.query(`
+    UPDATE vip_calls
+    SET cargo_id=$1
+    WHERE user_id=$2
+  `, [cargo.id, member.id]);
 
-await pool.query(`
-UPDATE calls_ativas
-SET cargo_id=$1
-WHERE user_id=$2
-`, [cargo.id, member.id]);
-
-message.reply("✅ Cargo criado.");
-
+  message.reply("✅ Cargo criado.");
 }
-
 
 // ================= LIMITE CALL =================
+if(estado === "limite") {
 
-if(estado === "limite"){
+  const limite = parseInt(message.content);
 
-const limite = parseInt(message.content);
+  if(isNaN(limite) || limite < 0)
+    return message.reply("❌ Número inválido.");
 
-if(isNaN(limite) || limite < 0)
-return message.reply("❌ Número inválido.");
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-const call = await pool.query(
-"SELECT * FROM calls_ativas WHERE user_id=$1",
-[member.id]
-);
+  if(!callData.rows.length || !callData.rows[0].channel_id)
+    return message.reply("❌ Você não possui uma call.");
 
-// precisa existir call
-if(!call.rows.length)
-return message.reply("❌ Você não possui uma call.");
+  const canal = message.guild.channels.cache.get(callData.rows[0].channel_id);
+  if(!canal) return message.reply("❌ Call não encontrada.");
 
-const canal = message.guild.channels.cache.get(call.rows[0].channel_id);
+  await canal.setUserLimit(limite).catch(()=>{});
 
-if(!canal)
-return message.reply("❌ Call não encontrada.");
-
-await canal.setUserLimit(limite).catch(()=>{});
-
-message.reply("✅ Limite atualizado.");
-
+  message.reply("✅ Limite atualizado.");
 }
+
 // ================= LIBERAR AMIGO =================
+if(estado === "liberar") {
 
-if(estado==="liberar"){
+  const amigo = message.mentions.members.first();
+  if(!amigo) return message.reply("❌ Marque um amigo.");
 
-const amigo = message.mentions.members.first();
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-if(!amigo) return message.reply("❌ Marque um amigo.");
+  if(!callData.rows.length || !callData.rows[0].cargo_id)
+    return message.reply("❌ Você não possui call ou cargo VIP.");
 
-const call = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+  const cargo = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+  if(!cargo) return;
 
-if(!call.rows.length)
-return message.reply("❌ Você não possui call.");
+  await amigo.roles.add(cargo).catch(()=>{});
 
-const cargo = message.guild.roles.cache.get(call.rows[0].cargo_id);
-
-if(!cargo) return;
-
-await amigo.roles.add(cargo).catch(()=>{});
-
-message.reply(`✅ ${amigo.user.username} liberado na call.`);
-
+  message.reply(`✅ ${amigo.user.username} liberado na call.`);
 }
-  // ================= STAFF DAR VIP CHAT =================
-
-if(estado === "staff_darvip"){
-
-if(!message.member.roles.cache.has(IDS.STAFF_ROLE)) return;
-
-const user = message.mentions.members.first();
-const tipo = message.content.split(" ")[1];
-const dias = message.content.split(" ")[2];
-
-if(!user || !tipo || !dias)
-return message.reply("❌ Formato inválido.");
-
-const cargo = IDS.CARGOS[tipo.toUpperCase()];
-
-let expira = Date.now() + (parseInt(dias)*86400000);
-
-await pool.query(`
-INSERT INTO vip_users(user_id,cargo_id,tipo,expira)
-VALUES($1,$2,$3,$4)
-ON CONFLICT(user_id)
-DO UPDATE SET cargo_id=$2,tipo=$3,expira=$4
-`,[user.id,cargo,tipo,expira]);
-
-await user.roles.add(cargo);
-
-message.reply("👑 VIP ativado.");
-
-logVIP(message.guild,`👑 VIP ${tipo} dado a ${user}`);
-
-}
-
-// ================= STAFF REMOVER =================
-
-if(estado === "staff_remover"){
-
-const user = message.mentions.members.first();
-if(!user) return;
-
-await pool.query("DELETE FROM vip_users WHERE user_id=$1",[user.id]);
-
-Object.values(IDS.CARGOS).forEach(async cargo=>{
-if(user.roles.cache.has(cargo))
-await user.roles.remove(cargo).catch(()=>{});
-});
-
-message.reply("🗑 VIP removido.");
-
-logVIP(message.guild,`🗑 VIP removido de ${user}`);
-
-}
-
-// ================= STAFF RENOVAR =================
-
-if(estado === "staff_renovar"){
-
-const user = message.mentions.members.first();
-const dias = message.content.split(" ")[1];
-
-if(!user || !dias) return;
-
-const vip = await pool.query(
-"SELECT * FROM vip_users WHERE user_id=$1",
-[user.id]
-);
-
-if(!vip.rows.length)
-return message.reply("Usuário não tem VIP.");
-
-let novo = Date.now() + (parseInt(dias) * 86400000);
-  
-await pool.query(
-"UPDATE vip_users SET expira=$1 WHERE user_id=$2",
-[novo,user.id]
-);
-
-message.reply("🔁 VIP renovado.");
-
-logVIP(message.guild,`🔁 VIP renovado ${user}`);
-
-}
-
-});
-
-client.on("interactionCreate",async interaction=>{
-
-if(!interaction.isButton()) return;
-
-const member = interaction.member;
 
 // ================= RENOMEAR CALL =================
+if(estado === "renomear_call") {
 
-if(interaction.customId==="renomear_call"){
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-aguardando[member.id]="renomear_call";
+  if(!callData.rows.length || !callData.rows[0].channel_id)
+    return message.reply("❌ Você não possui call.");
 
-return interaction.reply({
-content:"Digite o novo nome da call.",
-ephemeral:true
-});
+  const canal = message.guild.channels.cache.get(callData.rows[0].channel_id);
+  if(!canal) return message.reply("❌ Call não encontrada.");
 
+  await canal.setName(message.content).catch(()=>{});
+
+  message.reply("✅ Call renomeada.");
 }
 
 // ================= RENOMEAR CARGO =================
+if(estado === "renomear_cargo") {
 
-if(interaction.customId==="renomear_cargo"){
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-aguardando[member.id]="renomear_cargo";
+  if(!callData.rows.length || !callData.rows[0].cargo_id)
+    return message.reply("❌ Você não possui cargo.");
 
-return interaction.reply({
-content:"Digite o novo nome do cargo.",
-ephemeral:true
+  const cargo = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+  if(!cargo) return message.reply("❌ Cargo não encontrado.");
+
+  await cargo.setName(message.content).catch(()=>{});
+
+  message.reply("✅ Cargo renomeado.");
+}
 });
 
-}
+setInterval(async () => {
 
-// ================= DELETAR CALL =================
+  const vips = await pool.query("SELECT * FROM vip_users");
 
-if(interaction.customId==="deletar_call"){
+  for(const vip of vips.rows){
 
-const call = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+    // Verifica se o VIP expirou
+    if(Date.now() >= vip.expira){
 
-if(!call.rows.length)
-return interaction.reply({content:"❌ Sem call.",ephemeral:true});
+      const guild = client.guilds.cache.first();
+      const member = await guild.members.fetch(vip.user_id).catch(()=>null);
 
-const canal = interaction.guild.channels.cache.get(call.rows[0].channel_id);
+      if(member){
+        // Remove o cargo VIP
+        await member.roles.remove(vip.cargo_id).catch(()=>{});
 
-if(canal) await canal.delete().catch(()=>{});
+        // Remove call se existir
+        const callData = await pool.query(
+          "SELECT * FROM vip_calls WHERE user_id=$1",
+          [vip.user_id]
+        );
 
-await pool.query(
-"DELETE FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+        if(callData.rows.length && callData.rows[0].channel_id){
+          const canal = guild.channels.cache.get(callData.rows[0].channel_id);
+          if(canal) await canal.delete().catch(()=>{});
 
-interaction.reply({
-content:"🗑 Call deletada.",
-ephemeral:true
+          // Remove do banco
+          await pool.query(
+            "DELETE FROM vip_calls WHERE user_id=$1",
+            [vip.user_id]
+          );
+        }
+      }
+
+      // Remove do banco vip_users
+      await pool.query("DELETE FROM vip_users WHERE user_id=$1", [vip.user_id]);
+
+      // Log no canal
+      logVIP(guild, `⌛ VIP expirou <@${vip.user_id}>`);
+    }
+
+  }
+
+}, 60000); // checa a cada 60 segundos
+
+// ================= LOGIN =================
+client.login(process.env.TOKEN)
+  .then(() => console.log(`✅ Bot iniciado com sucesso!`))
+  .catch(err => console.error(`❌ Erro ao iniciar o bot: ${err}`));
+
+// ================= TRATAMENTO DE ERROS =================
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled Rejection:', error);
 });
 
-}
-
-// ================= DELETAR CARGO =================
-
-if(interaction.customId==="deletar_cargo"){
-
-const call = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
-
-if(!call.rows.length)
-return interaction.reply({content:"❌ Sem cargo.",ephemeral:true});
-
-const cargo = interaction.guild.roles.cache.get(call.rows[0].cargo_id);
-
-if(cargo) await cargo.delete().catch(()=>{});
-
-interaction.reply({
-content:"🗑 Cargo deletado.",
-ephemeral:true
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
 });
-
-}
-
-});
-
-setInterval(async()=>{
-
-const vips = await pool.query("SELECT * FROM vip_users");
-
-for(const vip of vips.rows){
-
-if(Date.now()>=vip.expira){
-
-const guild = client.guilds.cache.first();
-
-const member = await guild.members.fetch(vip.user_id).catch(()=>null);
-
-if(member){
-await member.roles.remove(vip.cargo_id).catch(()=>{});
-}
-
-await pool.query("DELETE FROM vip_users WHERE user_id=$1",[vip.user_id]);
-
-logVIP(guild,`⌛ VIP expirou <@${vip.user_id}>`);
-
-}
-
-}
-
-},60000);
-
-client.login(process.env.TOKEN);
-
