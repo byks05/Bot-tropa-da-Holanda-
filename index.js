@@ -319,8 +319,11 @@ if(!message.member.permissions.has(PermissionsBitField.Flags.Administrator))
 return message.reply("❌ Sem permissão.");
 
 const user = message.mentions.members.first();
-const tipo = args[2]?.toLowerCase();
-const tempo = args[3];
+
+const args = message.content.split(" ").slice(1);
+
+const tipo = args[1]?.toLowerCase();
+const tempo = args[2];
 
 if(!user || !tipo || !tempo)
 return message.reply("Use: ne!vipdar @user sol/brisa/fogo/imperio 30d");
@@ -332,7 +335,7 @@ return message.reply("VIP inválido.");
 
 let tempoMs = parseInt(tempo) * 86400000;
 
-const expira = Date.now()+tempoMs;
+const expira = Date.now() + tempoMs;
 
 await pool.query(`
 INSERT INTO vip_sistema (user_id,cargo_id,expira)
@@ -343,10 +346,9 @@ DO UPDATE SET cargo_id=$2,expira=$3
 
 await user.roles.add(cargo);
 
-message.reply(`👑 VIP ${tipo.toUpperCase()} ativado.`);
+message.reply(`👑 VIP ${tipo.toUpperCase()} ativado em ${user.user.username}.`);
 
 }
-
 // REMOVER VIP
 if(message.content.startsWith(`${PREFIX}vipremover`)){
 
