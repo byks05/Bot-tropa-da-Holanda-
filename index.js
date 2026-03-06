@@ -455,6 +455,60 @@ if(interaction.customId === "deletar_cargo") {
     ephemeral: true
   });
 }
+  client.on("interactionCreate", async interaction => {
+  if (!interaction.isButton()) return;
+  const member = interaction.member;
+
+  // ================= FECHAR =================
+  if (interaction.customId === "fechar") {
+    return interaction.message.delete().catch(() => {});
+  }
+
+  // ================= STAFF =================
+  if (interaction.customId === "staff_darvip") {
+    aguardando[interaction.user.id] = "staff_darvip";
+    return interaction.reply({
+      content: "Use no chat:\n`@user tipo dias`\nExemplo:\n`@kaique sol 30`",
+      ephemeral: true
+    });
+  }
+
+  if (interaction.customId === "staff_renovarvip") {
+    aguardando[interaction.user.id] = "staff_renovar";
+    return interaction.reply({
+      content: "Use no chat:\n`@user dias`\nExemplo:\n`@kaique 30`",
+      ephemeral: true
+    });
+  }
+
+  if (interaction.customId === "staff_removervip") {
+    aguardando[interaction.user.id] = "staff_remover";
+    return interaction.reply({
+      content: "Marque o usuário para remover VIP.",
+      ephemeral: true
+    });
+  }
+
+  if (interaction.customId === "staff_vervips") {
+    const vips = await pool.query("SELECT * FROM vip_users");
+    let lista = "";
+    for (const v of vips.rows) {
+      let dias = Math.floor((v.expira - Date.now()) / 86400000);
+      lista += `<@${v.user_id}> • ${dias} dias\n`;
+    }
+    return interaction.reply({
+      content: lista || "Nenhum VIP.",
+      ephemeral: true
+    });
+  }
+
+  if (interaction.customId === "staff_logs") {
+    return interaction.reply({
+      content: `Canal de logs: <#${IDS.LOG_VIP}>`,
+      ephemeral: true
+    });
+  }
+});
 
 });
 
