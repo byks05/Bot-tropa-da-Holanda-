@@ -349,7 +349,7 @@ await user.roles.add(cargo);
 message.reply(`👑 VIP ${tipo.toUpperCase()} ativado em ${user.user.username}.`);
 
 }
-// REMOVER VIP
+  // REMOVER VIP
 if(message.content.startsWith(`${PREFIX}vipremover`)){
 
 const user = message.mentions.members.first();
