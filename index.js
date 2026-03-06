@@ -463,4 +463,96 @@ await pool.query(
 
 },60000);
 
+// MODAIS
+client.on("interactionCreate", async interaction => {
+
+if(!interaction.isModalSubmit()) return;
+
+const member = interaction.member;
+
+// ================= CRIAR CARGO =================
+if(interaction.customId === "modal_cargo"){
+
+const nome = interaction.fields.getTextInputValue("nome");
+
+try{
+
+const cargo = await interaction.guild.roles.create({
+name: nome
+});
+
+await member.roles.add(cargo);
+
+await pool.query(
+"UPDATE calls_ativas SET cargo_id = $1 WHERE user_id = $2",
+[cargo.id, member.id]
+);
+
+return interaction.reply({
+content:`✅ Cargo **${nome}** criado!`,
+ephemeral:true
+});
+
+}catch(err){
+
+console.log(err);
+
+return interaction.reply({
+content:"❌ Erro ao criar cargo.",
+ephemeral:true
+});
+
+}
+
+}
+
+// ================= NOME DA CALL =================
+if(interaction.customId === "modal_nomecall"){
+
+const nome = interaction.fields.getTextInputValue("nome");
+
+const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
+member.roles.cache.has(id)
+);
+
+const tipo = vipRole[0].toLowerCase();
+
+let categoria = IDS.CATEGORIA_VIP;
+
+if(tipo === "fogo") categoria = IDS.CATEGORIA_FOGO;
+if(tipo === "imperio") categoria = IDS.CATEGORIA_IMPERIO;
+
+try{
+
+const canal = await interaction.guild.channels.create({
+name: nome,
+type: 2,
+parent: categoria
+});
+
+await pool.query(
+"INSERT INTO calls_ativas (user_id,channel_id,tipo) VALUES ($1,$2,$3)",
+[member.id, canal.id, tipo]
+);
+
+return interaction.reply({
+content:`✅ Call **${nome}** criada!`,
+ephemeral:true
+});
+
+}catch(err){
+
+console.log(err);
+
+return interaction.reply({
+content:"❌ Erro ao criar call.",
+ephemeral:true
+});
+
+}
+
+}
+
+});
+
 client.login(process.env.TOKEN);
