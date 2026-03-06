@@ -465,26 +465,17 @@ if(interaction.customId === "deletar_cargo") {
   }
 
   // ================= STAFF =================
-if (interaction.customId === "staff_darvip") {
-  try {
-    // Defer a resposta para evitar "Unknown interaction"
-    await interaction.deferReply({ ephemeral: true });
+if(interaction.customId === "staff_darvip"){
 
-    // Marca o usuário como aguardando o comando de dar VIP
-    aguardando[interaction.user.id] = "staff_darvip";
+  aguardando[interaction.user.id] = "staff_darvip";
 
-    // Envia a instrução após defer
-    await interaction.editReply({
-      content: "Use no chat:\n`@user tipo dias`\nExemplo:\n`@kaique sol 30`"
-    });
-  } catch (err) {
-    console.error("Erro ao processar Dar VIP:", err);
-    // Garante resposta caso algo dê errado
-    if (!interaction.replied && !interaction.deferred)
-      await interaction.reply({ content: "❌ Erro ao processar Dar VIP.", ephemeral: true });
-  }
-}
-  if (interaction.customId === "staff_renovarvip") {
+  return interaction.reply({
+    content:"Use no chat:\n@user tipo dias\nExemplo:\n@kaique sol 30",
+    ephemeral:true
+  });
+
+}  
+    if (interaction.customId === "staff_renovarvip") {
     aguardando[interaction.user.id] = "staff_renovar";
     return interaction.reply({
       content: "Use no chat:\n`@user dias`\nExemplo:\n`@kaique 30`",
