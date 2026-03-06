@@ -148,11 +148,6 @@ new ButtonBuilder()
 .setStyle(ButtonStyle.Success),
 
 new ButtonBuilder()
-.setCustomId("bloquear")
-.setLabel("🔒 Bloquear Pessoa")
-.setStyle(ButtonStyle.Danger),
-
-new ButtonBuilder()
 .setCustomId("deletar_call")
 .setLabel("🗑 Excluir Call")
 .setStyle(ButtonStyle.Danger),
@@ -391,10 +386,19 @@ message.reply("✅ Call criada.");
 
 // ================= CRIAR CARGO =================
 
-if(estado==="criar_cargo"){
+if(estado === "criar_cargo"){
+
+const call = await pool.query(
+"SELECT * FROM calls_ativas WHERE user_id=$1",
+[member.id]
+);
+
+// limite de 1 cargo
+if(call.rows.length && call.rows[0].cargo_id)
+return message.reply("❌ Você já possui um cargo VIP.");
 
 const cargo = await message.guild.roles.create({
-name:message.content
+name: message.content
 }).catch(()=>null);
 
 if(!cargo) return message.reply("❌ Erro ao criar cargo.");
@@ -402,18 +406,19 @@ if(!cargo) return message.reply("❌ Erro ao criar cargo.");
 await member.roles.add(cargo).catch(()=>{});
 
 await pool.query(`
-UPDATE vip_calls
+UPDATE calls_ativas
 SET cargo_id=$1
 WHERE user_id=$2
-`,[cargo.id,member.id]);
+`, [cargo.id, member.id]);
 
 message.reply("✅ Cargo criado.");
 
 }
 
+
 // ================= LIMITE CALL =================
 
-if(estado==="limite"){
+if(estado === "limite"){
 
 const limite = parseInt(message.content);
 
@@ -421,23 +426,24 @@ if(isNaN(limite) || limite < 0)
 return message.reply("❌ Número inválido.");
 
 const call = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
+"SELECT * FROM calls_ativas WHERE user_id=$1",
 [member.id]
 );
 
+// precisa existir call
 if(!call.rows.length)
-return message.reply("❌ Você não possui call.");
+return message.reply("❌ Você não possui uma call.");
 
 const canal = message.guild.channels.cache.get(call.rows[0].channel_id);
 
-if(!canal) return;
+if(!canal)
+return message.reply("❌ Call não encontrada.");
 
 await canal.setUserLimit(limite).catch(()=>{});
 
 message.reply("✅ Limite atualizado.");
 
 }
-
 // ================= LIBERAR AMIGO =================
 
 if(estado==="liberar"){
@@ -532,8 +538,8 @@ const vip = await pool.query(
 if(!vip.rows.length)
 return message.reply("Usuário não tem VIP.");
 
-let novo = vip.rows[0].expira + (parseInt(dias)*86400000);
-
+let novo = Date.now() + (parseInt(dias) * 86400000);
+  
 await pool.query(
 "UPDATE vip_users SET expira=$1 WHERE user_id=$2",
 [novo,user.id]
