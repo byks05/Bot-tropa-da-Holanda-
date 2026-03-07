@@ -49,6 +49,7 @@ const IDS = {
 
 // ================== SISTEMA DE ESTADOS ==================
 let aguardando = {};
+let paineisVIP = {};
 
 // ================== BANCO DE DADOS ==================
 client.once("ready", async () => {
