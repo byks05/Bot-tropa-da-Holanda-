@@ -688,12 +688,12 @@ if(estado === "criar_call") {
   // Limite de 1 call
   if(callExist.rows.length){
 
-const canal = message.guild.channels.cache.get(callExist.rows[0].channel_id);
+    const canal = message.guild.channels.cache.get(callExist.rows[0].channel_id);
 
-if(canal)
-return message.reply("❌ Você já possui uma call.");
+    if(canal)
+    return message.reply("❌ Você já possui uma call.");
 
-}
+  }
   
   const canal = await message.guild.channels.create({
     name: message.content,
@@ -721,12 +721,12 @@ const dados = await pool.query(
 [member.id]
 );
 
-const canal = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
+const canalVIP = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
 const cargo = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
 
 let row;
 
-if(canal && cargo){
+if(canalVIP && cargo){
 
 row = new ActionRowBuilder().addComponents(
 
@@ -761,7 +761,9 @@ new ButtonBuilder()
 
 else{
 
-row = new ActionRowBuilder().addComponents(
+row = new ActionRowBuilder();
+
+row.addComponents(
 
 new ButtonBuilder()
 .setCustomId("criar_cargo")
@@ -803,17 +805,17 @@ components:[row]
 }).catch(()=>{});
 
 }
-
-// ================= CRIAR CARGO =================
+}
+  // ================= CRIAR CARGO =================
 if(estado === "criar_cargo") {
 
-  const callData = await pool.query(
-    "SELECT * FROM vip_calls WHERE user_id=$1",
-    [member.id]
-  );
+const callData = await pool.query(
+"SELECT * FROM vip_calls WHERE user_id=$1",
+[member.id]
+);
 
-  // Limite de 1 cargo
-  if(callData.rows.length){
+// Limite de 1 cargo
+if(callData.rows.length){
 
 const cargoExist = message.guild.roles.cache.get(callData.rows[0].cargo_id);
 
@@ -821,24 +823,25 @@ if(cargoExist)
 return message.reply("❌ Você já possui um cargo VIP.");
 
 }
-  const cargo = await message.guild.roles.create({
-    name: message.content
-  }).catch(()=>null);
 
-  if(!cargo) return message.reply("❌ Erro ao criar cargo.");
+const cargo = await message.guild.roles.create({
+name: message.content
+}).catch(()=>null);
 
-  await member.roles.add(cargo).catch(()=>{});
+if(!cargo) return message.reply("❌ Erro ao criar cargo.");
 
- await pool.query(`
+await member.roles.add(cargo).catch(()=>{});
+
+await pool.query(`
 INSERT INTO vip_calls(user_id,cargo_id)
 VALUES($1,$2)
 ON CONFLICT(user_id)
 DO UPDATE SET cargo_id=$2
 `, [member.id, cargo.id]);
-  
-  message.reply("✅ Cargo criado.");
 
-  const painel = paineisVIP[member.id];
+message.reply("✅ Cargo criado.");
+
+const painel = paineisVIP[member.id];
 
 if(painel){
 
@@ -854,7 +857,9 @@ let row;
 
 if(canal && cargoExist){
 
-row = new ActionRowBuilder().addComponents(
+row = new ActionRowBuilder();
+
+row.addComponents(
 
 new ButtonBuilder()
 .setCustomId("limite")
@@ -887,7 +892,9 @@ new ButtonBuilder()
 
 else{
 
-row = new ActionRowBuilder().addComponents(
+row = new ActionRowBuilder();
+
+row.addComponents(
 
 new ButtonBuilder()
 .setCustomId("criar_call")
@@ -924,7 +931,8 @@ components:[row]
 }).catch(()=>{});
 
 }
-// ================= LIMITE CALL =================
+}
+  // ================= LIMITE CALL =================
 if(estado === "limite") {
 
   const limite = parseInt(message.content);
