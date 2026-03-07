@@ -479,36 +479,57 @@ if (estado === "staff_darvip") {
   }
 
 }
- // ================= RENOVAR VIP =================
+// ================= RENOVAR VIP =================
 if (estado === "staff_renovar") {
 
-  const user = message.mentions.members.first();
-  const args = message.content.split(" ");
-  const dias = parseInt(args[1]);
+  try {
 
-  if (!user || !dias) {
-    return message.channel.send("❌ Use:\n@user dias\nExemplo:\n@kaique 30");
+    const user = message.mentions.members.first();
+    const args = message.content.split(" ");
+    const dias = parseInt(args[1]);
+
+    if (!user || !dias) {
+      return message.channel.send(
+        "❌ Use:\n@user dias\nExemplo:\n@kaique 30"
+      );
+    }
+
+    const resultado = await pool.query(
+      "SELECT * FROM vip_users WHERE user_id=$1",
+      [user.id]
+    );
+
+    if (resultado.rows.length === 0) {
+      return message.channel.send("❌ Usuário não possui VIP.");
+    }
+
+    let expiraAtual = Number(resultado.rows[0].expira);
+
+    if (expiraAtual < Date.now()) {
+      expiraAtual = Date.now();
+    }
+
+    const novoExpira = expiraAtual + dias * 86400000;
+
+    await pool.query(
+      "UPDATE vip_users SET expira=$1 WHERE user_id=$2",
+      [novoExpira, user.id]
+    );
+
+    delete aguardando[message.author.id];
+
+    return message.channel.send(
+      `🔄 VIP de ${user} renovado por **${dias} dias**`
+    );
+
+  } catch (err) {
+
+    console.log("Erro renovar VIP:", err);
+
+    return message.channel.send("❌ Erro ao renovar VIP.");
+
   }
 
-  const vip = await pool.query(
-    "SELECT * FROM vip_users WHERE user_id = $1",
-    [user.id]
-  );
-
-  if (vip.rows.length === 0) {
-    return message.channel.send("❌ Usuário não possui VIP.");
-  }
-
-  const novoTempo = vip.rows[0].expira + dias * 86400000;
-
-  await pool.query(
-    "UPDATE vip_users SET expira = $1 WHERE user_id = $2",
-    [novoTempo, user.id]
-  );
-
-  return message.channel.send(
-    `🔄 VIP de ${user} renovado por **${dias} dias**`
-  );
 }
   // ================= REMOVER VIP =================
 if (estado === "staff_remover") {
