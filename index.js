@@ -568,52 +568,50 @@ if (estado === "staff_remover") {
 
   return message.channel.send(`❌ VIP removido de ${user}`);
 
-}
-// ================= CRIAR CALL =================
+}// ================= CRIAR CALL =================
 if(estado === "criar_call") {
+
+  // Pega os dados da call do banco
+  const dadosDB = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
+
+  // Pega o cargo salvo no banco
+  const vipRole = message.guild.roles.cache.get(dadosDB.rows[0]?.cargo_id);
+
+  if(!vipRole) return message.reply("❌ Você não possui VIP.");
+
+  // Pega o tipo baseado no cargo do usuário para a categoria correta
+  const tipo = Object.entries(IDS.CARGOS).find(([k,id]) => id === vipRole.id)[0].toLowerCase();
 
   const callExist = await pool.query(
     "SELECT * FROM vip_calls WHERE user_id=$1",
     [member.id]
   );
 
-  // Limite de 1 call
   if(callExist.rows.length){
     const canal = message.guild.channels.cache.get(callExist.rows[0].channel_id);
-    if(canal)
-      return message.reply("❌ Você já possui uma call.");
+    if(canal) return message.reply("❌ Você já possui uma call.");
   }
 
-  // Pega o cargo salvo no banco
-  const dadosCall = await pool.query(
-    "SELECT cargo_id FROM vip_calls WHERE user_id=$1",
-    [member.id]
-  );
-
-  const vipRoleId = dadosCall.rows[0]?.cargo_id;
-  const vipRole = message.guild.roles.cache.get(vipRoleId);
-
-  if(!vipRole) return message.reply("❌ Você precisa criar o cargo primeiro.");
-
-  const tipo = "vip"; // ou use a lógica que você tinha pra categoria
-
-  // Criar canal com permissões
+  // Agora a call será criada na categoria correta
   const canal = await message.guild.channels.create({
     name: message.content,
     type: 2, // voice channel
-    parent: categoriaVIP(tipo),
+    parent: categoriaVIP(tipo), // ✅ categoria correta
     permissionOverwrites: [
       {
         id: message.guild.roles.everyone,
-        allow: ["ViewChannel"], // todos veem
-        deny: ["Connect"]       // mas não conectam
+        allow: ["ViewChannel"],
+        deny: ["Connect"]
       },
       {
-        id: member.id,           // dono da call
+        id: member.id,
         allow: ["Connect", "ViewChannel", "ManageChannels"]
       },
       {
-        id: vipRole.id,          // cargo do dono
+        id: vipRole.id,
         allow: ["Connect", "ViewChannel"]
       }
     ]
