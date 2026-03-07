@@ -458,11 +458,13 @@ if (estado === "staff_darvip") {
       `
       INSERT INTO vip_users(user_id,cargo_id,expira)
       VALUES($1,$2,$3)
-      ON CONFLICT(user_id,cargo_id)
-      DO UPDATE SET expira=$3
+      ON CONFLICT(user_id)
+      DO UPDATE SET cargo_id=$2, expira=$3
       `,
       [user.id, cargo, expira]
     );
+
+    delete aguardando[message.author.id];
 
     return message.channel.send(
       `✅ VIP **${tipo.toUpperCase()}** setado em ${user} por **${dias} dias**`
@@ -477,7 +479,6 @@ if (estado === "staff_darvip") {
   }
 
 }
-
  // ================= RENOVAR VIP =================
 if (estado === "staff_renovar") {
 
