@@ -184,11 +184,6 @@ new ButtonBuilder()
 .setStyle(ButtonStyle.Secondary),
 
 new ButtonBuilder()
-.setCustomId("deletar_call")
-.setLabel("🗑 Deletar Call")
-.setStyle(ButtonStyle.Danger),
-
-new ButtonBuilder()
 .setCustomId("fechar")
 .setLabel("❌ Fechar")
 .setStyle(ButtonStyle.Danger)
@@ -212,10 +207,6 @@ new ButtonBuilder()
 .setLabel("🏷 Renomear Cargo")
 .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("deletar_cargo")
-.setLabel("🗑 Deletar Cargo")
-.setStyle(ButtonStyle.Danger),
 
 new ButtonBuilder()
 .setCustomId("fechar")
@@ -249,21 +240,13 @@ new ButtonBuilder()
 new ButtonBuilder()
 .setCustomId("liberar")
 .setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success),
+.setStyle(ButtonStyle.Success)
 
-new ButtonBuilder()
-.setCustomId("deletar_call")
-.setLabel("🗑 Deletar Call")
-.setStyle(ButtonStyle.Danger)
 
 );
 
 const row2 = new ActionRowBuilder().addComponents(
 
-new ButtonBuilder()
-.setCustomId("deletar_cargo")
-.setLabel("🗑 Deletar Cargo")
-.setStyle(ButtonStyle.Danger),
 
 new ButtonBuilder()
 .setCustomId("fechar")
@@ -749,11 +732,12 @@ new ButtonBuilder()
 .setCustomId("liberar")
 .setLabel("👤 Liberar Amigo")
 .setStyle(ButtonStyle.Success),
-
+  
 new ButtonBuilder()
-.setCustomId("deletar_call")
-.setLabel("🗑 Deletar Call")
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
 .setStyle(ButtonStyle.Danger)
+  
 
 );
 
@@ -779,11 +763,6 @@ new ButtonBuilder()
 .setCustomId("renomear_call")
 .setLabel("✏ Renomear Call")
 .setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("deletar_call")
-.setLabel("🗑 Deletar Call")
-.setStyle(ButtonStyle.Danger),
 
 new ButtonBuilder()
 .setCustomId("fechar")
