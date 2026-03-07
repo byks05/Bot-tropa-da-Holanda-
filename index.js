@@ -271,19 +271,20 @@ new ButtonBuilder()
 
 );
 
-return message.reply({
+const painel = await message.reply({
 embeds:[embed],
 components:[row,row2]
 });
 
+paineisVIP[message.author.id] = painel;
 }
 
-// enviar painel
-message.reply({
+const painel = await message.reply({
 embeds:[embed],
 components:[row]
 });
 
+paineisVIP[message.author.id] = painel;
 }
 // ================= PAINEL STAFF =================
 
@@ -709,6 +710,55 @@ DO UPDATE SET channel_id=$2, tipo=$3
 `,[member.id, canal.id, tipo]);
   
   message.reply("✅ Call criada.");
+
+  const painel = paineisVIP[member.id];
+
+  if(painel){
+
+    await painel.edit({
+
+      embeds:[
+        new EmbedBuilder()
+        .setTitle("👑 Painel VIP")
+        .setColor("Orange")
+        .setDescription("Gerencie sua call e cargo VIP")
+      ],
+
+      components:[
+        new ActionRowBuilder().addComponents(
+
+          new ButtonBuilder()
+          .setCustomId("criar_cargo")
+          .setLabel("🏷 Criar Cargo")
+          .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+          .setCustomId("limite")
+          .setLabel("👥 Limitar Call")
+          .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+          .setCustomId("renomear_call")
+          .setLabel("✏ Renomear Call")
+          .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+          .setCustomId("deletar_call")
+          .setLabel("🗑 Deletar Call")
+          .setStyle(ButtonStyle.Danger),
+
+          new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+
+        )
+      ]
+
+    }).catch(()=>{});
+
+  }
+
 }
 
 // ================= CRIAR CARGO =================
@@ -744,8 +794,51 @@ DO UPDATE SET cargo_id=$2
 `, [member.id, cargo.id]);
   
   message.reply("✅ Cargo criado.");
-}
 
+  const painel = paineisVIP[member.id];
+
+  if(painel){
+
+    await painel.edit({
+
+      embeds:[
+        new EmbedBuilder()
+        .setTitle("👑 Painel VIP")
+        .setColor("Orange")
+        .setDescription("Gerencie sua call e cargo VIP")
+      ],
+
+      components:[
+        new ActionRowBuilder().addComponents(
+
+          new ButtonBuilder()
+          .setCustomId("criar_call")
+          .setLabel("🎤 Criar Call")
+          .setStyle(ButtonStyle.Primary),
+
+          new ButtonBuilder()
+          .setCustomId("renomear_cargo")
+          .setLabel("🏷 Renomear Cargo")
+          .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+          .setCustomId("deletar_cargo")
+          .setLabel("🗑 Deletar Cargo")
+          .setStyle(ButtonStyle.Danger),
+
+          new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+
+        )
+      ]
+
+    }).catch(()=>{});
+
+  }
+
+}
 // ================= LIMITE CALL =================
 if(estado === "limite") {
 
