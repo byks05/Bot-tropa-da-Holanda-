@@ -427,6 +427,91 @@ if(!estado) return;
 delete aguardando[message.author.id];
 
 const member = message.member;
+  // ================= DAR VIP =================
+  if (estado === "staff_darvip") {
+
+    const user = message.mentions.members.first();
+    const tipo = message.content.split(" ")[1];
+    const dias = parseInt(message.content.split(" ")[2]);
+
+    if (!user || !tipo || !dias)
+      return message.reply("Use:\n@user tipo dias\nExemplo:\n@kaique sol 30");
+
+    const cargo = IDS.CARGOS[tipo.toUpperCase()];
+    if (!cargo)
+      return message.reply("❌ Tipo de VIP inválido.");
+
+    const expira = Date.now() + dias * 86400000;
+
+    await user.roles.add(cargo).catch(() => {});
+
+    await pool.query(`
+      INSERT INTO vip_users(user_id,cargo_id,expira)
+      VALUES($1,$2,$3)
+      ON CONFLICT(user_id,cargo_id)
+      DO UPDATE SET expira=$3
+    `, [user.id, cargo, expira]);
+
+    message.reply("✅ VIP adicionado.");
+
+  }
+
+  // ================= RENOVAR VIP =================
+  if (estado === "staff_renovar") {
+
+    const user = message.mentions.members.first();
+    const dias = parseInt(message.content.split(" ")[1]);
+
+    if (!user || !dias)
+      return message.reply("Use:\n@user dias\nExemplo:\n@kaique 30");
+
+    const vip = await pool.query(
+      "SELECT * FROM vip_users WHERE user_id = $1",
+      [user.id]
+    );
+
+    if (vip.rows.length === 0)
+      return message.reply("❌ Usuário não possui VIP.");
+
+    const novoTempo = vip.rows[0].expira + dias * 86400000;
+
+    await pool.query(
+      "UPDATE vip_users SET expira = $1 WHERE user_id = $2",
+      [novoTempo, user.id]
+    );
+
+    message.reply("♻️ VIP renovado.");
+
+  }
+
+  // ================= REMOVER VIP =================
+  if (estado === "staff_remover") {
+
+    const user = message.mentions.members.first();
+
+    if (!user)
+      return message.reply("Marque o usuário.");
+
+    const vip = await pool.query(
+      "SELECT * FROM vip_users WHERE user_id = $1",
+      [user.id]
+    );
+
+    if (vip.rows.length === 0)
+      return message.reply("❌ Usuário não possui VIP.");
+
+    const cargo = vip.rows[0].cargo_id;
+
+    await user.roles.remove(cargo).catch(() => {});
+
+    await pool.query(
+      "DELETE FROM vip_users WHERE user_id = $1",
+      [user.id]
+    );
+
+    message.reply("🗑️ VIP removido.");
+
+  }
 
 // ================= CRIAR CALL =================
 if(estado === "criar_call") {
