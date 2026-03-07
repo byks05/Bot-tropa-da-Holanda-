@@ -845,16 +845,46 @@ setInterval(async () => {
       if (Date.now() > vip.expira) {
 
         const guild = client.guilds.cache.first();
+        if(!guild) continue;
+
         const member = await guild.members.fetch(vip.user_id).catch(() => null);
 
+        // remover cargo VIP principal
         if (member) {
           await member.roles.remove(vip.cargo_id).catch(()=>{});
         }
 
+        // buscar call e cargo VIP personalizados
+        const callData = await pool.query(
+          "SELECT * FROM vip_calls WHERE user_id=$1",
+          [vip.user_id]
+        );
+
+        if(callData.rows.length){
+
+          const canal = guild.channels.cache.get(callData.rows[0].channel_id);
+          const cargo = guild.roles.cache.get(callData.rows[0].cargo_id);
+
+          if(canal){
+            await canal.delete().catch(()=>{});
+          }
+
+          if(cargo){
+            await cargo.delete().catch(()=>{});
+          }
+
+          await pool.query(
+            "DELETE FROM vip_calls WHERE user_id=$1",
+            [vip.user_id]
+          );
+
+        }
+
+        // remover VIP do banco
         await pool.query(
-"DELETE FROM vip_users WHERE user_id = $1",
-[vip.user_id]
-);
+          "DELETE FROM vip_users WHERE user_id=$1",
+          [vip.user_id]
+        );
 
       }
 
@@ -864,7 +894,7 @@ setInterval(async () => {
     console.log("Erro verificando VIP:", err);
   }
 
-}, 60000); // verifica a cada 1 minuto
+}, 60000);
 // ================= LOGIN =================
 client.login(process.env.TOKEN)
   .then(() => console.log(`✅ Bot iniciado com sucesso!`))
