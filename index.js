@@ -556,51 +556,40 @@ if(estado === "renomear_cargo") {
 }
 });
 
+// ================= VERIFICAR VIPS EXPIRADOS =================
+
 setInterval(async () => {
+  try {
 
-  const vips = await pool.query("SELECT * FROM vip_users");
+    const vips = await pool.query("SELECT * FROM vip_users");
 
-  for(const vip of vips.rows){
+    for (const vip of vips.rows) {
 
-    // Verifica se o VIP expirou
-    if(Date.now() >= vip.expira){
+      if (!vip.expira) continue;
 
-      const guild = client.guilds.cache.first();
-      const member = await guild.members.fetch(vip.user_id).catch(()=>null);
+      if (Date.now() > vip.expira) {
 
-      if(member){
-        // Remove o cargo VIP
-        await member.roles.remove(vip.cargo_id).catch(()=>{});
+        const guild = client.guilds.cache.first();
+        const member = await guild.members.fetch(vip.user_id).catch(() => null);
 
-        // Remove call se existir
-        const callData = await pool.query(
-          "SELECT * FROM vip_calls WHERE user_id=$1",
-          [vip.user_id]
+        if (member) {
+          await member.roles.remove(vip.cargo_id).catch(()=>{});
+        }
+
+        await pool.query(
+          "DELETE FROM vip_users WHERE user_id = $1 AND cargo_id = $2",
+          [vip.user_id, vip.cargo_id]
         );
 
-        if(callData.rows.length && callData.rows[0].channel_id){
-          const canal = guild.channels.cache.get(callData.rows[0].channel_id);
-          if(canal) await canal.delete().catch(()=>{});
-
-          // Remove do banco
-          await pool.query(
-            "DELETE FROM vip_calls WHERE user_id=$1",
-            [vip.user_id]
-          );
-        }
       }
 
-      // Remove do banco vip_users
-      await pool.query("DELETE FROM vip_users WHERE user_id=$1", [vip.user_id]);
-
-      // Log no canal
-      logVIP(guild, `⌛ VIP expirou <@${vip.user_id}>`);
     }
 
+  } catch (err) {
+    console.log("Erro verificando VIP:", err);
   }
 
-}, 60000); // checa a cada 60 segundos
-
+}, 60000); // verifica a cada 1 minuto
 // ================= LOGIN =================
 client.login(process.env.TOKEN)
   .then(() => console.log(`✅ Bot iniciado com sucesso!`))
