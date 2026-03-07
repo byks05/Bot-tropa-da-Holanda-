@@ -163,59 +163,6 @@ new ButtonBuilder()
 
 }
 
-// ================= TEM CALL MAS NÃO CARGO =================
-else if(temCall && !temCargo){
-
-row.addComponents(
-
-new ButtonBuilder()
-.setCustomId("criar_cargo")
-.setLabel("🏷 Criar Cargo")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("limite")
-.setLabel("👥 Limitar Call")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("renomear_call")
-.setLabel("✏ Renomear Call")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-}
-
-// ================= TEM CARGO MAS NÃO CALL =================
-else if(!temCall && temCargo){
-
-row.addComponents(
-
-new ButtonBuilder()
-.setCustomId("criar_call")
-.setLabel("🎤 Criar Call")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("renomear_cargo")
-.setLabel("🏷 Renomear Cargo")
-.setStyle(ButtonStyle.Secondary),
-
-
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-}
 
 // ================= TEM CALL E CARGO =================
 else if(temCall && temCargo){
