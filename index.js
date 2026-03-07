@@ -572,14 +572,6 @@ if (estado === "staff_remover") {
 // ================= CRIAR CALL =================
 if(estado === "criar_call") {
 
-  const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
-    member.roles.cache.has(id)
-  );
-
-  if(!vipRole) return message.reply("❌ Você não possui VIP.");
-
-  const tipo = vipRole[0].toLowerCase();
-
   const callExist = await pool.query(
     "SELECT * FROM vip_calls WHERE user_id=$1",
     [member.id]
@@ -592,13 +584,20 @@ if(estado === "criar_call") {
       return message.reply("❌ Você já possui uma call.");
   }
 
-  // 🔹 Buscar cargo VIP atualizado (garante que existe antes de criar o canal)
-  const cargoVIP = message.guild.roles.cache.get(vipRole[1]) 
-                 || await message.guild.roles.fetch(vipRole[1]).catch(()=>null);
+  // Pega o cargo salvo no banco
+  const dadosCall = await pool.query(
+    "SELECT cargo_id FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-  if(!cargoVIP) return message.reply("❌ Cargo VIP não encontrado.");
+  const vipRoleId = dadosCall.rows[0]?.cargo_id;
+  const vipRole = message.guild.roles.cache.get(vipRoleId);
 
-  // Criar canal com permissões específicas
+  if(!vipRole) return message.reply("❌ Você precisa criar o cargo primeiro.");
+
+  const tipo = "vip"; // ou use a lógica que você tinha pra categoria
+
+  // Criar canal com permissões
   const canal = await message.guild.channels.create({
     name: message.content,
     type: 2, // voice channel
@@ -606,15 +605,15 @@ if(estado === "criar_call") {
     permissionOverwrites: [
       {
         id: message.guild.roles.everyone,
-        allow: ["ViewChannel"], // todos podem ver
-        deny: ["Connect"]       // mas não conectar
+        allow: ["ViewChannel"], // todos veem
+        deny: ["Connect"]       // mas não conectam
       },
       {
         id: member.id,           // dono da call
         allow: ["Connect", "ViewChannel", "ManageChannels"]
       },
       {
-        id: cargoVIP.id,         // cargo VIP
+        id: vipRole.id,          // cargo do dono
         allow: ["Connect", "ViewChannel"]
       }
     ]
@@ -631,7 +630,6 @@ if(estado === "criar_call") {
 
   message.reply("✅ Call criada.");
 
-  // 🔹 O resto do seu painel continua igual
   const painel = paineisVIP[member.id];
 
   if(painel){
@@ -651,18 +649,22 @@ if(estado === "criar_call") {
           .setCustomId("limite")
           .setLabel("👥 Limitar Call")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("renomear_call")
           .setLabel("✏ Renomear Call")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("renomear_cargo")
           .setLabel("🏷 Renomear Cargo")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("liberar")
           .setLabel("👤 Liberar Amigo")
           .setStyle(ButtonStyle.Success),
+        
         new ButtonBuilder()
           .setCustomId("fechar")
           .setLabel("❌ Fechar")
@@ -675,14 +677,17 @@ if(estado === "criar_call") {
           .setCustomId("criar_cargo")
           .setLabel("🏷 Criar Cargo")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("limite")
           .setLabel("👥 Limitar Call")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("renomear_call")
           .setLabel("✏ Renomear Call")
           .setStyle(ButtonStyle.Secondary),
+
         new ButtonBuilder()
           .setCustomId("fechar")
           .setLabel("❌ Fechar")
@@ -701,7 +706,7 @@ if(estado === "criar_call") {
     }).catch(()=>{});
   }
 }
-// ================= CRIAR CARGO =================
+  // ================= CRIAR CARGO =================
 if(estado === "criar_cargo") {
 
 const callData = await pool.query(
