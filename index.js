@@ -607,7 +607,7 @@ if (estado === "staff_renovar") {
   }
 
 }
-  // ================= REMOVER VIP =================
+ // ================= REMOVER VIP =================
 if (estado === "staff_remover") {
 
   const user = message.mentions.members.first();
@@ -617,7 +617,7 @@ if (estado === "staff_remover") {
   }
 
   const vip = await pool.query(
-    "SELECT * FROM vip_users WHERE user_id = $1",
+    "SELECT * FROM vip_users WHERE user_id=$1",
     [user.id]
   );
 
@@ -625,18 +625,47 @@ if (estado === "staff_remover") {
     return message.channel.send("❌ Usuário não possui VIP.");
   }
 
-  const cargo = vip.rows[0].cargo_id;
+  const cargoVip = vip.rows[0].cargo_id;
 
+  // remover cargo VIP principal
   try {
-    await user.roles.remove(cargo);
+    await user.roles.remove(cargoVip);
   } catch {}
 
- await pool.query(
-"DELETE FROM vip_users WHERE user_id=$1",
-[user.id]
-);
+  // buscar call e cargo VIP personalizados
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [user.id]
+  );
+
+  if (callData.rows.length) {
+
+    const canal = message.guild.channels.cache.get(callData.rows[0].channel_id);
+    const cargo = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+
+    if (canal) {
+      await canal.delete().catch(()=>{});
+    }
+
+    if (cargo) {
+      await cargo.delete().catch(()=>{});
+    }
+
+    await pool.query(
+      "DELETE FROM vip_calls WHERE user_id=$1",
+      [user.id]
+    );
+
+  }
+
+  // apagar VIP do banco
+  await pool.query(
+    "DELETE FROM vip_users WHERE user_id=$1",
+    [user.id]
+  );
 
   return message.channel.send(`❌ VIP removido de ${user}`);
+
 }
 // ================= CRIAR CALL =================
 if(estado === "criar_call") {
