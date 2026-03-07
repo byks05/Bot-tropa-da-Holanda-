@@ -207,6 +207,7 @@ else if(temCall && temCargo){
     // Salvar referência do painel
     paineisVIP[message.author.id] = painel;
 }
+}
   // ================= PAINEL STAFF =================
 
 if(message.content === `${PREFIX}vipstaff`){
