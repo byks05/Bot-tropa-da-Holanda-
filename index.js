@@ -774,7 +774,13 @@ new ButtonBuilder()
 new ButtonBuilder()
 .setCustomId("liberar")
 .setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success)
+.setStyle(ButtonStyle.Success),
+  
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+  
 
 );
 
