@@ -339,125 +339,6 @@ components:[row,row2]
 
 });     
 
-client.on("interactionCreate", async interaction => {
-
-if(!interaction.isButton()) return;
-
-const member = interaction.member;
-
-// FECHAR PAINEL
-if(interaction.customId === "fechar") {
-  return interaction.message.delete().catch(()=>{});
-}
-
-// ================= CRIAR CALL =================
-if(interaction.customId === "criar_call") {
-  aguardando[member.id] = "criar_call";
-  return interaction.reply({
-    content: "Digite o nome da call.",
-    ephemeral: true
-  });
-}
-
-// ================= CRIAR CARGO =================
-if(interaction.customId === "criar_cargo") {
-  aguardando[member.id] = "criar_cargo";
-  return interaction.reply({
-    content: "Digite o nome do cargo.",
-    ephemeral: true
-  });
-}
-
-// ================= LIMITE =================
-if(interaction.customId === "limite") {
-  aguardando[member.id] = "limite";
-  return interaction.reply({
-    content: "Digite o limite da call.",
-    ephemeral: true
-  });
-}
-
-// ================= LIBERAR AMIGO =================
-if(interaction.customId === "liberar") {
-  aguardando[member.id] = "liberar";
-  return interaction.reply({
-    content: "Marque o amigo que deseja liberar.",
-    ephemeral: true
-  });
-}
-
-// ================= RENOMEAR CALL =================
-if(interaction.customId === "renomear_call") {
-  aguardando[member.id] = "renomear_call";
-  return interaction.reply({
-    content: "Digite o novo nome da call.",
-    ephemeral: true
-  });
-}
-
-// ================= RENOMEAR CARGO =================
-if(interaction.customId === "renomear_cargo") {
-  aguardando[member.id] = "renomear_cargo";
-  return interaction.reply({
-    content: "Digite o novo nome do cargo.",
-    ephemeral: true
-  });
-}
-
-// ================= DELETAR CALL =================
-if(interaction.customId === "deletar_call") {
-
-  const call = await pool.query(
-    "SELECT * FROM vip_calls WHERE user_id=$1",
-    [member.id]
-  );
-
-  if(!call.rows.length) return interaction.reply({
-    content: "❌ Você não possui call.",
-    ephemeral: true
-  });
-
-  const canal = interaction.guild.channels.cache.get(call.rows[0].channel_id);
-  if(canal) await canal.delete().catch(()=>{});
-
-  await pool.query("DELETE FROM vip_calls WHERE user_id=$1", [member.id]);
-
-  return interaction.reply({
-    content: "🗑 Call deletada.",
-    ephemeral: true
-  });
-}
-
-// ================= DELETAR CARGO =================
-if(interaction.customId === "deletar_cargo") {
-
-  const call = await pool.query(
-    "SELECT * FROM vip_calls WHERE user_id=$1",
-    [member.id]
-  );
-
-  if(!call.rows.length || !call.rows[0].cargo_id) 
-    return interaction.reply({
-      content: "❌ Você não possui cargo VIP.",
-      ephemeral: true
-    });
-
-  const cargo = interaction.guild.roles.cache.get(call.rows[0].cargo_id);
-  if(cargo) await cargo.delete().catch(()=>{});
-
-  await pool.query(
-    "UPDATE vip_calls SET cargo_id=NULL WHERE user_id=$1",
-    [member.id]
-  );
-
-  return interaction.reply({
-    content: "🗑 Cargo deletado.",
-    ephemeral: true
-  });
-}
-  client.on("interactionCreate", async interaction => {
-  if (!interaction.isButton()) return;
-  const member = interaction.member;
 
   // ================= FECHAR =================
   if (interaction.customId === "fechar") {
@@ -504,16 +385,14 @@ if(interaction.customId === "staff_darvip"){
     });
   }
 
-  if (interaction.customId === "staff_logs") {
+ if (interaction.customId === "staff_logs") {
     return interaction.reply({
       content: `Canal de logs: <#${IDS.LOG_VIP}>`,
       ephemeral: true
     });
   }
-});
 
 });
-
 client.on("messageCreate", async message => {
 
 if(message.author.bot) return;
