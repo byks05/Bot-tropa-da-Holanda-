@@ -120,10 +120,15 @@ let temCall = false;
 let temCargo = false;
 
 if(call.rows.length){
-temCall = true;
-if(call.rows[0].cargo_id) temCargo = true;
-}
 
+const canal = message.guild.channels.cache.get(call.rows[0].channel_id);
+const cargo = message.guild.roles.cache.get(call.rows[0].cargo_id);
+
+if(canal) temCall = true;
+if(cargo) temCargo = true;
+
+}
+  
 // embed
 const embed = new EmbedBuilder()
 .setTitle("👑 Painel VIP")
@@ -650,9 +655,15 @@ if(estado === "criar_call") {
   );
 
   // Limite de 1 call
-  if(callExist.rows.length && callExist.rows[0].channel_id)
-    return message.reply("❌ Você já possui uma call.");
+  if(callExist.rows.length){
 
+const canal = message.guild.channels.cache.get(callExist.rows[0].channel_id);
+
+if(canal)
+return message.reply("❌ Você já possui uma call.");
+
+}
+  
   const canal = await message.guild.channels.create({
     name: message.content,
     type: 2,
@@ -680,9 +691,14 @@ if(estado === "criar_cargo") {
   );
 
   // Limite de 1 cargo
-  if(callData.rows.length && callData.rows[0].cargo_id)
-    return message.reply("❌ Você já possui um cargo VIP.");
+  if(callData.rows.length){
 
+const cargoExist = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+
+if(cargoExist)
+return message.reply("❌ Você já possui um cargo VIP.");
+
+}
   const cargo = await message.guild.roles.create({
     name: message.content
   }).catch(()=>null);
@@ -807,9 +823,9 @@ setInterval(async () => {
         }
 
         await pool.query(
-          "DELETE FROM vip_users WHERE user_id = $1 AND cargo_id = $2",
-          [vip.user_id, vip.cargo_id]
-        );
+"DELETE FROM vip_users WHERE user_id = $1",
+[vip.user_id]
+);
 
       }
 
@@ -833,5 +849,6 @@ process.on('unhandledRejection', (error) => {
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
+
 
   
