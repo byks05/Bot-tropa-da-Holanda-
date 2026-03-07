@@ -637,7 +637,7 @@ if(estado === "criar_call") {
   `,[member.id, canal.id, tipo, vipRoleId]);
 
   message.reply("✅ Call criada com sucesso na categoria correta.");
-}
+
   // ================= ATUALIZA PAINEL =================
   const painel = paineisVIP[member.id];
 
