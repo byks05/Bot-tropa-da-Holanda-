@@ -712,53 +712,95 @@ DO UPDATE SET channel_id=$2, tipo=$3
   
   message.reply("✅ Call criada.");
 
-  const painel = paineisVIP[member.id];
+ const painel = paineisVIP[member.id];
 
-  if(painel){
+if(painel){
 
-    await painel.edit({
+const dados = await pool.query(
+"SELECT * FROM vip_calls WHERE user_id=$1",
+[member.id]
+);
 
-      embeds:[
-        new EmbedBuilder()
-        .setTitle("👑 Painel VIP")
-        .setColor("Orange")
-        .setDescription("Gerencie sua call e cargo VIP")
-      ],
+const canal = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
+const cargo = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
 
-      components:[
-        new ActionRowBuilder().addComponents(
+let row;
 
-          new ButtonBuilder()
-          .setCustomId("criar_cargo")
-          .setLabel("🏷 Criar Cargo")
-          .setStyle(ButtonStyle.Secondary),
+if(canal && cargo){
 
-          new ButtonBuilder()
-          .setCustomId("limite")
-          .setLabel("👥 Limitar Call")
-          .setStyle(ButtonStyle.Secondary),
+row = new ActionRowBuilder().addComponents(
 
-          new ButtonBuilder()
-          .setCustomId("renomear_call")
-          .setLabel("✏ Renomear Call")
-          .setStyle(ButtonStyle.Secondary),
+new ButtonBuilder()
+.setCustomId("limite")
+.setLabel("👥 Limitar Call")
+.setStyle(ButtonStyle.Secondary),
 
-          new ButtonBuilder()
-          .setCustomId("deletar_call")
-          .setLabel("🗑 Deletar Call")
-          .setStyle(ButtonStyle.Danger),
+new ButtonBuilder()
+.setCustomId("renomear_call")
+.setLabel("✏ Renomear Call")
+.setStyle(ButtonStyle.Secondary),
 
-          new ButtonBuilder()
-          .setCustomId("fechar")
-          .setLabel("❌ Fechar")
-          .setStyle(ButtonStyle.Danger)
+new ButtonBuilder()
+.setCustomId("renomear_cargo")
+.setLabel("🏷 Renomear Cargo")
+.setStyle(ButtonStyle.Secondary),
 
-        )
-      ]
+new ButtonBuilder()
+.setCustomId("liberar")
+.setLabel("👤 Liberar Amigo")
+.setStyle(ButtonStyle.Success),
 
-    }).catch(()=>{});
+new ButtonBuilder()
+.setCustomId("deletar_call")
+.setLabel("🗑 Deletar Call")
+.setStyle(ButtonStyle.Danger)
 
-  }
+);
+
+}
+
+else{
+
+row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("criar_cargo")
+.setLabel("🏷 Criar Cargo")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("limite")
+.setLabel("👥 Limitar Call")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("renomear_call")
+.setLabel("✏ Renomear Call")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("deletar_call")
+.setLabel("🗑 Deletar Call")
+.setStyle(ButtonStyle.Danger),
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+}
+
+await painel.edit({
+embeds:[
+new EmbedBuilder()
+.setTitle("👑 Painel VIP")
+.setColor("Orange")
+.setDescription("Gerencie sua call e cargo VIP")
+],
+components:[row]
+}).catch(()=>{});
 
 }
 
@@ -798,46 +840,88 @@ DO UPDATE SET cargo_id=$2
 
   const painel = paineisVIP[member.id];
 
-  if(painel){
+if(painel){
 
-    await painel.edit({
+const dados = await pool.query(
+"SELECT * FROM vip_calls WHERE user_id=$1",
+[member.id]
+);
 
-      embeds:[
-        new EmbedBuilder()
-        .setTitle("👑 Painel VIP")
-        .setColor("Orange")
-        .setDescription("Gerencie sua call e cargo VIP")
-      ],
+const canal = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
+const cargoExist = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
 
-      components:[
-        new ActionRowBuilder().addComponents(
+let row;
 
-          new ButtonBuilder()
-          .setCustomId("criar_call")
-          .setLabel("🎤 Criar Call")
-          .setStyle(ButtonStyle.Primary),
+if(canal && cargoExist){
 
-          new ButtonBuilder()
-          .setCustomId("renomear_cargo")
-          .setLabel("🏷 Renomear Cargo")
-          .setStyle(ButtonStyle.Secondary),
+row = new ActionRowBuilder().addComponents(
 
-          new ButtonBuilder()
-          .setCustomId("deletar_cargo")
-          .setLabel("🗑 Deletar Cargo")
-          .setStyle(ButtonStyle.Danger),
+new ButtonBuilder()
+.setCustomId("limite")
+.setLabel("👥 Limitar Call")
+.setStyle(ButtonStyle.Secondary),
 
-          new ButtonBuilder()
-          .setCustomId("fechar")
-          .setLabel("❌ Fechar")
-          .setStyle(ButtonStyle.Danger)
+new ButtonBuilder()
+.setCustomId("renomear_call")
+.setLabel("✏ Renomear Call")
+.setStyle(ButtonStyle.Secondary),
 
-        )
-      ]
+new ButtonBuilder()
+.setCustomId("renomear_cargo")
+.setLabel("🏷 Renomear Cargo")
+.setStyle(ButtonStyle.Secondary),
 
-    }).catch(()=>{});
+new ButtonBuilder()
+.setCustomId("liberar")
+.setLabel("👤 Liberar Amigo")
+.setStyle(ButtonStyle.Success),
 
-  }
+new ButtonBuilder()
+.setCustomId("deletar_call")
+.setLabel("🗑 Deletar Call")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+}
+
+else{
+
+row = new ActionRowBuilder().addComponents(
+
+new ButtonBuilder()
+.setCustomId("criar_call")
+.setLabel("🎤 Criar Call")
+.setStyle(ButtonStyle.Primary),
+
+new ButtonBuilder()
+.setCustomId("renomear_cargo")
+.setLabel("🏷 Renomear Cargo")
+.setStyle(ButtonStyle.Secondary),
+
+new ButtonBuilder()
+.setCustomId("deletar_cargo")
+.setLabel("🗑 Deletar Cargo")
+.setStyle(ButtonStyle.Danger),
+
+new ButtonBuilder()
+.setCustomId("fechar")
+.setLabel("❌ Fechar")
+.setStyle(ButtonStyle.Danger)
+
+);
+
+}
+
+await painel.edit({
+embeds:[
+new EmbedBuilder()
+.setTitle("👑 Painel VIP")
+.setColor("Orange")
+.setDescription("Gerencie sua call e cargo VIP")
+],
+components:[row]
+}).catch(()=>{});
 
 }
 // ================= LIMITE CALL =================
