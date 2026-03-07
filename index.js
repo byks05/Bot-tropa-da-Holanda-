@@ -697,128 +697,114 @@ if(estado === "criar_call") {
     }).catch(()=>{});
   }
 }
-  // ================= CRIAR CARGO =================
+// ================= CRIAR CARGO =================
 if(estado === "criar_cargo") {
 
-const callData = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+  // Aqui você pega o tipo do VIP do usuário. 
+  // Substitua "tipoVIP" pela lógica que você usa pra identificar (Fogo, Império, etc.)
+  const tipoVIP = "Fogo"; // Exemplo fixo, ajuste conforme seu sistema de categorias
 
-// Limite de 1 cargo
-if(callData.rows.length){
+  const callData = await pool.query(
+    "SELECT * FROM vip_calls WHERE user_id=$1",
+    [member.id]
+  );
 
-const cargoExist = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+  // Limite de 1 cargo
+  if(callData.rows.length){
+    const cargoExist = message.guild.roles.cache.get(callData.rows[0].cargo_id);
+    if(cargoExist)
+      return message.reply("❌ Você já possui um cargo VIP.");
+  }
 
-if(cargoExist)
-return message.reply("❌ Você já possui um cargo VIP.");
+  const cargo = await message.guild.roles.create({
+    name: message.content
+  }).catch(()=>null);
 
-}
+  if(!cargo) return message.reply("❌ Erro ao criar cargo.");
 
-const cargo = await message.guild.roles.create({
-name: message.content
-}).catch(()=>null);
+  await member.roles.add(cargo).catch(()=>{});
 
-if(!cargo) return message.reply("❌ Erro ao criar cargo.");
+  // Aqui salvamos o cargo e o tipo no banco
+  await pool.query(`
+    INSERT INTO vip_calls(user_id, cargo_id, tipo)
+    VALUES($1, $2, $3)
+    ON CONFLICT(user_id)
+    DO UPDATE SET cargo_id=$2, tipo=$3
+  `, [member.id, cargo.id, tipoVIP]);
 
-await member.roles.add(cargo).catch(()=>{});
+  message.reply("✅ Cargo criado.");
 
-await pool.query(`
-INSERT INTO vip_calls(user_id,cargo_id)
-VALUES($1,$2)
-ON CONFLICT(user_id)
-DO UPDATE SET cargo_id=$2
-`, [member.id, cargo.id]);
+  const painel = paineisVIP[member.id];
 
-message.reply("✅ Cargo criado.");
+  if(painel){
+    const dados = await pool.query(
+      "SELECT * FROM vip_calls WHERE user_id=$1",
+      [member.id]
+    );
 
-const painel = paineisVIP[member.id];
+    const canal = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
+    const cargoExist = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
 
-if(painel){
+    let row;
 
-const dados = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+    if(canal && cargoExist){
+      row = new ActionRowBuilder();
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId("limite")
+          .setLabel("👥 Limitar Call")
+          .setStyle(ButtonStyle.Secondary),
 
-const canal = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
-const cargoExist = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
+        new ButtonBuilder()
+          .setCustomId("renomear_call")
+          .setLabel("✏ Renomear Call")
+          .setStyle(ButtonStyle.Secondary),
 
-let row;
+        new ButtonBuilder()
+          .setCustomId("renomear_cargo")
+          .setLabel("🏷 Renomear Cargo")
+          .setStyle(ButtonStyle.Secondary),
 
-if(canal && cargoExist){
+        new ButtonBuilder()
+          .setCustomId("liberar")
+          .setLabel("👤 Liberar Amigo")
+          .setStyle(ButtonStyle.Success),
 
-row = new ActionRowBuilder();
+        new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+      );
+    } else {
+      row = new ActionRowBuilder();
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId("criar_call")
+          .setLabel("🎤 Criar Call")
+          .setStyle(ButtonStyle.Primary),
 
-row.addComponents(
+        new ButtonBuilder()
+          .setCustomId("renomear_cargo")
+          .setLabel("🏷 Renomear Cargo")
+          .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("limite")
-.setLabel("👥 Limitar Call")
-.setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+      );
+    }
 
-new ButtonBuilder()
-.setCustomId("renomear_call")
-.setLabel("✏ Renomear Call")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("renomear_cargo")
-.setLabel("🏷 Renomear Cargo")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("liberar")
-.setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success),
-  
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
-  
-
-);
-
-}
-
-else{
-
-row = new ActionRowBuilder();
-
-row.addComponents(
-
-new ButtonBuilder()
-.setCustomId("criar_call")
-.setLabel("🎤 Criar Call")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("renomear_cargo")
-.setLabel("🏷 Renomear Cargo")
-.setStyle(ButtonStyle.Secondary),
-
-
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-}
-
-await painel.edit({
-embeds:[
-new EmbedBuilder()
-.setTitle("👑 Painel VIP")
-.setColor("Orange")
-.setDescription("Gerencie sua call e cargo VIP")
-],
-components:[row]
-}).catch(()=>{});
-
-}
+    await painel.edit({
+      embeds:[
+        new EmbedBuilder()
+          .setTitle("👑 Painel VIP")
+          .setColor("Orange")
+          .setDescription("Gerencie sua call e cargo VIP")
+      ],
+      components:[row]
+    }).catch(()=>{});
+  }
 }
   // ================= LIMITE CALL =================
 if(estado === "limite") {
