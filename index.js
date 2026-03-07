@@ -570,7 +570,7 @@ if (estado === "staff_remover") {
 
 }
 // ================= CRIAR CALL =================
-if(estado === "criar_call") {
+if (estado === "criar_call") {
 
   // Pega os dados VIP do banco
   const dadosVIP = await pool.query(
@@ -635,50 +635,84 @@ if(estado === "criar_call") {
 
   message.reply("✅ Call criada com sucesso na categoria correta.");
 
-  // Atualiza o painel VIP
+  // ================= ATUALIZA PAINEL =================
   const painel = paineisVIP[member.id];
+
   if(painel){
-    let row = new ActionRowBuilder();
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId("limite")
-        .setLabel("👥 Limitar Call")
-        .setStyle(ButtonStyle.Secondary),
-
-      new ButtonBuilder()
-        .setCustomId("renomear_call")
-        .setLabel("✏ Renomear Call")
-        .setStyle(ButtonStyle.Secondary),
-
-      new ButtonBuilder()
-        .setCustomId("renomear_cargo")
-        .setLabel("🏷 Renomear Cargo")
-        .setStyle(ButtonStyle.Secondary),
-
-      new ButtonBuilder()
-        .setCustomId("liberar")
-        .setLabel("👤 Liberar Amigo")
-        .setStyle(ButtonStyle.Success),
-
-      new ButtonBuilder()
-        .setCustomId("fechar")
-        .setLabel("❌ Fechar")
-        .setStyle(ButtonStyle.Danger)
+    const dados = await pool.query(
+      "SELECT * FROM vip_calls WHERE user_id=$1",
+      [member.id]
     );
 
+    const canalVIP = message.guild.channels.cache.get(dados.rows[0]?.channel_id);
+    const cargo = message.guild.roles.cache.get(dados.rows[0]?.cargo_id);
+
+    let row;
+
+    if(canalVIP && cargo){
+      row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("limite")
+          .setLabel("👥 Limitar Call")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("renomear_call")
+          .setLabel("✏ Renomear Call")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("renomear_cargo")
+          .setLabel("🏷 Renomear Cargo")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("liberar")
+          .setLabel("👤 Liberar Amigo")
+          .setStyle(ButtonStyle.Success),
+        
+        new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+      );
+    } else {
+      row = new ActionRowBuilder();
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId("criar_cargo")
+          .setLabel("🏷 Criar Cargo")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("limite")
+          .setLabel("👥 Limitar Call")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("renomear_call")
+          .setLabel("✏ Renomear Call")
+          .setStyle(ButtonStyle.Secondary),
+
+        new ButtonBuilder()
+          .setCustomId("fechar")
+          .setLabel("❌ Fechar")
+          .setStyle(ButtonStyle.Danger)
+      );
+    }
+
     await painel.edit({
-      embeds:[
+      embeds: [
         new EmbedBuilder()
           .setTitle("👑 Painel VIP")
           .setColor("Orange")
           .setDescription("Gerencie sua call e cargo VIP")
       ],
-      components:[row]
+      components: [row]
     }).catch(()=>{});
   }
-
 }
-// ================= CRIAR CARGO =================
+  // ================= CRIAR CARGO =================
 if(estado === "criar_cargo") {
 
   // Aqui você pega o tipo do VIP do usuário. 
