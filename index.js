@@ -94,176 +94,156 @@ async function logVIP(guild, msg) {
 
 // ================= COMANDOS =================
 
-client.on("messageCreate",async message=>{
+client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
 
-if(message.author.bot) return;
+    // ================= VARIÁVEIS GERAIS =================
+    const member = message.member;
 
-// ================= PAINEL VIP =================
+    // ================= COMANDO VIP =================
+    if (message.content === `${PREFIX}vip`) {
+        // verificar se o usuário tem algum cargo VIP
+        const vipRole = Object.entries(IDS.CARGOS).find(([k, id]) =>
+            member.roles.cache.has(id)
+        );
+        if (!vipRole) return message.reply("❌ Você não possui VIP.");
 
-if(message.content === `${PREFIX}vip`){
+        // buscar dados do VIP no banco
+        const call = await pool.query(
+            "SELECT * FROM vip_calls WHERE user_id=$1",
+            [member.id]
+        );
 
-const member = message.member;
+        let temCall = false;
+        let temCargo = false;
 
-// verificar se tem VIP
-const vipRole = Object.entries(IDS.CARGOS).find(([k,id]) =>
-member.roles.cache.has(id)
-);
+        if (call.rows.length) {
+            const canal = message.guild.channels.cache.get(call.rows[0].channel_id);
+            const cargo = message.guild.roles.cache.get(call.rows[0].cargo_id);
 
-if(!vipRole) return message.reply("❌ Você não possui VIP.");
+            if (canal) temCall = true;
+            if (cargo) temCargo = true;
+        }
 
-// buscar no banco
-const call = await pool.query(
-"SELECT * FROM vip_calls WHERE user_id=$1",
-[member.id]
-);
+        // embed do painel
+        const embed = new EmbedBuilder()
+            .setTitle("👑 Painel VIP")
+            .setColor("Orange")
+            .setDescription("Gerencie sua call e cargo VIP");
 
-let temCall = false;
-let temCargo = false;
+        // botões do painel
+        const row = new ActionRowBuilder();
 
-if(call.rows.length){
+        // ================= SEM CALL E SEM CARGO =================
+        if (!temCall && !temCargo) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId("criar_call")
+                    .setLabel("🎤 Criar Call")
+                    .setStyle(ButtonStyle.Primary),
+                new ButtonBuilder()
+                    .setCustomId("criar_cargo")
+                    .setLabel("🏷 Criar Cargo")
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId("fechar")
+                    .setLabel("❌ Fechar")
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-const canal = message.guild.channels.cache.get(call.rows[0].channel_id);
-const cargo = message.guild.roles.cache.get(call.rows[0].cargo_id);
+            // enviar painel
+            const painel = await message.reply({
+                embeds: [embed],
+                components: [row],
+            });
 
-if(canal) temCall = true;
-if(cargo) temCargo = true;
+            paineisVIP[message.author.id] = painel;
+        }
 
-}
-  
-// embed
-const embed = new EmbedBuilder()
-.setTitle("👑 Painel VIP")
-.setColor("Orange")
-.setDescription("Gerencie sua call e cargo VIP");
+        // ================= TEM CALL E CARGO =================
+        else if (temCall && temCargo) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId("limite")
+                    .setLabel("👥 Limitar Call")
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId("renomear_call")
+                    .setLabel("✏ Renomear Call")
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId("renomear_cargo")
+                    .setLabel("🏷 Renomear Cargo")
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId("liberar")
+                    .setLabel("👤 Liberar Amigo")
+                    .setStyle(ButtonStyle.Success)
+            );
 
-// botões
-const row = new ActionRowBuilder();
+            const row2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId("fechar")
+                    .setLabel("❌ Fechar")
+                    .setStyle(ButtonStyle.Danger)
+            );
 
-// ================= SEM CALL E SEM CARGO =================
-if(!temCall && !temCargo){
+            const painel = await message.reply({
+                embeds: [embed],
+                components: [row, row2],
+            });
 
-row.addComponents(
+            paineisVIP[message.author.id] = painel;
+        }
+    }
 
-new ButtonBuilder()
-.setCustomId("criar_call")
-.setLabel("🎤 Criar Call")
-.setStyle(ButtonStyle.Primary),
+    // ================= COMANDO VIP STAFF =================
+    if (message.content === `${PREFIX}vipstaff`) {
+        if (!member.roles.cache.has(IDS.STAFF_ROLE))
+            return message.reply("❌ Apenas STAFF pode usar.");
 
-new ButtonBuilder()
-.setCustomId("criar_cargo")
-.setLabel("🏷 Criar Cargo")
-.setStyle(ButtonStyle.Secondary),
+        const embed = new EmbedBuilder()
+            .setTitle("👑 Painel STAFF VIP")
+            .setDescription("Gerenciamento do sistema VIP")
+            .setColor("Gold");
 
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("staff_darvip")
+                .setLabel("👑 Dar VIP")
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId("staff_renovarvip")
+                .setLabel("🔁 Renovar VIP")
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId("staff_removervip")
+                .setLabel("🗑 Remover VIP")
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId("staff_vervips")
+                .setLabel("📊 Ver VIPs")
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId("staff_logs")
+                .setLabel("📜 Logs VIP")
+                .setStyle(ButtonStyle.Secondary)
+        );
 
-);
+        const row2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("fechar")
+                .setLabel("❌ Fechar Painel")
+                .setStyle(ButtonStyle.Secondary)
+        );
 
-}
-
-
-// ================= TEM CALL E CARGO =================
-else if(temCall && temCargo){
-
-    // Botões principais do painel
-    row.addComponents(
-        new ButtonBuilder()
-            .setCustomId("limite")
-            .setLabel("👥 Limitar Call")
-            .setStyle(ButtonStyle.Secondary),
-
-        new ButtonBuilder()
-            .setCustomId("renomear_call")
-            .setLabel("✏ Renomear Call")
-            .setStyle(ButtonStyle.Secondary),
-
-        new ButtonBuilder()
-            .setCustomId("renomear_cargo")
-            .setLabel("🏷 Renomear Cargo")
-            .setStyle(ButtonStyle.Secondary),
-
-        new ButtonBuilder()
-            .setCustomId("liberar")
-            .setLabel("👤 Liberar Amigo")
-            .setStyle(ButtonStyle.Success)
-    );
-
-    // Botão de fechar separado
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId("fechar")
-            .setLabel("❌ Fechar")
-            .setStyle(ButtonStyle.Danger)
-    );
-
-    // Enviar o painel apenas uma vez
-    const painel = await message.reply({
-        embeds: [embed],
-        components: [row, row2]
-    });
-
-    // Salvar referência do painel
-    paineisVIP[message.author.id] = painel;
-}
-}
-  // ================= PAINEL STAFF =================
-
-if(message.content === `${PREFIX}vipstaff`){
-
-if(!message.member.roles.cache.has(IDS.STAFF_ROLE))
-return message.reply("❌ Apenas STAFF pode usar.");
-
-const embed = new EmbedBuilder()
-.setTitle("👑 Painel STAFF VIP")
-.setDescription("Gerenciamento do sistema VIP")
-.setColor("Gold");
-
-const row = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("staff_darvip")
-.setLabel("👑 Dar VIP")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId("staff_renovarvip")
-.setLabel("🔁 Renovar VIP")
-.setStyle(ButtonStyle.Primary),
-
-new ButtonBuilder()
-.setCustomId("staff_removervip")
-.setLabel("🗑 Remover VIP")
-.setStyle(ButtonStyle.Danger),
-
-new ButtonBuilder()
-.setCustomId("staff_vervips")
-.setLabel("📊 Ver VIPs")
-.setStyle(ButtonStyle.Secondary),
-
-new ButtonBuilder()
-.setCustomId("staff_logs")
-.setLabel("📜 Logs VIP")
-.setStyle(ButtonStyle.Secondary)
-
-);
-
-const row2 = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar Painel")
-.setStyle(ButtonStyle.Secondary)
-
-);
-
-message.reply({
-embeds:[embed],
-components:[row,row2]
+        message.reply({
+            embeds: [embed],
+            components: [row, row2],
+        });
+    }
 });
-
-}
+// ================= FUNÇÕES BOTÃO =================
 
  client.on("interactionCreate", async interaction => {
 
