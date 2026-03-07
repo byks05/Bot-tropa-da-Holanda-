@@ -570,7 +570,7 @@ if (estado === "staff_remover") {
 
 }
 // ================= CRIAR CALL =================
-if (estado === "criar_call") {
+if(estado === "criar_call") {
 
   // Pega os dados VIP do banco
   const dadosVIP = await pool.query(
@@ -581,25 +581,28 @@ if (estado === "criar_call") {
   if(dadosVIP.rows.length === 0) return message.reply("❌ Você não possui VIP cadastrado.");
 
   const vipRoleId = dadosVIP.rows[0]?.cargo_id;
-  const tipo = dadosVIP.rows[0]?.tipo; // 'fogo', 'imperio', etc.
-  
+  let tipo = dadosVIP.rows[0]?.tipo; // 'Fogo', 'Imperio', etc.
+
   if(!vipRoleId || !tipo) return message.reply("❌ Dados VIP incompletos no banco.");
 
+  // Normaliza tipo pra minúsculo pra função categoriaVIP não quebrar
+  tipo = tipo.toLowerCase();
+
+  // Pega a categoria correta
+  const categoriaId = categoriaVIP(tipo);
+  if(!categoriaId) return message.reply("❌ Categoria VIP não encontrada.");
+
+  // Verifica se já existe call
   const callExist = await pool.query(
     "SELECT * FROM vip_calls WHERE user_id=$1",
     [member.id]
   );
 
-  // Limite de 1 call
   if(callExist.rows.length){
     const canalExist = message.guild.channels.cache.get(callExist.rows[0].channel_id);
     if(canalExist)
       return message.reply("❌ Você já possui uma call.");
   }
-
-  // Pega a categoria correta
-  const categoriaId = categoriaVIP(tipo);
-  if(!categoriaId) return message.reply("❌ Categoria VIP não encontrada.");
 
   // Cria a call na categoria correta com permissões
   const canal = await message.guild.channels.create({
@@ -634,7 +637,7 @@ if (estado === "criar_call") {
   `,[member.id, canal.id, tipo, vipRoleId]);
 
   message.reply("✅ Call criada com sucesso na categoria correta.");
-
+}
   // ================= ATUALIZA PAINEL =================
   const painel = paineisVIP[member.id];
 
