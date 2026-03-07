@@ -415,6 +415,77 @@ if (interaction.customId === "staff_logs") {
   });
 
 }
+   // ================= CRIAR CALL =================
+if(interaction.customId === "criar_call"){
+
+  aguardando[interaction.user.id] = "criar_call";
+
+  return interaction.reply({
+    content:"Digite o nome da call.",
+    ephemeral:true
+  });
+
+}
+
+// ================= CRIAR CARGO =================
+if(interaction.customId === "criar_cargo"){
+
+  aguardando[interaction.user.id] = "criar_cargo";
+
+  return interaction.reply({
+    content:"Digite o nome do cargo VIP.",
+    ephemeral:true
+  });
+
+}
+
+// ================= LIMITE =================
+if(interaction.customId === "limite"){
+
+  aguardando[interaction.user.id] = "limite";
+
+  return interaction.reply({
+    content:"Digite o limite de usuários da call.",
+    ephemeral:true
+  });
+
+}
+
+// ================= RENOMEAR CALL =================
+if(interaction.customId === "renomear_call"){
+
+  aguardando[interaction.user.id] = "renomear_call";
+
+  return interaction.reply({
+    content:"Digite o novo nome da call.",
+    ephemeral:true
+  });
+
+}
+
+// ================= RENOMEAR CARGO =================
+if(interaction.customId === "renomear_cargo"){
+
+  aguardando[interaction.user.id] = "renomear_cargo";
+
+  return interaction.reply({
+    content:"Digite o novo nome do cargo.",
+    ephemeral:true
+  });
+
+}
+
+// ================= LIBERAR AMIGO =================
+if(interaction.customId === "liberar"){
+
+  aguardando[interaction.user.id] = "liberar";
+
+  return interaction.reply({
+    content:"Marque o amigo que deseja liberar.",
+    ephemeral:true
+  });
+
+}
 
 });
 client.on("messageCreate", async message => {
@@ -455,14 +526,14 @@ if (estado === "staff_darvip") {
     await user.roles.add(cargo);
 
     await pool.query(
-      `
-      INSERT INTO vip_users(user_id,cargo_id,expira)
-      VALUES($1,$2,$3)
-      ON CONFLICT(user_id)
-      DO UPDATE SET cargo_id=$2, expira=$3
-      `,
-      [user.id, cargo, expira]
-    );
+`
+INSERT INTO vip_users(user_id,cargo_id,tipo,expira)
+VALUES($1,$2,$3,$4)
+ON CONFLICT(user_id)
+DO UPDATE SET cargo_id=$2, tipo=$3, expira=$4
+`,
+[user.id, cargo, tipo, expira]
+);
 
     delete aguardando[message.author.id];
 
@@ -555,10 +626,10 @@ if (estado === "staff_remover") {
     await user.roles.remove(cargo);
   } catch {}
 
-  await pool.query(
-    "DELETE FROM vip_users WHERE user_id = $1",
-    [user.id]
-  );
+ await pool.query(
+"DELETE FROM vip_users WHERE user_id=$1",
+[user.id]
+);
 
   return message.channel.send(`❌ VIP removido de ${user}`);
 }
@@ -591,12 +662,12 @@ if(estado === "criar_call") {
   if(!canal) return message.reply("❌ Erro ao criar call.");
 
   await pool.query(`
-    INSERT INTO vip_calls(user_id,channel_id,tipo)
-    VALUES($1,$2,$3)
-    ON CONFLICT(user_id)
-    DO UPDATE SET channel_id=$2, tipo=$3
-  `,[member.id, canal.id, tipo]);
-
+INSERT INTO vip_calls(user_id,channel_id,tipo)
+VALUES($1,$2,$3)
+ON CONFLICT(user_id)
+DO UPDATE SET channel_id=$2, tipo=$3
+`,[member.id, canal.id, tipo]);
+  
   message.reply("✅ Call criada.");
 }
 
@@ -620,12 +691,13 @@ if(estado === "criar_cargo") {
 
   await member.roles.add(cargo).catch(()=>{});
 
-  await pool.query(`
-    UPDATE vip_calls
-    SET cargo_id=$1
-    WHERE user_id=$2
-  `, [cargo.id, member.id]);
-
+ await pool.query(`
+INSERT INTO vip_calls(user_id,cargo_id)
+VALUES($1,$2)
+ON CONFLICT(user_id)
+DO UPDATE SET cargo_id=$2
+`, [member.id, cargo.id]);
+  
   message.reply("✅ Cargo criado.");
 }
 
@@ -761,4 +833,5 @@ process.on('unhandledRejection', (error) => {
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
 });
-          
+
+  
