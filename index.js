@@ -167,48 +167,47 @@ new ButtonBuilder()
 // ================= TEM CALL E CARGO =================
 else if(temCall && temCargo){
 
-row.addComponents(
+    // Botões principais do painel
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId("limite")
+            .setLabel("👥 Limitar Call")
+            .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("limite")
-.setLabel("👥 Limitar Call")
-.setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId("renomear_call")
+            .setLabel("✏ Renomear Call")
+            .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("renomear_call")
-.setLabel("✏ Renomear Call")
-.setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId("renomear_cargo")
+            .setLabel("🏷 Renomear Cargo")
+            .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("renomear_cargo")
-.setLabel("🏷 Renomear Cargo")
-.setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId("liberar")
+            .setLabel("👤 Liberar Amigo")
+            .setStyle(ButtonStyle.Success)
+    );
 
-new ButtonBuilder()
-.setCustomId("liberar")
-.setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success)
+    // Botão de fechar separado
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId("fechar")
+            .setLabel("❌ Fechar")
+            .setStyle(ButtonStyle.Danger)
+    );
 
-);
+    // Enviar o painel apenas uma vez
+    const painel = await message.reply({
+        embeds: [embed],
+        components: [row, row2]
+    });
 
-const row2 = new ActionRowBuilder().addComponents(
-
-new ButtonBuilder()
-.setCustomId("fechar")
-.setLabel("❌ Fechar")
-.setStyle(ButtonStyle.Danger)
-
-);
-
-const painel = await message.reply({
-embeds:[embed],
-components:[row,row2]
-});
-
-paineisVIP[message.author.id] = painel;
-
+    // Salvar referência do painel
+    paineisVIP[message.author.id] = painel;
 }
-// ================= PAINEL STAFF =================
+  // ================= PAINEL STAFF =================
 
 if(message.content === `${PREFIX}vipstaff`){
 
@@ -264,8 +263,6 @@ components:[row,row2]
 });
 
 }
-
-});     
 
  client.on("interactionCreate", async interaction => {
 
