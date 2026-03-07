@@ -189,11 +189,9 @@ new ButtonBuilder()
 .setLabel("👤 Liberar Amigo")
 .setStyle(ButtonStyle.Success)
 
-
 );
 
 const row2 = new ActionRowBuilder().addComponents(
-
 
 new ButtonBuilder()
 .setCustomId("fechar")
@@ -208,14 +206,7 @@ components:[row,row2]
 });
 
 paineisVIP[message.author.id] = painel;
-}
 
-const painel = await message.reply({
-embeds:[embed],
-components:[row]
-});
-
-paineisVIP[message.author.id] = painel;
 }
 // ================= PAINEL STAFF =================
 
@@ -805,12 +796,7 @@ new ButtonBuilder()
 new ButtonBuilder()
 .setCustomId("liberar")
 .setLabel("👤 Liberar Amigo")
-.setStyle(ButtonStyle.Success),
-
-new ButtonBuilder()
-.setCustomId("deletar_call")
-.setLabel("🗑 Deletar Call")
-.setStyle(ButtonStyle.Danger)
+.setStyle(ButtonStyle.Success)
 
 );
 
