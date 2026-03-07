@@ -591,7 +591,13 @@ if(estado === "criar_call") {
     if(canal)
       return message.reply("❌ Você já possui uma call.");
   }
-  
+
+  // 🔹 Buscar cargo VIP atualizado (garante que existe antes de criar o canal)
+  const cargoVIP = message.guild.roles.cache.get(vipRole[1]) 
+                 || await message.guild.roles.fetch(vipRole[1]).catch(()=>null);
+
+  if(!cargoVIP) return message.reply("❌ Cargo VIP não encontrado.");
+
   // Criar canal com permissões específicas
   const canal = await message.guild.channels.create({
     name: message.content,
@@ -600,15 +606,15 @@ if(estado === "criar_call") {
     permissionOverwrites: [
       {
         id: message.guild.roles.everyone,
-        allow: ["ViewChannel"], // todo mundo vê
-        deny: ["Connect"]       // mas não pode conectar
+        allow: ["ViewChannel"], // todos podem ver
+        deny: ["Connect"]       // mas não conectar
       },
       {
         id: member.id,           // dono da call
         allow: ["Connect", "ViewChannel", "ManageChannels"]
       },
       {
-        id: vipRole[1],          // cargo VIP do usuário
+        id: cargoVIP.id,         // cargo VIP
         allow: ["Connect", "ViewChannel"]
       }
     ]
@@ -622,9 +628,10 @@ if(estado === "criar_call") {
     ON CONFLICT(user_id)
     DO UPDATE SET channel_id=$2, tipo=$3
   `,[member.id, canal.id, tipo]);
-  
+
   message.reply("✅ Call criada.");
 
+  // 🔹 O resto do seu painel continua igual
   const painel = paineisVIP[member.id];
 
   if(painel){
@@ -644,22 +651,18 @@ if(estado === "criar_call") {
           .setCustomId("limite")
           .setLabel("👥 Limitar Call")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("renomear_call")
           .setLabel("✏ Renomear Call")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("renomear_cargo")
           .setLabel("🏷 Renomear Cargo")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("liberar")
           .setLabel("👤 Liberar Amigo")
           .setStyle(ButtonStyle.Success),
-        
         new ButtonBuilder()
           .setCustomId("fechar")
           .setLabel("❌ Fechar")
@@ -672,17 +675,14 @@ if(estado === "criar_call") {
           .setCustomId("criar_cargo")
           .setLabel("🏷 Criar Cargo")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("limite")
           .setLabel("👥 Limitar Call")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("renomear_call")
           .setLabel("✏ Renomear Call")
           .setStyle(ButtonStyle.Secondary),
-
         new ButtonBuilder()
           .setCustomId("fechar")
           .setLabel("❌ Fechar")
@@ -701,7 +701,7 @@ if(estado === "criar_call") {
     }).catch(()=>{});
   }
 }
-  // ================= CRIAR CARGO =================
+// ================= CRIAR CARGO =================
 if(estado === "criar_cargo") {
 
 const callData = await pool.query(
@@ -802,10 +802,6 @@ new ButtonBuilder()
 .setLabel("🏷 Renomear Cargo")
 .setStyle(ButtonStyle.Secondary),
 
-new ButtonBuilder()
-.setCustomId("deletar_cargo")
-.setLabel("🗑 Deletar Cargo")
-.setStyle(ButtonStyle.Danger),
 
 new ButtonBuilder()
 .setCustomId("fechar")
