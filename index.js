@@ -138,13 +138,14 @@ client.on("messageCreate", async (message) => {
         if (!temCall && !temCargo) {
             row.addComponents(
                 new ButtonBuilder()
-                    .setCustomId("criar_call")
-                    .setLabel("🎤 Criar Call")
-                    .setStyle(ButtonStyle.Primary),
-                new ButtonBuilder()
                     .setCustomId("criar_cargo")
                     .setLabel("🏷 Criar Cargo")
+                    .setStyle(ButtonStyle.Primary),
+               new ButtonBuilder()
+                    .setCustomId("criar_call")
+                    .setLabel("🎤 Criar Call")
                     .setStyle(ButtonStyle.Secondary),
+               
                 new ButtonBuilder()
                     .setCustomId("fechar")
                     .setLabel("❌ Fechar")
