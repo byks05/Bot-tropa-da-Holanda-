@@ -574,10 +574,10 @@ if(estado === "criar_call") {
 
   // Pega os dados VIP do banco
   const dadosVIP = await pool.query(
-    "SELECT * FROM vip_calls WHERE user_id=$1",
-    [member.id]
-  );
-
+  "SELECT * FROM vip_users WHERE user_id=$1",
+  [member.id]
+);
+  
   if(dadosVIP.rows.length === 0) return message.reply("❌ Você não possui VIP cadastrado.");
 
   const vipRoleId = dadosVIP.rows[0]?.cargo_id;
